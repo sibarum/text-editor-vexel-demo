@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>dev.vexelray.demo</groupId>
+    <artifactId>text-editor-vexel-demo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <name>text-editor-vexel-demo</name>
+    <description>
+        A deceptively simple text editor built on vexelray-gui. Standalone client app: depends on the
+        framework from the local Maven repo and selects its platform modules via OS-activated profiles,
+        the same shape as vexelray-gui-demo.
+    </description>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <vexelray-gui.version>0.1.0-SNAPSHOT</vexelray-gui.version>
+        <vexelray.version>0.1.0-SNAPSHOT</vexelray.version>
+        <tactroller.version>1.0-SNAPSHOT</tactroller.version>
+
+        <app.mainClass>dev.vexelray.demo.editor.TextEditorApp</app.mainClass>
+        <!-- Program args for exec:exec (one token; empty = interactive). -->
+        <app.args></app.args>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-widget</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
+        <!-- Input at the application edge: the tactroller->atchung bridge. -->
+        <dependency>
+            <groupId>sibarum.tactroller</groupId>
+            <artifactId>tactroller-atchung</artifactId>
+            <version>${tactroller.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>sibarum.tactroller</groupId>
+            <artifactId>tactroller-clipboard</artifactId>
+            <version>${tactroller.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+            <!-- Run: mvn compile exec:exec ; headless capture: mvn compile exec:exec "-Dapp.args=[dash][dash]capture" -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <executable>${java.home}/bin/java</executable>
+                    <classpathScope>runtime</classpathScope>
+                    <arguments>
+                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>${app.mainClass}</argument>
+                        <argument>${app.args}</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Build-time platform selection, same as vexelray-gui-demo. -->
+        <profile>
+            <id>platform-windows</id>
+            <activation><os><family>windows</family></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.vexelray</groupId>
+                    <artifactId>vexelray-os-windows</artifactId>
+                    <version>${vexelray.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>sibarum.tactroller</groupId>
+                    <artifactId>tactroller-windows</artifactId>
+                    <version>${tactroller.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>platform-linux</id>
+            <activation><os><family>unix</family><name>linux</name></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.vexelray</groupId>
+                    <artifactId>vexelray-os-linux</artifactId>
+                    <version>${vexelray.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>sibarum.tactroller</groupId>
+                    <artifactId>tactroller-linux</artifactId>
+                    <version>${tactroller.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>platform-macos</id>
+            <activation><os><family>mac</family></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.vexelray</groupId>
+                    <artifactId>vexelray-os-macos</artifactId>
+                    <version>${vexelray.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>sibarum.tactroller</groupId>
+                    <artifactId>tactroller-macos</artifactId>
+                    <version>${tactroller.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>
