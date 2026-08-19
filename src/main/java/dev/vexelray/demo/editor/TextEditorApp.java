@@ -332,6 +332,11 @@ public final class TextEditorApp {
         private TactrollerInputBridge bridge;
         private boolean shown;
 
+        /** This window.s Gui, so the app can bind its shortcuts here as well as on the main window. */
+        Gui gui() {
+            return gui;
+        }
+
         FolderWindow(java.util.function.Consumer<Path> openFile) {
             this.openFile = openFile;
             this.label = gui.text("")
@@ -342,6 +347,8 @@ public final class TextEditorApp {
                     .padding(Length.dp(12)).gap(Length.dp(6))
                     .children(label);
             gui.root().background(BG).children(column);
+            // Zoom is per-window: each Gui zooms itself, so the tree scales independently of the editor.
+            zoomShortcuts(gui);
         }
 
         /** Show {@code folder}, opening the window on the next frame if it is not already up. */
@@ -452,15 +459,28 @@ public final class TextEditorApp {
             requests.add(() -> loadInto(file));
         }
 
+        /**
+         * Bind the app.s shortcuts on <em>every</em> window. The folder window is part of the same
+         * application, so its keys must reach the same actions -- otherwise Ctrl+W does nothing while the
+         * file tree has focus, which is what happens if only the main window is bound.
+         *
+         * <p>This does not double-fire: keys are focal, so tactroller delivers them only to the focused
+         * window, and a chord bound on both Guis therefore runs once.
+         */
         void shortcuts() {
-            gui.shortcut(Key.O, () -> requests.add(this::open), Modifier.CONTROL);
-            gui.shortcut(Key.O, () -> requests.add(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
-            gui.shortcut(Key.S, () -> requests.add(this::save), Modifier.CONTROL);
-            gui.shortcut(Key.S, () -> requests.add(this::saveAs), Modifier.CONTROL, Modifier.SHIFT);
-            gui.shortcut(Key.N, () -> requests.add(() -> ws.newTab("", null, false)), Modifier.CONTROL);
-            gui.shortcut(Key.W, () -> requests.add(ws::closeActive), Modifier.CONTROL);
-            gui.shortcut(Key.TAB, () -> requests.add(() -> ws.cycle(+1)), Modifier.CONTROL);
-            gui.shortcut(Key.TAB, () -> requests.add(() -> ws.cycle(-1)), Modifier.CONTROL, Modifier.SHIFT);
+            bind(gui);
+            bind(folder.gui());
+        }
+
+        private void bind(Gui g) {
+            g.shortcut(Key.O, () -> requests.add(this::open), Modifier.CONTROL);
+            g.shortcut(Key.O, () -> requests.add(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
+            g.shortcut(Key.S, () -> requests.add(this::save), Modifier.CONTROL);
+            g.shortcut(Key.S, () -> requests.add(this::saveAs), Modifier.CONTROL, Modifier.SHIFT);
+            g.shortcut(Key.N, () -> requests.add(() -> ws.newTab("", null, false)), Modifier.CONTROL);
+            g.shortcut(Key.W, () -> requests.add(ws::closeActive), Modifier.CONTROL);
+            g.shortcut(Key.TAB, () -> requests.add(() -> ws.cycle(+1)), Modifier.CONTROL);
+            g.shortcut(Key.TAB, () -> requests.add(() -> ws.cycle(-1)), Modifier.CONTROL, Modifier.SHIFT);
         }
 
         /** GUI thread, once per frame. One request at a time — each may block on a modal dialog. */
