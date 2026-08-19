@@ -34,6 +34,34 @@
             <artifactId>vexelray-gui-widget</artifactId>
             <version>${vexelray-gui.version}</version>
         </dependency>
+        <!-- Syntax highlighting: TM4E's TextMate tokenizer (NetBeans repack of org.eclipse.tm4e.core,
+             the only current release on Maven Central) plus its undeclared runtime deps. -->
+        <dependency>
+            <groupId>org.netbeans.external</groupId>
+            <artifactId>org.eclipse.tm4e.core-0.14.0</artifactId>
+            <version>RELEASE260</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jruby.joni</groupId>
+            <artifactId>joni</artifactId>
+            <version>2.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.snakeyaml</groupId>
+            <artifactId>snakeyaml-engine</artifactId>
+            <version>2.7</version>
+        </dependency>
+        <!-- Native OS open/save dialogs (NFDe over Panama), at the application edge. -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-nfd</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
         <!-- Input at the application edge: the tactroller->atchung bridge. -->
         <dependency>
             <groupId>sibarum.tactroller</groupId>
