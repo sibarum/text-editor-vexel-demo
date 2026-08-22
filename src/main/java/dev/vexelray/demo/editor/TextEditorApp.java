@@ -4,12 +4,20 @@ import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.TextClipboard;
+import dev.vexelray.gui.core.WindowControls;
+import dev.vexelray.gui.core.app.AppWindow;
 import dev.vexelray.gui.core.app.GuiApp;
+import dev.vexelray.gui.core.app.WindowInput;
+import dev.vexelray.gui.core.app.WindowSpec;
+import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.nfd.FileDialog;
+import dev.vexelray.demo.editor.terminal.TerminalWindow;
 import dev.vexelray.gui.widget.Tabs;
+import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
+import dev.vexelray.os.Decorations;
 import sibarum.tactroller.api.BackendException;
 import sibarum.tactroller.api.CoordinateSpace;
 import sibarum.tactroller.api.Key;
@@ -34,9 +42,15 @@ import java.util.List;
  */
 public final class TextEditorApp {
 
-    /** Window and capture size, in the engine's logical coordinates. */
+    /**
+     * Window and capture size, in the engine's logical coordinates. The GUI draws the frame now, so the client
+     * area covers the whole window and the height carries {@link #BAR_H} of the application's own title bar on
+     * top of the 560 the tabs and editor had beneath an OS one.
+     */
     private static final int W = 800;
-    private static final int H = 560;
+    /** The title bar's own height, in dp — {@code TitleBar}'s, which is the Windows caption metric. */
+    static final int BAR_H = 32;
+    private static final int H = 560 + BAR_H;
 
     private static final Color BG = Color.rgb(0x11141b);
     private static final Color PANEL = Color.rgb(0x1b2130);
@@ -51,9 +65,15 @@ public final class TextEditorApp {
 
     public static void main(String[] args) throws Exception {
         args = java.util.Arrays.stream(args).filter(s -> !s.isBlank()).toArray(String[]::new);
+        // --terminal opens the shell window at startup instead of on Ctrl+`, so the second window can be looked
+        // at (and its shutdown exercised) without a hand on the keyboard.
+        boolean withTerminal = java.util.Arrays.asList(args).contains("--terminal");
+        args = java.util.Arrays.stream(args).filter(s -> !s.equals("--terminal")).toArray(String[]::new);
 
         Gui gui = new Gui();
-        gui.minSize(Length.em(30), Length.em(20));
+        // Two em more height than the page needs on its own: the title bar sits inside the canvas now, so the
+        // smallest layout has to hold it as well as the tabs and the status line.
+        gui.minSize(Length.em(30), Length.em(22));
         Workspace ws = new Workspace(gui);
         zoomShortcuts(gui);
 
@@ -63,21 +83,87 @@ public final class TextEditorApp {
             return;
         }
 
+        if (args.length >= 1 && args[0].equals("--capture-terminal")) {
+            captureTerminal(args.length >= 2 ? args[1] : "terminal.png");
+            return;
+        }
+
         int maxFrames = args.length > 0 ? Integer.parseInt(args[0]) : 0;
+        // Placement is read before the window exists, so it is created where it was left rather than moved there
+        // after appearing — and clamped on the way, because the desk may have changed shape since.
+        WindowMemory memory = new WindowMemory(Settings.open("text-editor"));
         try (Tactroller input = openInput();
-             GuiApp app = new GuiApp("Text Editor", W, H);
-             Clipboard clipboard = openClipboard(gui)) {
+             GuiApp app = new GuiApp(memory.config("main", "Text Editor", W, H)
+                     .decorations(Decorations.CLIENT));
+             Clipboard clipboard = openClipboard()) {
+            // The window exists at last, so the chrome can be pointed at it. Until now the bar has been a
+            // working bar against WindowControls.NONE — which is also what --capture renders.
+            ws.titleBar.controls(app.controls());
+            if (memory.maximized("main")) {
+                app.window().maximize();
+            }
+            memory.watch("main", app.window());
+            // The main window is created before this class exists, so it still wires its own input; every other
+            // window the framework opens gets one from here.
             attachInput(input, app);
-            FileActions files = new FileActions(gui, ws, app);
+            app.input(TextEditorApp::windowInput);
+            FileActions files = new FileActions(gui, ws, app, memory);
             files.shortcuts();
+            // Every window gets the OS clipboard, not just the main one: copy out of the terminal's prompt has to
+            // reach the same place copy out of a tab does.
+            if (clipboard != null) {
+                for (Gui window : files.windows()) {
+                    bindClipboard(window, clipboard);
+                }
+            }
+            // Whatever was up last time comes back up. --terminal on top of that is harmless: opening a window
+            // that is already open focuses it.
+            files.restore();
+            if (withTerminal) {
+                files.openTerminal();
+            }
             TactrollerInputBridge bridge = input == null ? null : new TactrollerInputBridge(input, gui.bus());
-            app.run(gui, maxFrames, () -> {
-                pump(bridge);
-                files.drain();
-            });
+            try {
+                app.run(gui, maxFrames, () -> {
+                    pump(bridge);
+                    files.drain();
+                    memory.poll();
+                });
+            } finally {
+                files.close();
+                memory.save();
+            }
         }
         gui.close();
         System.out.println("clean shutdown");
+    }
+
+    /**
+     * Render the terminal window headlessly: start MainFrame, run a few real lines against the real filesystem,
+     * let the per-frame flush publish them, and write the PNG. {@code GuiApp.capture} takes one tree, so the
+     * terminal needs its own entry point — and this one doubles as a smoke test of the whole path with no GPU
+     * window and no keyboard.
+     */
+    private static void captureTerminal(String path) throws Exception {
+        // No window is opened here, so the memory is never asked for a placement and never written to.
+        WindowMemory unused = new WindowMemory(Settings.open("text-editor"));
+        try (TerminalWindow terminal = new TerminalWindow(f -> { }, d -> { }, unused)) {
+            terminal.start(Path.of("").toAbsolutePath());
+            for (String line : List.of("version", "ls | where kind == \"file\" | select name size ext",
+                    "ls | where nmae == \"x\"")) {
+                terminal.submit(line);
+                long deadline = System.nanoTime() + 10_000_000_000L;
+                Thread.sleep(50);
+                while (terminal.busy() && System.nanoTime() < deadline) {
+                    Thread.sleep(10);
+                }
+                Thread.sleep(50);
+                terminal.tick();
+            }
+            terminal.tick();
+            GuiApp.capture(terminal.gui(), 720, 480 + BAR_H, 0.06f, 0.07f, 0.09f, path);
+        }
+        System.out.println("captured " + path);
     }
 
     private static void zoomShortcuts(Gui gui) {
@@ -98,6 +184,45 @@ public final class TextEditorApp {
         }
     }
 
+    /**
+     * How input reaches every window the framework opens for us — the file tree, the terminal, any dialog. One
+     * backend per window, attached at creation, pumped by the frame loop, released with the window.
+     *
+     * <p>This is the same four lines each of those windows used to run for itself, plus the per-frame pump and
+     * the teardown, said once. The framework cannot do it alone: it speaks {@code tactroller-api} and Atchung
+     * topics, but the bridge between them is chosen here, at the application edge.
+     */
+    private static WindowInput windowInput(dev.vexelray.os.NativeWindow window, Gui gui) {
+        try {
+            Tactroller backend = Tactroller.open();
+            backend.attach(NativeWindow.ofHwnd(window.osHandle()));
+            backend.setCoordinateSpace(CoordinateSpace.CLIENT);
+            TactrollerInputBridge bridge = new TactrollerInputBridge(backend, gui.bus());
+            return new WindowInput() {
+                @Override
+                public void pump() {
+                    try {
+                        bridge.pump();
+                    } catch (BackendException e) {
+                        // Transient poll failure — drop this frame's input rather than tear down the loop.
+                    }
+                }
+
+                @Override
+                public void close() {
+                    try {
+                        backend.close();
+                    } catch (Exception e) {
+                        // best effort — the backend is going away regardless
+                    }
+                }
+            };
+        } catch (BackendException e) {
+            System.out.println("window input unavailable (" + e.getMessage() + "); that window takes no input");
+            return WindowInput.NONE;
+        }
+    }
+
     /** CLIENT space, density left at 1.0 — the engine's canvas is logical; see vexelray-gui-demo's attachInput. */
     private static void attachInput(Tactroller input, GuiApp app) {
         if (input == null) {
@@ -112,33 +237,36 @@ public final class TextEditorApp {
     }
 
     /** OS clipboard for cut/copy/paste; falls back to the in-memory default when no backend is present. */
-    private static Clipboard openClipboard(Gui gui) {
+    private static Clipboard openClipboard() {
         try {
-            Clipboard clip = Clipboard.open();
-            gui.clipboard(new TextClipboard() {
-                @Override
-                public String get() {
-                    try {
-                        return clip.getText().orElse("");
-                    } catch (ClipboardException e) {
-                        return "";
-                    }
-                }
-
-                @Override
-                public void set(String text) {
-                    try {
-                        clip.setText(text);
-                    } catch (ClipboardException e) {
-                        // best effort — a transient clipboard failure just drops the copy
-                    }
-                }
-            });
-            return clip;
+            return Clipboard.open();
         } catch (ClipboardException e) {
             System.out.println("clipboard unavailable (" + e.getMessage() + "); cut/copy/paste use in-memory buffer");
             return null;
         }
+    }
+
+    /** Point one window's clipboard at the OS one. Each Gui carries its own, so each window is bound. */
+    private static void bindClipboard(Gui gui, Clipboard clip) {
+        gui.clipboard(new TextClipboard() {
+            @Override
+            public String get() {
+                try {
+                    return clip.getText().orElse("");
+                } catch (ClipboardException e) {
+                    return "";
+                }
+            }
+
+            @Override
+            public void set(String text) {
+                try {
+                    clip.setText(text);
+                } catch (ClipboardException e) {
+                    // best effort — a transient clipboard failure just drops the copy
+                }
+            }
+        });
     }
 
     private static void pump(TactrollerInputBridge bridge) {
@@ -181,21 +309,29 @@ public final class TextEditorApp {
         final Gui gui;
         final Tabs tabs;
         final Node status;
+        final TitleBar titleBar;
         final List<EditorTab> open = new ArrayList<>();
 
         Workspace(Gui gui) {
             this.gui = gui;
             this.tabs = new Tabs(gui);
-            this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+S save - Ctrl+Shift+S save as - "
-                            + "Ctrl+N new - Ctrl+W close - Ctrl+Tab next tab")
-                    .width(Length.FILL).height(Length.rem(1.75f))
+            // AUTO, not a fixed line: this line also reports what was opened or saved, and a long path wraps.
+            // A fixed height clips the second line outside the padding instead of making room for it.
+            this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+` terminal - Ctrl+S save - "
+                            + "Ctrl+N new - Ctrl+W close")
+                    .width(Length.FILL).height(Length.AUTO)
                     .textSize(Length.rem(0.875f)).textColor(DIM)
-                    .align(dev.vexelray.text.TextLayout.HAlign.LEFT, dev.vexelray.text.TextLayout.VAlign.MIDDLE);
+                    .align(dev.vexelray.text.TextLayout.HAlign.LEFT, dev.vexelray.text.TextLayout.VAlign.MIDDLE)
+                    .scroll(false, false);
 
-            Node root = gui.column().width(Length.FILL).height(Length.FILL)
+            Node root = gui.column().width(Length.FILL).height(Length.grow(1))
                     .padding(Length.dp(16)).gap(Length.rem(0.625f))
                     .children(tabs.node(), status);
-            gui.root().background(BG).children(root);
+            // The window's own title bar: ordinary widgets, plus the declarations that tell the window manager
+            // which pixels are caption. Bound to the real window in main(); here it commands
+            // WindowControls.NONE, which is what --capture draws.
+            this.titleBar = new TitleBar(gui, WindowControls.NONE, "Text Editor");
+            gui.root().background(BG).children(titleBar.node(), root);
 
             newTab(WELCOME, null, false);
         }
@@ -314,50 +450,72 @@ public final class TextEditorApp {
 
     /**
      * The folder explorer as its own OS window on the shared frame loop: a second {@link Gui} holding a
-     * {@link TreeView}, opened via {@link GuiApp#requestPopup}. The popup gets its own input backend attached
-     * to its own window handle, bridged onto its own bus — so both windows take focus and input from the OS
-     * like one application, while every model change (opening a file into a tab) crosses to the main window
-     * through {@link FileActions}' request queue on the one shared thread.
+     * {@link TreeView}, opened as the named window {@code "folder"} so Ctrl+Shift+O always means this one. The
+     * framework attaches and pumps its input from the factory the app supplied, so both windows take focus and
+     * input from the OS like one application, while every model change (opening a file into a tab) crosses to the
+     * main window through {@link FileActions}' request queue on the one shared thread.
      *
-     * <p>All methods run on the main thread: {@code show}/{@code setFolder} from the drain, the two popup
-     * callbacks from the frame loop, {@code pump} from beforeFrame.
+     * <p>All methods run on the main thread: {@code show}/{@code setFolder} from the drain, the two lifecycle
+     * callbacks from the frame loop.
      */
     private static final class FolderWindow {
+        /** The default size, used the first time — after that, whatever the user left it at. */
+        private static final int DEFAULT_W = 340;
+        private static final int DEFAULT_H = 560 + BAR_H;
+
         private final java.util.function.Consumer<Path> openFile;
+        private final WindowMemory memory;
         private final Gui gui = new Gui();
-        private final Node label;
         private final Node column;
+        private final TitleBar titleBar;
         private TreeView<Path> tree;
-        private Tactroller input;
-        private TactrollerInputBridge bridge;
-        private boolean shown;
+        /** The framework's handle on this window, claimed the first time it is shown. */
+        private AppWindow handle;
 
         /** This window.s Gui, so the app can bind its shortcuts here as well as on the main window. */
         Gui gui() {
             return gui;
         }
 
-        FolderWindow(java.util.function.Consumer<Path> openFile) {
+        /** Whether the window is up right now — polled each frame so it can be reopened next launch. */
+        boolean isOpen() {
+            return handle != null && handle.open();
+        }
+
+        FolderWindow(java.util.function.Consumer<Path> openFile, WindowMemory memory) {
             this.openFile = openFile;
-            this.label = gui.text("")
-                    .width(Length.FILL).height(Length.rem(1.5f))
-                    .textSize(Length.rem(0.875f)).textColor(DIM)
-                    .align(dev.vexelray.text.TextLayout.HAlign.LEFT, dev.vexelray.text.TextLayout.VAlign.MIDDLE);
-            this.column = gui.column().width(Length.FILL).height(Length.FILL)
-                    .padding(Length.dp(12)).gap(Length.dp(6))
-                    .children(label);
-            gui.root().background(BG).children(column);
+            this.memory = memory;
+            this.column = gui.column().width(Length.FILL).height(Length.grow(1))
+                    .padding(Length.dp(12)).gap(Length.dp(6));
+            // The popup draws its own frame too, so all three windows match. Its bar is bound in onCreated: a
+            // popup's window does not exist until the main thread services the request, and it is that window the
+            // buttons command — not the main one app.controls() would hand over.
+            //
+            // It also carries the folder's name, which is why there is no label row: a window that draws its own
+            // caption has somewhere to say what it is showing, and saying it twice is just a row of lost height.
+            this.titleBar = new TitleBar(gui, WindowControls.NONE, "Files");
+            gui.root().background(BG).children(titleBar.node(), column);
             // Zoom is per-window: each Gui zooms itself, so the tree scales independently of the editor.
             zoomShortcuts(gui);
         }
 
-        /** Show {@code folder}, opening the window on the next frame if it is not already up. */
+        /**
+         * Show {@code folder}, opening the window on the next frame if it is not already up. If it is, it comes
+         * forward showing the new folder rather than staying behind the editor looking unresponsive.
+         */
         void show(GuiApp app, Path folder) {
             setFolder(folder);
-            if (!shown) {
-                shown = true;
-                app.requestPopup("Files", 340, 560, gui, this::attachInput, this::onClosed);
+            // Remembered so the next launch can point the tree at the same place, not just at the same rectangle.
+            memory.shownPath("folder", folder);
+            // One call for both cases: show() creates the window if it is closed and raises it if it is not.
+            if (handle == null) {
+                handle = app.window("folder", () -> WindowSpec
+                        .of(memory.config("folder", "Files", DEFAULT_W, DEFAULT_H)
+                                .decorations(Decorations.CLIENT), gui)
+                        .onCreated(this::onCreated)
+                        .onClosed(this::onClosed));
             }
+            handle.show();
         }
 
         private void setFolder(Path folder) {
@@ -366,7 +524,7 @@ public final class TextEditorApp {
                 tree.close();
             }
             Path name = folder.getFileName();
-            label.text(name != null ? name.toString() : folder.toString());
+            titleBar.title(name != null ? name.toString() : folder.toString());
             tree = new TreeView<>(gui, new FolderSource(folder));
             tree.node().width(Length.FILL).height(Length.grow(1));
             // Selection opens files (click or keyboard walk); Enter additionally expands a selected directory.
@@ -385,45 +543,27 @@ public final class TextEditorApp {
             tree.focus();
         }
 
-        /** Attach a second input backend to the popup's own window handle, feeding this Gui's bus. */
-        private void attachInput(long hwnd) {
-            try {
-                input = Tactroller.open();
-                input.attach(NativeWindow.ofHwnd(hwnd));
-                input.setCoordinateSpace(CoordinateSpace.CLIENT);
-                bridge = new TactrollerInputBridge(input, gui.bus());
-            } catch (BackendException e) {
-                System.out.println("folder window input unavailable (" + e.getMessage() + ")");
-                closeInput();
+        /**
+         * The window exists, and its input is already attached and pumping — the framework did that from the
+         * factory the app supplied. What is left is the two things only this window knows: which window its own
+         * title bar commands, and where it should be.
+         */
+        private void onCreated(dev.vexelray.os.NativeWindow window) {
+            titleBar.controls(WindowControls.of(window));
+            if (memory.maximized("folder")) {
+                window.maximize();
+            } else {
+                memory.restoreBounds("folder", window, DEFAULT_W, DEFAULT_H);
             }
+            memory.watch("folder", window);
         }
 
         private void onClosed() {
-            closeInput();
-            shown = false;
-        }
-
-        private void closeInput() {
-            if (input != null) {
-                try {
-                    input.close();
-                } catch (Exception e) {
-                    // best effort — the backend is going away regardless
-                }
-                input = null;
-                bridge = null;
-            }
-        }
-
-        /** Poll the popup's input, if the window is up — called once per frame alongside the main pump. */
-        void pump() {
-            if (bridge != null) {
-                try {
-                    bridge.pump();
-                } catch (BackendException e) {
-                    // Transient poll failure — drop this frame's input rather than tear down the loop.
-                }
-            }
+            // Stop reading placement off a window that is being destroyed; what was recorded last stands.
+            memory.forget("folder");
+            // The window this bar commanded is gone; the tree outlives it and is shown again on the next
+            // Ctrl+Shift+O, so the buttons go back to commanding nothing until onCreated rebinds them.
+            titleBar.controls(WindowControls.NONE);
         }
     }
 
@@ -434,7 +574,7 @@ public final class TextEditorApp {
      * so the shortcuts only enqueue, and {@link #drain()} services one request per frame from the app's
      * beforeFrame hook. Tab-structure changes ride the same queue so they are ordered with the file I/O.
      */
-    private static final class FileActions {
+    private static final class FileActions implements AutoCloseable {
         private static final List<FileDialog.Filter> FILTERS =
                 List.of(FileDialog.Filter.of("Text files", "txt", "md", "java", "json"));
 
@@ -442,21 +582,40 @@ public final class TextEditorApp {
         private final Workspace ws;
         private final GuiApp app;
         private final long window;
+        private final WindowMemory memory;
         private final FolderWindow folder;
+        private final TerminalWindow terminal;
         private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> requests =
                 new java.util.concurrent.ConcurrentLinkedQueue<>();
 
-        FileActions(Gui gui, Workspace ws, GuiApp app) {
+        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory) {
             this.gui = gui;
             this.ws = ws;
             this.app = app;
             this.window = app.windowHandle();
-            this.folder = new FolderWindow(this::openPath);
+            this.memory = memory;
+            this.folder = new FolderWindow(this::openPath, memory);
+            // MainFrame reaches the editor the same way the file tree does: by enqueueing onto this one queue, so
+            // a shell command that opens a tab is ordered with the modal dialogs and the tab-structure changes.
+            this.terminal = new TerminalWindow(this::openPath, this::revealPath, memory);
         }
 
         /** Enqueue opening {@code file} into a tab — how the folder window's tree reaches the editor. */
         void openPath(Path file) {
             requests.add(() -> loadInto(file));
+        }
+
+        /** Enqueue pointing the folder window at {@code dir} — MainFrame's {@code reveal}. */
+        void revealPath(Path dir) {
+            requests.add(() -> {
+                folder.show(app, dir);
+                ws.status.text("Folder: " + dir);
+            });
+        }
+
+        /** Every Gui this application presents, main window first. */
+        List<Gui> windows() {
+            return List.of(gui, folder.gui(), terminal.gui());
         }
 
         /**
@@ -470,9 +629,11 @@ public final class TextEditorApp {
         void shortcuts() {
             bind(gui);
             bind(folder.gui());
+            bind(terminal.gui());
         }
 
         private void bind(Gui g) {
+            g.shortcut(Key.GRAVE_ACCENT, () -> requests.add(this::openTerminal), Modifier.CONTROL);
             g.shortcut(Key.O, () -> requests.add(this::open), Modifier.CONTROL);
             g.shortcut(Key.O, () -> requests.add(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
             g.shortcut(Key.S, () -> requests.add(this::save), Modifier.CONTROL);
@@ -485,11 +646,62 @@ public final class TextEditorApp {
 
         /** GUI thread, once per frame. One request at a time — each may block on a modal dialog. */
         void drain() {
-            folder.pump();
+            terminal.tick();
+            // Which windows are up is read from the windows themselves, every frame, rather than written when
+            // they open and close: see WindowMemory.open for why that distinction is the whole feature.
+            memory.open("folder", folder.isOpen());
+            memory.open("terminal", terminal.isOpen());
             Runnable r = requests.poll();
             if (r != null) {
                 r.run();
             }
+        }
+
+        /**
+         * Reopen what was open when the application last closed: the file tree, pointed back at the same folder,
+         * and the terminal. Enqueued rather than done here, so both open through the one path everything else
+         * uses — one per frame, ordered with the dialogs.
+         *
+         * <p>A folder that has since been deleted, renamed or unmounted is <em>not</em> reopened, and says so
+         * rather than opening an empty tree. That also forgets it: the next frame records the window as closed,
+         * so a folder that has gone away stops being asked for.
+         */
+        void restore() {
+            if (memory.wasOpen("folder")) {
+                Path dir = savedFolder();
+                if (dir == null) {
+                    requests.add(() -> ws.status.text("Last folder is no longer there - not reopening it"));
+                } else {
+                    revealPath(dir);
+                }
+            }
+            if (memory.wasOpen("terminal")) {
+                requests.add(this::openTerminal);
+            }
+        }
+
+        /** The remembered folder, or null if there is none, it is unreadable, or it is no longer a directory. */
+        private Path savedFolder() {
+            String saved = memory.shownPath("folder");
+            if (saved.isBlank()) {
+                return null;
+            }
+            try {
+                Path dir = Path.of(saved);
+                return java.nio.file.Files.isDirectory(dir) ? dir : null;
+            } catch (java.nio.file.InvalidPathException e) {
+                return null;   // the settings file is hand-editable, so this is reachable
+            }
+        }
+
+        /**
+         * Open the terminal where the work is: the active tab's directory, else where the editor was started.
+         * MainFrame keeps its own cwd from there on — {@code cd} moves it and the prompt follows.
+         */
+        private void openTerminal() {
+            Path start = startDir();
+            terminal.show(app, start != null ? start : Path.of("").toAbsolutePath());
+            ws.status.text("Terminal: MainFrame - Ctrl+` to return to it");
         }
 
         private void open() {
@@ -590,6 +802,12 @@ public final class TextEditorApp {
         private Path startDir() {
             EditorTab tab = ws.active();
             return tab != null && tab.file != null ? tab.file.getParent() : null;
+        }
+
+        /** Main window gone: stop MainFrame's job thread before the process starts tearing down. */
+        @Override
+        public void close() {
+            terminal.close();
         }
     }
 

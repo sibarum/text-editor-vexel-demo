@@ -22,6 +22,7 @@
         <vexelray-gui.version>0.1.0-SNAPSHOT</vexelray-gui.version>
         <vexelray.version>0.1.0-SNAPSHOT</vexelray.version>
         <tactroller.version>1.0-SNAPSHOT</tactroller.version>
+        <mainframe.version>0.1.0-SNAPSHOT</mainframe.version>
 
         <app.mainClass>dev.vexelray.demo.editor.TextEditorApp</app.mainClass>
         <!-- Program args for exec:exec (one token; empty = interactive). -->
@@ -55,6 +56,14 @@
             <groupId>org.snakeyaml</groupId>
             <artifactId>snakeyaml-engine</artifactId>
             <version>2.7</version>
+        </dependency>
+        <!-- The terminal window's shell. MainFrame is a library first: a Session that prints through a Renderer
+             over two streams, so the window embeds it in-process rather than driving its binary and scraping the
+             output. Zero runtime dependencies of its own. -->
+        <dependency>
+            <groupId>dev.mainframe</groupId>
+            <artifactId>mainframe</artifactId>
+            <version>${mainframe.version}</version>
         </dependency>
         <!-- Native OS open/save dialogs (NFDe over Panama), at the application edge. -->
         <dependency>
