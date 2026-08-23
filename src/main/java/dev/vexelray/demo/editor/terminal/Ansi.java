@@ -1,19 +1,31 @@
 package dev.vexelray.demo.editor.terminal;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.demo.editor.Palettes;
+import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.core.style.Theme;
 import dev.vexelray.gui.core.text.Span;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MainFrame's colour, translated. Everything MainFrame prints goes through its {@code Renderer}, which paints
- * with exactly seven SGR codes — {@code 0m} reset, {@code 1m} bold, {@code 2m} dim and four colours — so this
- * handles those and <em>discards</em> every other escape sequence rather than letting it reach the atlas as
- * garbage glyphs.
+ * MainFrame's colour, translated onto a monochrome tube. Everything MainFrame prints goes through its
+ * {@code Renderer}, which paints with exactly seven SGR codes — {@code 0m} reset, {@code 1m} bold, {@code 2m} dim
+ * and four colours — so this handles those and <em>discards</em> every other escape sequence rather than letting
+ * it reach the atlas as garbage glyphs.
  *
- * <p>Attributes do not nest: a code replaces the one before it and {@code 0m} clears both slots. That matches
- * how the renderer emits them (each helper closes its own span) and keeps the state to two fields.
+ * <p><b>Seven codes, three intensities.</b> A phosphor screen has one colour and a beam that can be turned up or
+ * down, so the four hues do not survive the trip: red, yellow and cyan all mean "this line is worth looking at",
+ * which on a green screen is the same instruction as bold. What is lost is real — an error and a heading now look
+ * alike in the scrollback — and what pays for it is the message line, which is where a 5250 put an error in the
+ * first place, in reverse video where no amount of hue would have been louder.
+ *
+ * <p>The three levels come from the theme rather than from here, so a window themed some other way gets its own
+ * ink out of the same code. Nothing in this file names a colour.
+ *
+ * <p>Attributes do not nest: a code replaces the one before it and {@code 0m} clears both slots. That matches how
+ * the renderer emits them (each helper closes its own span) and keeps the state to two fields.
  */
 final class Ansi {
 
@@ -24,20 +36,36 @@ final class Ansi {
         }
     }
 
-    // The atlas has no bold face, so bold is brighter ink — the one honest mapping available.
-    static final Color INK = Color.rgb(0xc7d1e0);
-    static final Color BRIGHT = Color.rgb(0xeef3fa);
-    static final Color DIM = Color.rgb(0x7d8798);
-    static final Color RED = Color.rgb(0xff7b72);
-    static final Color GREEN = Color.rgb(0x7ee787);
-    static final Color YELLOW = Color.rgb(0xe3b341);
-    static final Color CYAN = Color.rgb(0x56d4dd);
+    /** Full beam: bold, and every hue the tube cannot draw. */
+    private final Color hot;
+    /** The resting intensity of the phosphor — what an unattributed line is drawn in. */
+    private final Color normal;
+    /** The beam turned down: {@code 2m}, and anything the renderer meant as secondary. */
+    private final Color soft;
 
-    private Ansi() {
+    private Ansi(Color hot, Color normal, Color soft) {
+        this.hot = hot;
+        this.normal = normal;
+        this.soft = soft;
+    }
+
+    /** The three intensities this theme's ink ladder gives. */
+    static Ansi of(Theme theme) {
+        return new Ansi(theme.color(Palettes.HOT), theme.color(Role.INK), theme.color(Role.DIM));
+    }
+
+    /** What a line with nothing said about it is drawn in. */
+    Color normal() {
+        return normal;
+    }
+
+    /** Full beam — the terminal's own chrome uses it for the echoed prompt. */
+    Color hot() {
+        return hot;
     }
 
     /** Split {@code raw} into printable text plus the spans its escape codes asked for. */
-    static Line parse(String raw) {
+    Line parse(String raw) {
         if (raw.indexOf(0x1b) < 0) {
             return Line.plain(raw);
         }
@@ -67,11 +95,11 @@ final class Ansi {
                             bold = false;
                         }
                         case "1" -> bold = true;
-                        case "2" -> colour = DIM;
-                        case "31" -> colour = RED;
-                        case "32" -> colour = GREEN;
-                        case "33" -> colour = YELLOW;
-                        case "36" -> colour = CYAN;
+                        case "2" -> colour = soft;
+                        // Green is the tube's own colour, so 32m is the resting intensity rather than a shift.
+                        case "32" -> colour = normal;
+                        // Red, yellow and cyan: three ways of saying "brighter" to a screen with one colour.
+                        case "31", "33", "36" -> colour = hot;
                         default -> {
                             // A code MainFrame does not emit. Dropping it beats guessing at it.
                         }
@@ -85,11 +113,11 @@ final class Ansi {
         return new Line(text.toString(), List.copyOf(spans));
     }
 
-    private static void close(List<Span> spans, int start, int end, Color colour, boolean bold) {
+    private void close(List<Span> spans, int start, int end, Color colour, boolean bold) {
         if (end <= start) {
             return;
         }
-        Color ink = colour != null ? colour : bold ? BRIGHT : null;
+        Color ink = colour != null ? colour : bold ? hot : null;
         if (ink != null) {
             spans.add(Span.foreground(start, end, ink));
         }

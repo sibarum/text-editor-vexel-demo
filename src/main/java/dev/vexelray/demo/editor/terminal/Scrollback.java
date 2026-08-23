@@ -26,17 +26,20 @@ final class Scrollback {
 
     private final Gui gui;
     private final Node column;
+    /** The tube's three intensities, resolved once from the theme — also what parses the escapes. */
+    private final Ansi ansi;
     private final ConcurrentLinkedQueue<Ansi.Line> incoming = new ConcurrentLinkedQueue<>();
     private final ArrayDeque<Node> live = new ArrayDeque<>();
 
-    Scrollback(Gui gui, Node column) {
+    Scrollback(Gui gui, Node column, Ansi ansi) {
         this.gui = gui;
         this.column = column;
+        this.ansi = ansi;
     }
 
     /** Queue one line of MainFrame output. Called from the job thread; the escapes are parsed there too. */
     void post(String raw) {
-        incoming.add(Ansi.parse(raw));
+        incoming.add(ansi.parse(raw));
     }
 
     /** Queue one line the terminal itself wrote — an echoed prompt, a status note. */
@@ -64,7 +67,7 @@ final class Scrollback {
                 .width(Length.FILL)
                 .font(1)
                 .textSize(Length.rem(0.8125f))
-                .textColor(Ansi.INK)
+                .textColor(ansi.normal())
                 .align(TextLayout.HAlign.LEFT, TextLayout.VAlign.TOP);
         if (!line.spans().isEmpty()) {
             node.spans(line.spans());

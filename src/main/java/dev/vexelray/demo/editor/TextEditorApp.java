@@ -6,13 +6,17 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.TextClipboard;
 import dev.vexelray.gui.core.WindowControls;
 import dev.vexelray.gui.core.app.AppWindow;
+import dev.vexelray.gui.core.app.CloseRequest;
 import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.app.WindowInput;
 import dev.vexelray.gui.core.app.WindowSpec;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.nfd.FileDialog;
 import dev.vexelray.demo.editor.terminal.TerminalWindow;
+import dev.vexelray.gui.widget.Modal;
+import dev.vexelray.gui.widget.Modals;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.gui.widget.TextField;
@@ -51,11 +55,16 @@ public final class TextEditorApp {
     /** The title bar's own height, in dp — {@code TitleBar}'s, which is the Windows caption metric. */
     static final int BAR_H = 32;
     private static final int H = 560 + BAR_H;
-
-    private static final Color BG = Color.rgb(0x11141b);
-    private static final Color PANEL = Color.rgb(0x1b2130);
-    private static final Color LINE = Color.rgb(0x2b3346);
-    private static final Color DIM = Color.rgb(0x93a0b4);
+    /**
+     * The margin the page leaves around itself — and, because it is declared as such, the window's resize grip.
+     *
+     * <p>It is one constant used twice on purpose. The ring of dead space a window draws around its content is
+     * the easiest thing on screen to aim at and the only thing on screen that did nothing, so it is handed to the
+     * window manager ({@code Gui.resizeBorder}): the pointer turns into a resize pointer the moment it crosses
+     * into the margin, and the edge is as wide a target as the margin is. Padding it by one value and gripping by
+     * another would leave either a strip of margin that does not resize or a strip of text that does.
+     */
+    private static final Length GUTTER = Length.dp(16);
 
     private static final String UNTITLED = "untitled.txt";
     private static final String WELCOME =
@@ -71,6 +80,10 @@ public final class TextEditorApp {
         args = java.util.Arrays.stream(args).filter(s -> !s.equals("--terminal")).toArray(String[]::new);
 
         Gui gui = new Gui();
+        // The editor keeps the framework's own look, unshifted — it is the reference the other two windows are
+        // departures from (see Palettes). Stated rather than left to the default, because the choice is now one
+        // of three and a default is not a choice anyone can read.
+        gui.theme(Palettes.EDITOR);
         // Two em more height than the page needs on its own: the title bar sits inside the canvas now, so the
         // smallest layout has to hold it as well as the tabs and the status line.
         gui.minSize(Length.em(30), Length.em(22));
@@ -85,6 +98,11 @@ public final class TextEditorApp {
 
         if (args.length >= 1 && args[0].equals("--capture-terminal")) {
             captureTerminal(args.length >= 2 ? args[1] : "terminal.png");
+            return;
+        }
+
+        if (args.length >= 1 && args[0].equals("--capture-folder")) {
+            captureFolder(args.length >= 2 ? args[1] : "folder.png");
             return;
         }
 
@@ -109,6 +127,10 @@ public final class TextEditorApp {
             app.input(TextEditorApp::windowInput);
             FileActions files = new FileActions(gui, ws, app, memory);
             files.shortcuts();
+            // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
+            // gate that can still ask about unsaved work while the window stays open.
+            Modals dialogs = Modals.install(app);
+            app.onCloseRequest(files::guardClose);
             // Every window gets the OS clipboard, not just the main one: copy out of the terminal's prompt has to
             // reach the same place copy out of a tab does.
             if (clipboard != null) {
@@ -130,6 +152,9 @@ public final class TextEditorApp {
                     memory.poll();
                 });
             } finally {
+                // Drop any dialog still queued: an application on its way out must not be held up by a question
+                // there is nobody left to answer.
+                dialogs.close();
                 files.close();
                 memory.save();
             }
@@ -161,8 +186,25 @@ public final class TextEditorApp {
                 terminal.tick();
             }
             terminal.tick();
-            GuiApp.capture(terminal.gui(), 720, 480 + BAR_H, 0.06f, 0.07f, 0.09f, path);
+            // The display knows its own size and its own bezel colour, so the capture is its call, not this one.
+            terminal.capture(path);
         }
+        System.out.println("captured " + path);
+    }
+
+    /**
+     * Render the file tree headlessly, for the same reason the terminal has an entry point: a window whose look
+     * cannot be looked at without a GPU and a mouse is a window whose look nobody checks. It shows this
+     * repository, which is the one folder every checkout is guaranteed to have.
+     */
+    private static void captureFolder(String path) throws Exception {
+        // No window is opened here, so the memory is never asked for a placement and never written to.
+        WindowMemory unused = new WindowMemory(Settings.open("text-editor"));
+        FolderWindow folder = new FolderWindow(f -> { }, unused);
+        folder.setFolder(Path.of("").toAbsolutePath());
+        Color page = folder.gui().theme().color(Role.PAGE);
+        GuiApp.capture(folder.gui(), FolderWindow.DEFAULT_W, FolderWindow.DEFAULT_H,
+                page.r(), page.g(), page.b(), path);
         System.out.println("captured " + path);
     }
 
@@ -288,15 +330,35 @@ public final class TextEditorApp {
         Path file;
         /** Line-ending convention of the file, restored on save. New files save with {@code \n}. */
         boolean crlf;
+        /**
+         * The text as last loaded or saved — what {@link #dirty()} compares against.
+         *
+         * <p>A snapshot rather than a flag set from {@code onChange}, because change handlers run on worker
+         * threads: a flag would race with the programmatic {@code editor.text(...)} that loading a file does, and
+         * lose. Comparing on demand cannot race with anything, and it answers the question more honestly —
+         * typing something and then undoing it back leaves the document clean, which is what it is.
+         */
+        String savedText;
 
-        EditorTab(TextField editor, Highlighter highlighter, Node body) {
+        EditorTab(TextField editor, Highlighter highlighter, Node body, String savedText) {
             this.editor = editor;
             this.highlighter = highlighter;
             this.body = body;
+            this.savedText = savedText;
         }
 
         String title() {
             return file != null ? file.getFileName().toString() : UNTITLED;
+        }
+
+        /** Whether this document has edits that are not on disk. */
+        boolean dirty() {
+            return !editor.text().equals(savedText);
+        }
+
+        /** This document's name for a message about losing it. */
+        String describe() {
+            return file != null ? file.getFileName().toString() : UNTITLED + " (never saved)";
         }
     }
 
@@ -320,18 +382,22 @@ public final class TextEditorApp {
             this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+` terminal - Ctrl+S save - "
                             + "Ctrl+N new - Ctrl+W close")
                     .width(Length.FILL).height(Length.AUTO)
-                    .textSize(Length.rem(0.875f)).textColor(DIM)
+                    .textSize(Length.rem(0.875f)).textColor(gui.theme().color(Role.DIM))
                     .align(dev.vexelray.text.TextLayout.HAlign.LEFT, dev.vexelray.text.TextLayout.VAlign.MIDDLE)
                     .scroll(false, false);
 
             Node root = gui.column().width(Length.FILL).height(Length.grow(1))
-                    .padding(Length.dp(16)).gap(Length.rem(0.625f))
+                    .padding(GUTTER).gap(Length.rem(0.625f))
                     .children(tabs.node(), status);
+            // The same gutter, said to the window manager: everything outside the page and below the bar is a
+            // grip. The bar is not — it declares itself caption, and a declared region keeps the system's own
+            // thin band, so this buys the three dead edges without costing the fourth its drag.
+            gui.resizeBorder(GUTTER);
             // The window's own title bar: ordinary widgets, plus the declarations that tell the window manager
             // which pixels are caption. Bound to the real window in main(); here it commands
             // WindowControls.NONE, which is what --capture draws.
             this.titleBar = new TitleBar(gui, WindowControls.NONE, "Text Editor");
-            gui.root().background(BG).children(titleBar.node(), root);
+            gui.root().background(gui.theme().color(Role.PAGE)).children(titleBar.node(), root);
 
             newTab(WELCOME, null, false);
         }
@@ -344,11 +410,11 @@ public final class TextEditorApp {
             // strokes borders as one ring (no per-side control), so the seam-free look means no stroke at all;
             // lit + elevation keep the card reading as a panel without it.
             Node body = gui.column().width(Length.FILL).height(Length.FILL)
-                    .background(PANEL).corner(Length.ZERO, Length.rem(0.75f))
-                    .lit(true).elevation(Length.rem(1))
+                    .background(gui.theme().color(Role.PANEL)).corner(Length.ZERO, Length.rem(0.75f))
+                    .lit(gui.theme().lit()).elevation(Length.rem(1))
                     .padding(Length.dp(12))
                     .children(editor.node());
-            EditorTab tab = new EditorTab(editor, new Highlighter(gui, editor), body);
+            EditorTab tab = new EditorTab(editor, new Highlighter(gui, editor), body, content);
             tab.file = file;
             tab.crlf = crlf;
             open.add(tab);
@@ -361,6 +427,17 @@ public final class TextEditorApp {
         EditorTab active() {
             int i = tabs.selected();
             return i >= 0 && i < open.size() ? open.get(i) : null;
+        }
+
+        /** Every open document with edits that are not on disk, in tab order. */
+        List<EditorTab> unsaved() {
+            List<EditorTab> out = new ArrayList<>();
+            for (EditorTab tab : open) {
+                if (tab.dirty()) {
+                    out.add(tab);
+                }
+            }
+            return out;
         }
 
         int indexOf(Path file) {
@@ -392,6 +469,7 @@ public final class TextEditorApp {
                 tab.file = null;
                 tab.crlf = false;
                 tab.editor.text("");
+                tab.savedText = "";
                 retitleActive();
                 status.text("Closed - one empty tab remains");
                 return;
@@ -462,6 +540,8 @@ public final class TextEditorApp {
         /** The default size, used the first time — after that, whatever the user left it at. */
         private static final int DEFAULT_W = 340;
         private static final int DEFAULT_H = 560 + BAR_H;
+        /** This window's margin, and so its resize grip — see {@link TextEditorApp#GUTTER}. Tighter: it is narrow. */
+        private static final Length GUTTER = Length.dp(12);
 
         private final java.util.function.Consumer<Path> openFile;
         private final WindowMemory memory;
@@ -485,8 +565,12 @@ public final class TextEditorApp {
         FolderWindow(java.util.function.Consumer<Path> openFile, WindowMemory memory) {
             this.openFile = openFile;
             this.memory = memory;
+            // Before the first node: the drawer is the editor's own look swung round to the warm side of
+            // neutral, so a glance at the taskbar tells the two windows apart before any text is read.
+            gui.theme(Palettes.FILES);
             this.column = gui.column().width(Length.FILL).height(Length.grow(1))
-                    .padding(Length.dp(12)).gap(Length.dp(6));
+                    .padding(GUTTER).gap(Length.dp(6));
+            gui.resizeBorder(GUTTER);
             // The popup draws its own frame too, so all three windows match. Its bar is bound in onCreated: a
             // popup's window does not exist until the main thread services the request, and it is that window the
             // buttons command — not the main one app.controls() would hand over.
@@ -494,7 +578,7 @@ public final class TextEditorApp {
             // It also carries the folder's name, which is why there is no label row: a window that draws its own
             // caption has somewhere to say what it is showing, and saying it twice is just a row of lost height.
             this.titleBar = new TitleBar(gui, WindowControls.NONE, "Files");
-            gui.root().background(BG).children(titleBar.node(), column);
+            gui.root().background(gui.theme().color(Role.PAGE)).children(titleBar.node(), column);
             // Zoom is per-window: each Gui zooms itself, so the tree scales independently of the editor.
             zoomShortcuts(gui);
         }
@@ -753,6 +837,7 @@ public final class TextEditorApp {
                     tab.file = picked;
                     tab.crlf = loaded.crlf();
                     tab.editor.text(loaded.text());
+                    tab.savedText = loaded.text();
                     ws.retitleActive();
                 } else {
                     ws.newTab(loaded.text(), picked, loaded.crlf());
@@ -788,14 +873,87 @@ public final class TextEditorApp {
             }
         }
 
-        private void write(EditorTab tab, Path target) {
+        /**
+         * Stand between the user and losing work: the main window is closing, and closing it is quitting.
+         *
+         * <p>The handler runs on a worker thread and the window stays open, live and drawing until the request is
+         * answered — which is what lets the answer come from a dialog rather than from a guess. Every path answers
+         * it exactly once, including the one where the user dismisses the dialog without choosing.
+         */
+        void guardClose(CloseRequest request) {
+            List<EditorTab> unsaved = ws.unsaved();
+            if (unsaved.isEmpty()) {
+                request.proceed();
+                return;
+            }
+            Modals.show(Modal.of("Unsaved changes", unsavedMessage(unsaved))
+                    .defaultButton("Save all", () -> requests.add(() -> saveAllThenClose(request)))
+                    .button("Discard", request::proceed)
+                    .cancelButton("Cancel", request::cancel));
+        }
+
+        private static String unsavedMessage(List<EditorTab> unsaved) {
+            StringBuilder sb = new StringBuilder(unsaved.size() == 1
+                    ? "One document has changes that are not on disk:\n\n"
+                    : unsaved.size() + " documents have changes that are not on disk:\n\n");
+            for (EditorTab tab : unsaved) {
+                sb.append("    ").append(tab.describe()).append('\n');
+            }
+            return sb.append("\nSave all closes after writing every one of them. Discard closes now and "
+                    + "loses those edits.").toString();
+        }
+
+        /**
+         * GUI thread: save every changed document, then answer the close request with what actually happened.
+         *
+         * <p>It runs from the request queue because a never-saved document needs the native save dialog, which is
+         * modal and belongs to this thread. Any document that does not land — a cancelled dialog, an unwritable
+         * path — cancels the close: the user asked to save everything, so quitting anyway would be exactly the
+         * loss the question existed to prevent.
+         */
+        private void saveAllThenClose(CloseRequest request) {
+            for (EditorTab tab : ws.unsaved()) {
+                if (!saveTab(tab)) {
+                    request.cancel();
+                    ws.status.text("Still open: " + tab.describe() + " was not saved");
+                    return;
+                }
+            }
+            request.proceed();
+        }
+
+        /** Save one tab wherever it belongs, asking for a path if it has never had one. */
+        private boolean saveTab(EditorTab tab) {
+            if (tab.file != null) {
+                return write(tab, tab.file);
+            }
+            // Selecting it first is not cosmetic: the save dialog's start directory and suggested name come from
+            // the active tab, so a Save As for a tab the user cannot see would be labelled from another one.
+            ws.tabs.select(ws.open.indexOf(tab));
             try {
-                java.nio.file.Files.write(target, TextFile.encode(tab.editor.text(), tab.crlf));
+                Path target = FileDialog.save(window, FILTERS, startDir(), tab.title()).orElse(null);
+                return target != null && write(tab, target);
+            } catch (RuntimeException e) {
+                ws.status.text("Save failed: " + e.getMessage());
+                return false;
+            }
+        }
+
+        /** Write {@code tab} to {@code target}. Returns false if it did not land, so a caller can stop. */
+        private boolean write(EditorTab tab, Path target) {
+            try {
+                // The exact text that goes to disk is the text this tab is now clean against — read once, so an
+                // edit arriving between the write and the snapshot cannot be mistaken for saved.
+                String text = tab.editor.text();
+                java.nio.file.Files.write(target, TextFile.encode(text, tab.crlf));
                 tab.file = target;
+                tab.savedText = text;
                 ws.retitleActive();
                 ws.status.text("Saved " + target);
+                return true;
             } catch (java.io.IOException e) {
                 ws.status.text("Save failed: " + e.getMessage());
+                return false;
             }
         }
 

@@ -24,12 +24,33 @@ mvn compile exec:exec "-Dapp.args=--capture"
 
 Ctrl+= / Ctrl+- / Ctrl+0 zoom the whole UI — every length is relative.
 
+Closing the window asks first if anything is unsaved: a dialog naming each changed document, with **Save all**
+(which prompts for a path for anything never saved, and cancels the quit if any write does not land), **Discard**
+and **Cancel**. Nothing to save closes straight through. See [docs/close-gate.md](docs/close-gate.md).
+
 All three windows draw their own title bar, in the app's palette rather than the system's: `TitleBar` from
 `vexelray-gui-widget` over a window created with `Decorations.CLIENT`. It is an ordinary row of ordinary
 widgets — what makes it a title bar is two declarations, `WindowRegion.DRAG` on the strip and
 `WindowRegion.INTERACTIVE` on each button, so dragging, snapping, double-click-to-maximize, Win+arrow and the
 system menu all stay the window manager's job. The buttons drive `GuiApp.controls()` on the main window, and
 each popup's own `NativeWindow` on the others.
+
+The margin every window leaves around its page is also its resize grip. A system frame gives you two or three
+pixels to aim at; here the whole gutter — 16dp around the editor, 12dp around the terminal and the file tree —
+is handed to the window manager with one declaration, `Gui.resizeBorder(GUTTER)`, set from the same `Length` the
+root is padded by so the two cannot drift. Cross into the dead space and the pointer is already a resize pointer.
+It costs the chrome nothing: the wider band applies only where the tree declares nothing, so inside the title bar
+and its buttons the system's own thin band still applies — the bar keeps all but its top few pixels draggable,
+and the close button stays a close button all the way to its corner.
+
+**Three windows, three looks.** A theme in vexelray-gui is nine numbers rather than a table of colours, so a
+second look is an angle, not a fork. [Palettes.java](src/main/java/dev/vexelray/demo/editor/Palettes.java) rotates
+the *neutral family* of `Palette.DARK` — page, ink, and the depth colour every shadow derives from — and leaves
+the chromatic anchors where the framework put them: the editor keeps the blue-grey it always had, the file tree
+is the same ladders swung 163° to the warm side, and both keep the same blue selection, because a selection
+should read as a selection in every window. The terminal is the exception, and deliberately so. Nothing in this
+app names a colour any more; the five hex constants it used to carry were all within 2/255 of a rung on the
+framework's own ladder, so they are `Role.PAGE`, `Role.PANEL` and `Role.DIM` now.
 
 Every window remembers where it was, and whether it was open: position, size, maximized state, which tool
 windows were up and what folder the file tree was showing all persist to `~/.text-editor/settings.properties`.
@@ -54,9 +75,58 @@ records, sizes, times and media types, not text to be re-parsed. It runs embedde
 design, and what the framework cannot do for it yet, is in [docs/mainframe-window.md](docs/mainframe-window.md);
 the original from-scratch scope it replaced is in [docs/terminal.md](docs/terminal.md).
 
+### It is a green screen
+
+MainFrame pipes typed records rather than text, which is the one idea it shares with the machine its name comes
+from — so the window wears the part: an IBM 5250 data-entry display, with `Command ===>` over a boxed entry area
+and a message line under it.
+
+What it does *not* wear is the rest of the costume. A real 5250 spent its top three rows on a screen identifier,
+a centred title and a "Type command, press Enter." that stopped being news the second time you read it, and its
+bottom row on a function-key legend. Those four rows are scrollback now. The header is one line: the working
+directory on the left, the date and time on the right — the only two things up there that ever changed.
+
+The look is a palette, not a set of overrides. `Palettes.PHOSPHOR` is one hue at nine lightnesses: accent, action
+and danger all collapse onto the same green, because a tube has one colour and a beam that goes up or down. Two
+things fall out of that for free. The palette's `depth` anchor is the phosphor itself, so `Node.elevation` stops
+being a drop shadow and becomes the halo the glass throws on the bezel — one number, no special case anywhere in
+the renderer. And an error turns the message line over into reverse video without anything choosing two colours:
+`Role.DANGER` fills it and `Role.ON_DANGER` is *whichever palette extreme lies further from that fill*, which in
+a monochrome palette is the unlit page.
+
+What the tube cannot do is draw MainFrame's four ANSI colours, so red, yellow and cyan all become "brighter" —
+the same instruction as bold. That loses something real, and the message line is what pays it back.
+
+There was a shadow mask over the glass for a while — scan lines every 3dp, aperture-grille wires every 4dp, so
+the lit cell between them came out taller than it was wide. It went for the reason the legend went: a delight to
+look at, a tax to read through, and this is a window you read through.
+
+Everything the terminal answers to is a chord, and they all predate the costume: `Up`/`Down` for history, `Ctrl+L`
+to clear, `Ctrl+C` to interrupt or copy, `Ctrl+D` to close.
+
+**The screen tails, until you say otherwise.** The scrollback is a `ScrollLock.BOTTOM` container, so it follows
+output down as it arrives; scroll away from the bottom and the framework detaches the lock, and nothing that
+prints afterwards moves the view. Scrolling back onto the bottom edge re-attaches it — all of that is
+`scrollLock` doing its job, and none of it is this app's code.
+
+The one thing the app has to say is what Enter means. Pressing it is a reader announcing they are done with
+history: a shell that runs a command and leaves you looking at an older screen has hidden its own answer. So
+submitting a line calls `Node.scrollToEdge()`, which re-attaches the tail and lands in the same frame as the
+echo. Scrolling stays entirely the reader's; only Enter overrides it.
+
+**The whole window is the input.** Any click anywhere puts the caret back in the command field — subscribed to
+the click *topic* rather than handled on the root, because a handler bubbles only to the nearest ancestor that
+has one, so a click on the title bar's maximize button would never reach it. Re-focusing a field that already has
+focus is a no-op in the dispatcher, so the common case costs a comparison. There is nothing to aim at, because
+everything is the same target.
+
 Two extra flags:
 
 ```bash
 mvn compile exec:exec "-Dapp.args=--terminal"           # open the shell window at startup
 mvn compile exec:exec "-Dapp.args=--capture-terminal"   # render it headlessly to terminal.png
+mvn compile exec:exec "-Dapp.args=600" "-Dapp.args2=--terminal"   # both windows, 600 frames, then quit
 ```
+
+(`app.args` and `app.args2` are one token each — a Maven property is not a command line. Blanks are dropped, so
+an unused slot costs nothing.)

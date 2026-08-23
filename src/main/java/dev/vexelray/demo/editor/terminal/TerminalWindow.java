@@ -1,6 +1,6 @@
 package dev.vexelray.demo.editor.terminal;
 
-import dev.vexelray.canvas.Color;
+import dev.vexelray.demo.editor.Palettes;
 import dev.vexelray.demo.editor.WindowMemory;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
@@ -11,6 +11,8 @@ import dev.vexelray.gui.core.input.ClaimScope;
 import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.layout.LayoutEnums;
+import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.core.style.Theme;
 import dev.vexelray.gui.core.text.Document;
 import dev.vexelray.gui.core.text.Span;
 import dev.vexelray.gui.core.WindowControls;
@@ -18,23 +20,47 @@ import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.os.Decorations;
 import dev.vexelray.text.TextLayout;
+import sibarum.atchung.Subscription;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
 import dev.vexelray.os.NativeWindow;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * MainFrame as its own OS window on the shared frame loop: a third {@link Gui} holding a tailing scrollback over
- * a prompt over a status line, opened as the named window {@code "terminal"} — so Ctrl+` means <em>the</em>
+ * a prompt over a message line, opened as the named window {@code "terminal"} — so the shortcut means <em>the</em>
  * terminal, whether that has to create one or raise the one already there.
  *
  * <p>This is a <b>shell console, not a terminal emulator</b>: lines in, lines out. There is no character grid, no
  * pseudo-terminal and no escape-sequence state machine here, and MainFrame needs none — it is a Java library that
  * prints, so the window feeds it a line and renders what it prints.
+ *
+ * <h2>Why it looks like a 5250</h2>
+ * MainFrame is a shell whose pipes carry typed records rather than text, which is the one idea it shares with the
+ * machine this screen is borrowed from. So the window wears the part: {@link Palettes#PHOSPHOR} for a green tube,
+ * {@code Command ===>} over a boxed entry area, and a message line that turns over into reverse video when
+ * something failed.
+ *
+ * <p><b>What is left is what earns its row.</b> A 5250 spent its top three lines on a screen identifier, a
+ * centred title and a "Type command, press Enter." that stopped being news the second time anyone read it, and
+ * its bottom line on a function-key legend. Those four rows are scrollback now; the working directory and the
+ * clock, the only things up there that ever changed, share one. The shadow mask over the glass went the same
+ * way, and for the same reason: this is a window you read through, and the costume was charging rent.
+ *
+ * <p>The chrome is a 5250; the <em>content</em> is not. MainFrame's output keeps its own case and its own
+ * spacing, because a shell that upper-cases your paths is a shell that lies about them.
+ *
+ * <h2>Typing without aiming</h2>
+ * The caret lives in the command field and returns there on any click anywhere in the window, so the field never
+ * has to be hit to be typed into — see {@link #focusFollowsWindow}.
  *
  * <p><b>The session outlives the window.</b> The tree belongs to this object, not to the OS window, so closing
  * the terminal releases a window and leaves MainFrame running: reopen it and the scrollback, the history and the
@@ -45,80 +71,132 @@ import java.util.function.Consumer;
  */
 public final class TerminalWindow implements AutoCloseable {
 
-    private static final Color BG = Color.rgb(0x11141b);
-    private static final Color PANEL = Color.rgb(0x161b26);
-    private static final Color DIM = Color.rgb(0x93a0b4);
-
     /** The title bar's own height, in dp — {@code TitleBar}'s, which is the Windows caption metric. */
     private static final int BAR_H = 32;
 
     /**
      * The default size, used the first time — after that, whatever the user left it at. The height carries the
-     * title bar this window draws itself, since the client area now covers the whole window.
+     * title bar this window draws itself, plus the three rows around the scrollback: the header, the command
+     * line and the message line.
      */
-    private static final int DEFAULT_W = 720;
-    private static final int DEFAULT_H = 480 + BAR_H;
+    private static final int DEFAULT_W = 760;
+    private static final int DEFAULT_H = 520 + BAR_H;
+
+    /** This window's margin, and so its resize grip — the same bargain the editor's gutter makes. */
+    private static final Length GUTTER = Length.dp(12);
+
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("MM/dd/yy  HH:mm:ss");
+
+    /** What the clock reads before a window has ever been opened — see {@link #stamp()}. */
+    private static final String UNSET = "--/--/--  --:--:--";
 
     private final Consumer<Path> openFile;
     private final Consumer<Path> openDir;
     private final WindowMemory memory;
     private final Gui gui = new Gui();
+    private final Ansi ansi;
     private final Node output;
-    private final Node promptLabel;
-    private final Node status;
+    private final Node location;
+    private final Node clock;
+    private final Node message;
     private final TextField prompt;
     private final Scrollback scrollback;
     private final TitleBar titleBar;
+    private final Subscription clicks;
     private final List<String> history = new ArrayList<>();
 
     private MainFrameShell shell;
     /** The framework.s handle on this window, claimed the first time it is shown. */
     private AppWindow handle;
     private int recall;
-    private String shownPrompt = "";
-    private String shownStatus = "";
+    private String shownLocation = "";
+    private String shownClock = "";
+    private String shownMessage = "";
+    private boolean shownError;
 
     public TerminalWindow(Consumer<Path> openFile, Consumer<Path> openDir, WindowMemory memory) {
         this.openFile = openFile;
         this.openDir = openDir;
         this.memory = memory;
 
+        // First, and before a single node exists: a role resolves at the moment a widget writes a prop, so a
+        // theme installed after the tree is built reaches nothing that is already painted.
+        gui.theme(Palettes.PHOSPHOR);
+        Theme theme = gui.theme();
+        this.ansi = Ansi.of(theme);
+
+        // ---- the display -------------------------------------------------------------
+        // One line, because one line is all there was worth keeping: where you are, and when it is. The screen
+        // identifier, the centred title and the instruction line underneath them were furniture that told you
+        // nothing the second time you read them, and the three rows they cost are scrollback now.
+        this.location = glyphs("", theme.color(Palettes.HOT)).width(Length.grow(1));
+        this.clock = glyphs(UNSET, theme.color(Role.DIM))
+                .width(Length.AUTO)
+                .align(TextLayout.HAlign.RIGHT, TextLayout.VAlign.MIDDLE);
+        Node header = gui.row().width(Length.FILL).height(Length.rem(1.4f)).gap(Length.em(1.5f))
+                .children(location, clock);
+
+        Node rule = gui.box().width(Length.FILL).height(Length.dp(1)).background(theme.color(Role.DIM));
+        // A tailing log is clipped at its top edge, so the oldest visible line is usually cut through the
+        // middle. That is what a scrolling display does; it only looks like a fault when the cut lands against
+        // the rule. This is the clearance that keeps the two apart.
+        Node clearance = gui.box().width(Length.FILL).height(Length.rem(0.3f));
+
         this.output = gui.column().width(Length.FILL).height(Length.grow(1))
-                .background(PANEL).corner(Length.rem(0.5f), Length.rem(0.5f))
-                .padding(Length.dp(10))
                 .scrollLock(LayoutEnums.ScrollLock.BOTTOM);
-        this.scrollback = new Scrollback(gui, output);
+        this.scrollback = new Scrollback(gui, output, ansi);
 
-        this.promptLabel = gui.text("")
-                .width(Length.AUTO).height(Length.FILL)
-                .font(1).textSize(Length.rem(0.8125f)).textColor(Ansi.CYAN)
-                .align(TextLayout.HAlign.LEFT, TextLayout.VAlign.MIDDLE);
+        // ---- the entry field ----------------------------------------------------------
+        Node command = glyphs("Command", theme.color(Role.INK)).width(Length.AUTO);
+        Node arrow = glyphs("===>", theme.color(Palettes.HOT)).width(Length.AUTO);
         this.prompt = new TextField(gui, "");
-        prompt.node().width(Length.FILL).height(Length.FILL)
-                .font(1).textSize(Length.rem(0.8125f)).textColor(Ansi.BRIGHT);
-        Node promptRow = gui.row().width(Length.FILL).height(Length.rem(1.75f)).gap(Length.em(0.5f))
-                .children(promptLabel, prompt.node());
+        // Square, with the tube showing through it. The widget paints itself a rounded sunken well, which is
+        // right on a page and wrong on glass — but its border it re-paints on every focus change, so that one is
+        // not ours to take away. Left alone it becomes the thing a 5250 entry field was always drawn as: a box
+        // around the input area, bright while the field holds the caret. Which, in this window, is always.
+        prompt.node().width(Length.grow(1)).height(Length.FILL)
+                .background(theme.color(Role.NONE))
+                .corner(Length.ZERO)
+                .font(1).textSize(Length.rem(0.8125f)).textColor(theme.color(Palettes.HOT));
+        Node commandRow = gui.row().width(Length.FILL).height(Length.rem(1.9f)).gap(Length.em(0.6f))
+                .children(command, arrow, prompt.node());
 
-        this.status = gui.text("")
+        // ---- the message line ------------------------------------------------------------
+        this.message = glyphs("", theme.color(Role.DIM))
                 .width(Length.FILL).height(Length.rem(1.5f))
-                .textSize(Length.rem(0.8125f)).textColor(DIM)
-                .align(TextLayout.HAlign.LEFT, TextLayout.VAlign.MIDDLE);
+                .padding(Length.ZERO, Length.em(0.4f));
+        // ---- the tube ------------------------------------------------------------------
+        // Rounded because the glass is, lit because it is glass, and elevated because this palette's depth anchor
+        // is the phosphor itself — so what would be a drop shadow under any other theme is the halo the screen
+        // throws onto the bezel around it. One anchor; no special case anywhere in the renderer.
+        Node tube = gui.column().width(Length.FILL).height(Length.grow(1))
+                .background(theme.color(Role.PAGE))
+                .corner(Length.rem(1.1f))
+                .padding(Length.dp(18))
+                .gap(Length.rem(0.35f))
+                .lit(theme.lit())
+                .elevation(Length.rem(1.25f))
+                .children(header, rule, clearance, output, commandRow, message);
 
-        Node root = gui.column().width(Length.FILL).height(Length.grow(1))
-                .padding(Length.dp(12)).gap(Length.rem(0.5f))
-                .children(output, promptRow, status);
+        Node frame = gui.column().width(Length.FILL).height(Length.grow(1))
+                .padding(GUTTER)
+                .children(tube);
         // This window draws its own frame too, so all three match. The bar is bound in onCreated: a popup's
         // window does not exist until the main thread services the request, and it is that window the buttons
         // command — not the main one.
         this.titleBar = new TitleBar(gui, WindowControls.NONE, "Terminal");
-        gui.root().background(BG).children(titleBar.node(), root);
-        gui.minSize(Length.em(24), Length.em(14));
+        gui.root().background(theme.color(Palettes.BEZEL)).children(titleBar.node(), frame);
+        // One row of chrome more than the plain console had, so barely more than it asked for.
+        gui.minSize(Length.em(26), Length.em(15));
+        // The margin is the grip: dead space around the tube resizes the window, the bar above it still drags it.
+        gui.resizeBorder(GUTTER);
         gui.zoomRange(0.5f, 3f, 1.25f);
         gui.shortcut(Key.EQUAL, gui::zoomIn, Modifier.CONTROL);
         gui.shortcut(Key.MINUS, gui::zoomOut, Modifier.CONTROL);
         gui.shortcut(Key.DIGIT_0, gui::resetZoom, Modifier.CONTROL);
 
         prompt.onSubmit(this::onLine);
+        this.clicks = focusFollowsWindow();
         claims();
     }
 
@@ -130,8 +208,8 @@ public final class TerminalWindow implements AutoCloseable {
     /**
      * Open the window on the next frame, starting MainFrame in {@code cwd}.
      *
-     * <p>Only the first call opens a window. A second Ctrl+` raises the one that exists and puts the caret back
-     * in the prompt — "open the terminal" has to mean the terminal, not a second terminal, and a window that is
+     * <p>Only the first call opens a window. Asking again raises the one that exists and puts the caret back in
+     * the prompt — "open the terminal" has to mean the terminal, not a second terminal, and a window that is
      * already open but behind something else has to come forward or the shortcut looks broken.
      *
      * <p>Its position and size come from {@link WindowMemory}, clamped to a monitor that exists, and go back
@@ -160,15 +238,24 @@ public final class TerminalWindow implements AutoCloseable {
             return;
         }
         shell = new MainFrameShell(scrollback, cwd, openFile, openDir, this::onShellExit);
-        scrollback.post("MainFrame in " + cwd, List.of(Span.foreground(0, 9, Ansi.BRIGHT)));
-        scrollback.post("type help to see every command, or try: ls | where kind == \"file\" | sort-by size",
-                List.of());
-        scrollback.post("", List.of());
+        greet(cwd);
     }
 
     /** Run one line as if it had been typed. The entry point for the capture path and for scripted checks. */
     public void submit(String line) {
         onLine(line);
+    }
+
+    /**
+     * Render this display to a PNG at its default size — no window, no input backend, no GPU surface beyond the
+     * one the capture opens for itself.
+     *
+     * <p>The clear colour is the bezel, read off this window's own theme rather than repeated as three floats.
+     */
+    public void capture(String path) throws java.io.IOException {
+        tick();
+        dev.vexelray.canvas.Color bezel = gui.theme().color(Palettes.BEZEL);
+        GuiApp.capture(gui, DEFAULT_W, DEFAULT_H, bezel.r(), bezel.g(), bezel.b(), path);
     }
 
     /** True while a command is running — the capture path waits on this. */
@@ -183,14 +270,23 @@ public final class TerminalWindow implements AutoCloseable {
 
     // ---- the prompt ------------------------------------------------------------------
 
-    /** Handler thread: echo the line, remember it, hand it to the job thread. */
+    /**
+     * Handler thread: echo the line, remember it, hand it to the job thread.
+     *
+     * <p>And send the display back to the tail. Scrolling up through history detaches the scroll lock and hands
+     * the reader full control of the view, which is right — output arriving underneath them must not yank the
+     * page. But pressing Enter says they are finished reading history: a shell that runs a command and leaves you
+     * looking at some older screen has hidden its own answer. So the tail is re-attached here rather than waiting
+     * for them to scroll back down, and the jump lands in the same frame as the echo.
+     */
     private void onLine(String line) {
         if (shell == null) {
             return;
         }
         prompt.text("");
+        output.scrollToEdge();
         String label = promptText();
-        scrollback.post(label + line, List.of(Span.foreground(0, label.length(), Ansi.CYAN)));
+        scrollback.post(label + line, List.of(Span.foreground(0, label.length(), ansi.hot())));
         if (line.isBlank()) {
             return;
         }
@@ -201,6 +297,22 @@ public final class TerminalWindow implements AutoCloseable {
             recall = history.size();
         }
         shell.submit(line);
+    }
+
+    /**
+     * Any click anywhere in this window puts the caret back in the command field.
+     *
+     * <p>The click <em>topic</em> rather than a handler on the root, and that is the point: a handler bubbles to
+     * the nearest ancestor that has one, so a click on the scrollback would reach the root but a click on the
+     * title bar's maximize button would not — and the one that leaves you unable to type afterwards is the
+     * second. The topic publishes every click whatever consumed it. Re-focusing a field that already has focus
+     * is a no-op in the dispatcher, so the common case costs a comparison.
+     *
+     * <p>This is what makes the whole tube the input: there is nothing to aim at, because everything is the
+     * same target.
+     */
+    private Subscription focusFollowsWindow() {
+        return gui.bus().subscribe(gui.clicks(), event -> gui.focus(prompt.node()));
     }
 
     /**
@@ -242,6 +354,13 @@ public final class TerminalWindow implements AutoCloseable {
         prompt.caret(line.length());
     }
 
+    private void greet(Path cwd) {
+        scrollback.post("MainFrame in " + cwd, List.of(Span.foreground(0, 9, ansi.hot())));
+        scrollback.post("type help to see every command, or try: ls | where kind == \"file\" | sort-by size",
+                List.of());
+        scrollback.post("", List.of());
+    }
+
     private void interruptOrCopy() {
         if (shell != null && shell.busy()) {
             if (shell.interrupt()) {
@@ -257,9 +376,9 @@ public final class TerminalWindow implements AutoCloseable {
     }
 
     /**
-     * {@code exit} asked to leave. It travels the ordinary close route, so the frame loop tears the window down
-     * on its own terms and {@link #onClosed} still runs — and MainFrame keeps running behind it, so this is
-     * "put the terminal away", not "throw the session away". Safe from the job thread: the command only enqueues.
+     * {@code exit} asked to leave, or Ctrl+D did. It travels the ordinary close route, so the frame loop tears the
+     * window down on its own terms and {@link #onClosed} still runs — and MainFrame keeps running behind it, so
+     * this is "put the display away", not "throw the session away". Safe from the job thread: it only enqueues.
      */
     private void onShellExit() {
         AppWindow w = handle;
@@ -271,46 +390,86 @@ public final class TerminalWindow implements AutoCloseable {
     // ---- per frame -------------------------------------------------------------------
 
     /**
-     * Main thread, once per frame: publish the output that arrived since the last frame, and refresh the two
-     * labels that track the shell. Input is the framework's business now.
+     * Main thread, once per frame: publish the output that arrived since the last frame and refresh the three
+     * fields that track the session. Every one of them is written only when its text actually changed — a
+     * display that rewrites a prop per frame dirties the layout per frame.
      */
     public void tick() {
         if (shell == null) {
             return;
         }
         scrollback.flush();
-        String label = promptText();
-        if (!label.equals(shownPrompt)) {
-            shownPrompt = label;
-            promptLabel.text(label);
+        set(location, where(), () -> shownLocation, s -> shownLocation = s);
+        set(clock, stamp(), () -> shownClock, s -> shownClock = s);
+        messageLine();
+    }
+
+    /**
+     * The message line, and the one place a hue would have earned its keep. A monochrome tube cannot draw a red
+     * error, so this does what the machine it is imitating did: turns the line over — the fill becomes the
+     * phosphor and the text becomes unlit glass — which is louder than any colour and needs none.
+     *
+     * <p>Nothing here picks the two colours. {@code Role.DANGER} is the fill and {@code Role.ON_DANGER} is
+     * whichever of the palette's extremes lies further from it, which in a monochrome palette resolves to the
+     * page. Reverse video falls out of the role rather than being spelled.
+     */
+    private void messageLine() {
+        String error = shell.lastError();
+        boolean failed = !error.isEmpty();
+        String text = failed ? error.toUpperCase(Locale.ROOT) : statusText();
+        if (text.equals(shownMessage) && failed == shownError) {
+            return;
         }
-        String line = statusText();
-        if (!line.equals(shownStatus)) {
-            shownStatus = line;
-            status.text(line);
+        shownMessage = text;
+        shownError = failed;
+        Theme theme = gui.theme();
+        message.text(text)
+                .background(theme.color(failed ? Role.DANGER : Role.NONE))
+                .textColor(theme.color(failed ? Role.ON_DANGER : Role.DIM));
+    }
+
+    /** Write {@code text} onto {@code node} only if it is not already what the node says. */
+    private static void set(Node node, String text, Supplier<String> shown, Consumer<String> remember) {
+        if (!text.equals(shown.get())) {
+            remember.accept(text);
+            node.text(text);
         }
     }
 
+    /**
+     * The date and time, or {@link #UNSET} while no window has been opened.
+     *
+     * <p>Not a flourish: the headless capture renders this tree without ever creating a window, and a capture
+     * that differs every run is a capture you cannot diff against the last one to see what a change did. Gating
+     * the clock on a window makes the PNG a function of the screen alone — and it is the truth besides, since a
+     * display with no session on it has no session time to show.
+     */
+    private String stamp() {
+        return handle == null ? UNSET : STAMP.format(LocalDateTime.now());
+    }
+
+    /** What an echoed command line is prefixed with — a shell prompt, because the echo is shell output. */
     private String promptText() {
+        return where() + " > ";
+    }
+
+    /** The working directory as the field above the screen shows it: no arrow, because a field is not a prompt. */
+    private String where() {
         if (shell == null) {
             return "";
         }
         Path cwd = shell.cwd();
         Path home = Path.of(System.getProperty("user.home"));
-        String where = cwd.equals(home) ? "~"
+        return cwd.equals(home) ? "~"
                 : cwd.startsWith(home) ? "~/" + home.relativize(cwd).toString().replace('\\', '/')
                 : cwd.toString();
-        return where + " > ";
     }
 
     private String statusText() {
         if (shell.busy()) {
-            return "running - Ctrl+C interrupt - Ctrl+L clear - Up/Down history";
+            return "Running.  Ctrl+C interrupt   Ctrl+L clear   Up/Down history";
         }
-        String error = shell.lastError();
-        return error.isEmpty()
-                ? "ready - Ctrl+L clear - Up/Down history - help lists every command - edit <file> opens a tab"
-                : error;
+        return "Ready.  help lists every command   edit <file> opens a tab   Ctrl+D closes this display";
     }
 
     // ---- lifecycle -------------------------------------------------------------------
@@ -342,18 +501,29 @@ public final class TerminalWindow implements AutoCloseable {
     private void onClosed() {
         // Stop reading placement off a window that is being destroyed; what was recorded last stands.
         memory.forget("terminal");
-        // The window this bar commanded is gone; the tree outlives it and is shown again on the next Ctrl+`, so
-        // the buttons go back to commanding nothing until onCreated rebinds them.
+        // The window this bar commanded is gone; the tree outlives it and is shown again the next time the
+        // terminal is asked for, so the buttons go back to commanding nothing until onCreated rebinds them.
         titleBar.controls(WindowControls.NONE);
     }
 
     /** Application shutdown: this is where MainFrame's job thread actually stops. */
     @Override
     public void close() {
+        clicks.close();
         if (shell != null) {
             shell.close();
             shell = null;
         }
         prompt.close();
+    }
+
+    /** One line of screen text in the tube's own face and size. Every label on this display goes through here. */
+    private Node glyphs(String text, dev.vexelray.canvas.Color ink) {
+        return gui.text(text)
+                .height(Length.FILL)
+                .font(1)
+                .textSize(Length.rem(0.8125f))
+                .textColor(ink)
+                .align(TextLayout.HAlign.LEFT, TextLayout.VAlign.MIDDLE);
     }
 }
