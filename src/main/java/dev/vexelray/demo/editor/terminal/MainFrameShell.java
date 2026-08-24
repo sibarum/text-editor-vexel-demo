@@ -51,6 +51,8 @@ final class MainFrameShell implements AutoCloseable {
     private static final long MAX_CHARS = 4L * 1024 * 1024;
 
     private final Scrollback scrollback;
+    /** The command line, as something MainFrame's forms and confirmations can read a line from. */
+    private final PromptPipe pipe = new PromptPipe();
     private final Session session;
     private final Interpreter interpreter;
     private final ExecutorService jobs;
@@ -59,6 +61,8 @@ final class MainFrameShell implements AutoCloseable {
 
     private volatile Thread worker;
     private volatile String lastError = "";
+    /** The profile last applied to this session's environment, for the window to show. */
+    private volatile String applied = "";
     private int lines;
     private long chars;
     private boolean truncated;
@@ -67,21 +71,29 @@ final class MainFrameShell implements AutoCloseable {
      * @param openFile called with a file that {@code edit} should open in a tab
      * @param openDir  called with a directory that {@code reveal} should point the folder window at
      * @param onExit   called when the {@code exit} builtin runs, to close the window
+     * @param profiles the user's environment profiles, which the profile commands read and write
+     * @param project  the project whose {@code .vtext} a project-scoped default is written to, read on demand
+     *                 because the project changes under a running shell
      */
     MainFrameShell(Scrollback scrollback, Path cwd, Consumer<Path> openFile, Consumer<Path> openDir,
-                   Runnable onExit) {
+                   Runnable onExit, ProfileStore profiles,
+                   java.util.function.Supplier<dev.vexelray.demo.editor.ProjectSettings> project) {
         this.scrollback = scrollback;
         this.onExit = onExit;
 
         PrintStream out = new PrintStream(new LineSink(this::emit), true, StandardCharsets.UTF_8);
         PrintStream err = new PrintStream(new LineSink(this::emitError), true, StandardCharsets.UTF_8);
+        // The session reads from the command line now. That is what lets a form ask a question in the scrollback
+        // and get an answer back -- see PromptPipe. It stays *non*-interactive all the same: interactive means
+        // "hand an external program the process's own stdio", which in a GUI sends it somewhere nobody can see.
         this.session = new Session(new Renderer(out, err, true), IndexStore.inState(),
-                new BufferedReader(Reader.nullReader()), cwd);
+                new BufferedReader(pipe), cwd);
         session.interactive(false);
 
         Registry registry = Registry.standard();
         registry.add(editCommand(openFile));
         registry.add(revealCommand(openDir));
+        new ProfileCommands(profiles, project, name -> applied = name).register(registry);
         this.interpreter = new Interpreter(session, registry);
 
         this.jobs = Executors.newSingleThreadExecutor(r -> {
@@ -110,6 +122,28 @@ final class MainFrameShell implements AutoCloseable {
     /** Queue a line. Called from a handler thread; a line typed while a command runs waits its turn. */
     void submit(String source) {
         jobs.execute(() -> run(source));
+    }
+
+    /**
+     * Whether the shell is waiting to be told something rather than to be given a command -- a form asking for a
+     * field, or a destructive command asking for a yes.
+     *
+     * <p>This is what the window routes on, and it is a fact about the shell rather than a mode the window is put
+     * into: it is true exactly while the job thread is blocked reading. A form that finishes, cancels or fails
+     * stops reading, so the next line is a command again without anything having to say so.
+     */
+    boolean asking() {
+        return pipe.waiting();
+    }
+
+    /** Hand a typed line to whatever is asking. */
+    void answer(String line) {
+        pipe.offer(line);
+    }
+
+    /** The profile last applied to this session, or {@code ""} if none has been. */
+    String appliedProfile() {
+        return applied;
     }
 
     /**
@@ -286,6 +320,9 @@ final class MainFrameShell implements AutoCloseable {
 
     @Override
     public void close() {
+        // Before the interrupt: a form parked on a read has to be told the input ended, or the job thread never
+        // leaves it and the shutdown waits the full two seconds for nothing.
+        pipe.close();
         interrupt();
         jobs.shutdownNow();
         try {

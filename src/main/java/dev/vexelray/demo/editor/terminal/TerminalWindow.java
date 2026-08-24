@@ -93,10 +93,14 @@ public final class TerminalWindow implements AutoCloseable {
     private final Consumer<Path> openFile;
     private final Consumer<Path> openDir;
     private final WindowMemory memory;
+    private final ProfileStore profiles;
+    /** Read on demand: the project is whatever folder the file tree is showing, and that changes. */
+    private final Supplier<dev.vexelray.demo.editor.ProjectSettings> project;
     private final Gui gui = new Gui();
     private final Ansi ansi;
     private final Node output;
     private final Node location;
+    private final Node badge;
     private final Node clock;
     private final Node message;
     private final TextField prompt;
@@ -110,14 +114,23 @@ public final class TerminalWindow implements AutoCloseable {
     private AppWindow handle;
     private int recall;
     private String shownLocation = "";
+    /** Characters the location field can show on one line, learned from the layout -- see {@link #fitted}. */
+    private int locationRoom = Integer.MAX_VALUE;
+    /** The width the budget was learned at, so a resize measures again instead of keeping an old answer. */
+    private float locationWidth = -1f;
+    private String shownBadge = "";
     private String shownClock = "";
     private String shownMessage = "";
     private boolean shownError;
 
-    public TerminalWindow(Consumer<Path> openFile, Consumer<Path> openDir, WindowMemory memory) {
+    public TerminalWindow(Consumer<Path> openFile, Consumer<Path> openDir, WindowMemory memory,
+                          ProfileStore profiles,
+                          Supplier<dev.vexelray.demo.editor.ProjectSettings> project) {
         this.openFile = openFile;
         this.openDir = openDir;
         this.memory = memory;
+        this.profiles = profiles;
+        this.project = project;
 
         // First, and before a single node exists: a role resolves at the moment a widget writes a prop, so a
         // theme installed after the tree is built reaches nothing that is already painted.
@@ -129,12 +142,19 @@ public final class TerminalWindow implements AutoCloseable {
         // One line, because one line is all there was worth keeping: where you are, and when it is. The screen
         // identifier, the centred title and the instruction line underneath them were furniture that told you
         // nothing the second time you read them, and the three rows they cost are scrollback now.
-        this.location = glyphs("", theme.color(Palettes.HOT)).width(Length.grow(1));
+        this.location = glyphs("", theme.color(Palettes.HOT))
+                .width(Length.grow(1))
+                .scroll(false, false);
+        // What a 5250 kept up here was the library list -- which toolchain the next command would find. This is
+        // the same fact under a newer name, and the same reason for it being on screen rather than asked for.
+        this.badge = glyphs("", theme.color(Role.INK))
+                .width(Length.AUTO)
+                .align(TextLayout.HAlign.RIGHT, TextLayout.VAlign.MIDDLE);
         this.clock = glyphs(UNSET, theme.color(Role.DIM))
                 .width(Length.AUTO)
                 .align(TextLayout.HAlign.RIGHT, TextLayout.VAlign.MIDDLE);
         Node header = gui.row().width(Length.FILL).height(Length.rem(1.4f)).gap(Length.em(1.5f))
-                .children(location, clock);
+                .children(location, badge, clock);
 
         Node rule = gui.box().width(Length.FILL).height(Length.dp(1)).background(theme.color(Role.DIM));
         // A tailing log is clipped at its top edge, so the oldest visible line is usually cut through the
@@ -197,6 +217,7 @@ public final class TerminalWindow implements AutoCloseable {
 
         prompt.onSubmit(this::onLine);
         this.clicks = focusFollowsWindow();
+        gui.onContextMenu(frame, this::settingsMenu);
         claims();
     }
 
@@ -237,8 +258,9 @@ public final class TerminalWindow implements AutoCloseable {
         if (shell != null) {
             return;
         }
-        shell = new MainFrameShell(scrollback, cwd, openFile, openDir, this::onShellExit);
+        shell = new MainFrameShell(scrollback, cwd, openFile, openDir, this::onShellExit, profiles, project);
         greet(cwd);
+        applyDefaultProfile();
     }
 
     /** Run one line as if it had been typed. The entry point for the capture path and for scripted checks. */
@@ -285,6 +307,14 @@ public final class TerminalWindow implements AutoCloseable {
         }
         prompt.text("");
         output.scrollToEdge();
+        // A line is either a command or an answer to a question the shell is holding open -- a form's field, a
+        // yes/no. The shell knows which, because it knows whether it is blocked reading; the window only has to
+        // ask. An answer is echoed like a command, since that is what the scrollback of a filled-in form is.
+        if (shell.asking()) {
+            scrollback.post("> " + line, List.of(Span.foreground(0, 1, ansi.hot())));
+            shell.answer(line);
+            return;
+        }
         String label = promptText();
         scrollback.post(label + line, List.of(Span.foreground(0, label.length(), ansi.hot())));
         if (line.isBlank()) {
@@ -399,7 +429,8 @@ public final class TerminalWindow implements AutoCloseable {
             return;
         }
         scrollback.flush();
-        set(location, where(), () -> shownLocation, s -> shownLocation = s);
+        set(location, fitted(where()), () -> shownLocation, s -> shownLocation = s);
+        set(badge, badgeText(), () -> shownBadge, s -> shownBadge = s);
         set(clock, stamp(), () -> shownClock, s -> shownClock = s);
         messageLine();
     }
@@ -449,6 +480,151 @@ public final class TerminalWindow implements AutoCloseable {
     }
 
     /** What an echoed command line is prefixed with — a shell prompt, because the echo is shell output. */
+    /**
+     * Run {@code line} as if it had been typed, and show that it was.
+     *
+     * <p>What the settings menu does. It matters that this echoes: a menu that changes the environment silently
+     * leaves you guessing at what it did, whereas a menu that puts {@code profile-use jdk-21} in the scrollback
+     * has taught you the command. It stays out of the history, though -- Up is for things you typed.
+     */
+    private void runVisibly(String line) {
+        if (shell == null) {
+            return;
+        }
+        output.scrollToEdge();
+        String label = promptText();
+        scrollback.post(label + line, List.of(Span.foreground(0, label.length(), ansi.hot())));
+        shell.submit(line);
+    }
+
+    /**
+     * The settings menu: profiles, and what can be done with them right now.
+     *
+     * <p>Built at the moment of the click, which is the point of a sink -- it lists the profiles that exist and
+     * greys what does not apply rather than hiding it, so the menu teaches the same shape whatever the state. And
+     * every line runs a command through {@link #runVisibly}, so nothing here is a second implementation of
+     * anything: the menu is a way of finding {@code profile-new}, not an alternative to it.
+     */
+    private void settingsMenu(dev.vexelray.gui.core.input.MenuSink menu) {
+        dev.vexelray.demo.editor.ProjectSettings here = project.get();
+        String active = activeProfile();
+        List<String> names = profiles.names();
+
+        menu.item("New profile...", () -> runVisibly("profile-new"));
+        menu.item("Edit " + (active.isEmpty() ? "profile" : active) + "...", !active.isEmpty(),
+                () -> runVisibly("profile-edit " + quoted(active)));
+
+        menu.separator();
+        if (names.isEmpty()) {
+            menu.item("No profiles yet", false, null);
+        }
+        // In use and preferred are different states, and the line has to say which -- a profile that is only the
+        // default has not touched the PATH yet. Both the marker and the greying read the same fact, so they
+        // cannot disagree: the only line that is greyed is the one there is nothing left to do to.
+        String live = shell == null ? "" : shell.appliedProfile();
+        String preferred = effectiveDefault();
+        for (String name : names) {
+            String mark = name.equals(live) ? "  (in use)" : name.equals(preferred) ? "  (default)" : "";
+            menu.item("Use " + name + mark, !name.equals(live),
+                    () -> runVisibly("profile-use " + quoted(name)));
+        }
+
+        menu.separator();
+        menu.item(here.present()
+                        ? "Default for " + here.name() + ": " + (active.isEmpty() ? "-" : active)
+                        : "Default for this project (none open)",
+                here.present() && !active.isEmpty(),
+                () -> runVisibly("profile-default " + quoted(active) + " --project"));
+        menu.item("My default: " + (profiles.defaultName().isEmpty() ? "-" : profiles.defaultName()),
+                !active.isEmpty(),
+                () -> runVisibly("profile-default " + quoted(active)));
+
+        menu.separator();
+        menu.item("List profiles", () -> runVisibly("profile"));
+        menu.item("Show the environment", () -> runVisibly("env"));
+    }
+
+    /**
+     * Which profile this session is on: what was applied if anything has been, otherwise what would be.
+     *
+     * <p>The two are different questions and the menu needs both, but the one worth showing is this: the profile
+     * whose variables the next command will see, or would see once it were applied.
+     */
+    private String activeProfile() {
+        String live = shell == null ? "" : shell.appliedProfile();
+        return live.isEmpty() ? effectiveDefault() : live;
+    }
+
+    /** The default that applies here: the project's if it names one this machine has, otherwise the user's. */
+    private String effectiveDefault() {
+        String here = project.get().profile();
+        if (profiles.has(here)) {
+            return here;
+        }
+        String mine = profiles.defaultName();
+        return profiles.has(mine) ? mine : "";
+    }
+
+    /**
+     * Apply the default profile as the session opens, by running the command for it.
+     *
+     * <p>Through {@link #runVisibly} rather than quietly, because a shell whose PATH is not the PATH you would
+     * have guessed has to say so somewhere, and the honest place is the first lines of the scrollback. A project
+     * naming a profile this machine does not have is said out loud too, and then ignored.
+     */
+    private void applyDefaultProfile() {
+        String here = project.get().profile();
+        if (!here.isEmpty() && !profiles.has(here)) {
+            scrollback.post("this project asks for the profile " + here
+                    + ", which this machine does not have -- carrying on without it", List.of());
+        }
+        String name = effectiveDefault();
+        if (!name.isEmpty()) {
+            runVisibly("profile-use " + quoted(name));
+        }
+    }
+
+    /**
+     * A profile name as a MainFrame argument.
+     *
+     * <p>Quoted, always. MainFrame's language reads {@code -} as an operator, so a bare {@code jdk-21} parses as
+     * {@code jdk} minus {@code 21} and the command is handed two arguments instead of one. Hyphens are exactly
+     * what people call toolchains, so the name goes in quotes rather than the hyphen being taken away from them.
+     */
+    private static String quoted(String name) {
+        return dev.mainframe.value.Values.quoted(name);
+    }
+
+    /**
+     * {@code path} shortened to what the header can actually show, keeping the end of it.
+     *
+     * <p>The header is one row of a fixed height, and a text node that needs two lines does not get clipped to
+     * its box -- it draws the second line straight through the rule underneath. So the field is measured rather
+     * than guessed at: the layout says where the first visual line ended, which is exactly how many characters
+     * fit, and everything before that is dropped behind an ellipsis. The <em>end</em> of a working directory is
+     * the part worth keeping, and the whole of it is on every echoed prompt line anyway.
+     *
+     * <p>The budget is thrown away whenever the field's width changes, so widening the window measures again
+     * instead of holding on to an answer from when it was narrow. One frame late, like everything read from the
+     * layout, and self-correcting because the next frame measures what this one decided.
+     */
+    private String fitted(String path) {
+        var layout = location.layout();
+        float width = layout.rect().w();
+        if (width != locationWidth) {
+            locationWidth = width;
+            locationRoom = Integer.MAX_VALUE;
+        }
+        var metrics = layout.text();
+        if (metrics != null && metrics.lines().size() > 1) {
+            locationRoom = Math.max(12, metrics.lines().get(0).end() - 1);
+        }
+        if (path.length() <= locationRoom) {
+            return path;
+        }
+        return "..." + path.substring(path.length() - Math.max(9, locationRoom - 3));
+    }
+
     private String promptText() {
         return where() + " > ";
     }
@@ -465,11 +641,29 @@ public final class TerminalWindow implements AutoCloseable {
                 : cwd.toString();
     }
 
+    /**
+     * The profile the next command will run under, shown up in the header where a 5250 kept its library list.
+     *
+     * <p>A profile that is set but not yet applied is marked, because those are different states and the
+     * difference is the one that catches people out: the PATH is not yet what the header would let you assume.
+     */
+    private String badgeText() {
+        String live = shell == null ? "" : shell.appliedProfile();
+        if (!live.isEmpty()) {
+            return live;
+        }
+        String pending = effectiveDefault();
+        return pending.isEmpty() ? "" : pending + " (not applied)";
+    }
+
     private String statusText() {
+        if (shell.asking()) {
+            return "Answering.  !back a field   !clear empties it   !cancel abandons the form";
+        }
         if (shell.busy()) {
             return "Running.  Ctrl+C interrupt   Ctrl+L clear   Up/Down history";
         }
-        return "Ready.  help lists every command   edit <file> opens a tab   Ctrl+D closes this display";
+        return "Ready.  right-click for profiles   help lists every command   Ctrl+D closes this display";
     }
 
     // ---- lifecycle -------------------------------------------------------------------

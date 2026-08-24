@@ -14,7 +14,9 @@ import dev.vexelray.gui.core.app.WindowSpec;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.krono.KronoGui;
 import dev.vexelray.gui.nfd.FileDialog;
+import dev.vexelray.demo.editor.terminal.ProfileStore;
 import dev.vexelray.demo.editor.terminal.TerminalWindow;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Modals;
@@ -23,6 +25,8 @@ import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
 import dev.vexelray.os.Decorations;
+import sibarum.kronometer.Dur;
+import sibarum.kronometer.anim.Ease;
 import sibarum.tactroller.api.BackendException;
 import sibarum.tactroller.api.CoordinateSpace;
 import sibarum.tactroller.api.Key;
@@ -88,7 +92,10 @@ public final class TextEditorApp {
         // Two em more height than the page needs on its own: the title bar sits inside the canvas now, so the
         // smallest layout has to hold it as well as the tabs and the status line.
         gui.minSize(Length.em(30), Length.em(22));
-        Workspace ws = new Workspace(gui);
+        // The frame clock. Attached before the UI is built, because a widget that animates is handed its timing
+        // at construction, and ticked from the run loop's beforeFrame hook below -- one tick per presented frame.
+        KronoGui krono = KronoGui.attach(gui);
+        Workspace ws = new Workspace(gui, krono);
         zoomShortcuts(gui);
 
         if (args.length >= 1 && args[0].equals("--capture")) {
@@ -110,7 +117,11 @@ public final class TextEditorApp {
         int maxFrames = args.length > 0 ? Integer.parseInt(args[0]) : 0;
         // Placement is read before the window exists, so it is created where it was left rather than moved there
         // after appearing — and clamped on the way, because the desk may have changed shape since.
-        WindowMemory memory = new WindowMemory(Settings.open("text-editor"));
+        // One Settings for the whole application, shared rather than opened twice: two instances over the same
+        // file each hold their own copy of it, so the second one to save would drop whatever the first had added.
+        Settings settings = Settings.open("text-editor");
+        WindowMemory memory = new WindowMemory(settings);
+        ProfileStore profiles = new ProfileStore(settings);
         try (Tactroller input = openInput();
              GuiApp app = new GuiApp(memory.config("main", "Text Editor", W, H)
                      .decorations(Decorations.CLIENT));
@@ -126,7 +137,7 @@ public final class TextEditorApp {
             // window the framework opens gets one from here.
             attachInput(input, app);
             app.input(TextEditorApp::windowInput);
-            FileActions files = new FileActions(gui, ws, app, memory);
+            FileActions files = new FileActions(gui, ws, app, memory, profiles);
             files.shortcuts();
             // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
             // gate that can still ask about unsaved work while the window stays open.
@@ -150,6 +161,11 @@ public final class TextEditorApp {
                 app.run(gui, maxFrames, () -> {
                     pump(bridge);
                     files.drain();
+                    // The clock after the queue, so a tab change serviced by drain() starts its crossfade on the
+                    // same frame that selected it rather than a frame later. The tick returns with its batch
+                    // complete, so the opacities this frame's motion produced are on the bus before Gui.frame
+                    // reconciles them -- the frame that presents a value is the frame that computed it.
+                    krono.tick();
                     memory.poll();
                 });
             } finally {
@@ -160,6 +176,7 @@ public final class TextEditorApp {
                 memory.save();
             }
         }
+        krono.close();   // the clock outlives the window but not the process: closed with the GUI it drove
         gui.close();
         System.out.println("clean shutdown");
     }
@@ -171,9 +188,12 @@ public final class TextEditorApp {
      * window and no keyboard.
      */
     private static void captureTerminal(String path) throws Exception {
-        // No window is opened here, so the memory is never asked for a placement and never written to.
-        WindowMemory unused = new WindowMemory(Settings.open("text-editor"));
-        try (TerminalWindow terminal = new TerminalWindow(f -> { }, d -> { }, unused)) {
+        // No window is opened here, so the memory is never asked for a placement and never written to. The
+        // profiles are the real ones, read-only as far as this path goes -- the capture shows what is set up.
+        Settings settings = Settings.open("text-editor");
+        WindowMemory unused = new WindowMemory(settings);
+        try (TerminalWindow terminal = new TerminalWindow(f -> { }, d -> { }, unused,
+                new ProfileStore(settings), () -> projectOf(unused))) {
             terminal.start(Path.of("").toAbsolutePath());
             for (String line : List.of("version", "ls | where kind == \"file\" | select name size ext",
                     "ls | where nmae == \"x\"")) {
@@ -207,6 +227,21 @@ public final class TextEditorApp {
         GuiApp.capture(folder.gui(), FolderWindow.DEFAULT_W, FolderWindow.DEFAULT_H,
                 page.r(), page.g(), page.b(), path);
         System.out.println("captured " + path);
+    }
+
+    /**
+     * The project, as of right now: the folder the file tree is showing.
+     *
+     * <p>Read on every call rather than captured, because it changes -- Ctrl+Shift+O picks a different one, and a
+     * shell that had been told the old one at startup would go on writing that project's {@code .vtext}. The
+     * folder outlives the file-tree window (closing the drawer does not close the project), which is why this
+     * reads the remembered path rather than asking the window whether it is open.
+     */
+    static ProjectSettings projectOf(WindowMemory memory) {
+        String shown = memory.shownPath("folder");
+        return shown == null || shown.isBlank()
+                ? ProjectSettings.none()
+                : ProjectSettings.of(Path.of(shown));
     }
 
     private static void zoomShortcuts(Gui gui) {
@@ -375,9 +410,18 @@ public final class TextEditorApp {
         final TitleBar titleBar;
         final List<EditorTab> open = new ArrayList<>();
 
-        Workspace(Gui gui) {
+        Workspace(Gui gui, KronoGui krono) {
             this.gui = gui;
             this.tabs = new Tabs(gui);
+            // Changing tabs crossfades. Tabs supplies the motion -- opacity over both pages, the outgoing one
+            // floated over the incoming one so nothing reflows for the duration -- and Kronometer supplies the
+            // time; the seam between them is a DoubleConsumer and a Runnable, so this line is the only place the
+            // two meet and leaving it out gives back the instant switch. 160ms out-cubic: long enough to read as
+            // one document replacing another, short enough that Ctrl+Tab held down never has to wait for it.
+            // Harmless under --capture, which never ticks the clock: a panel with one tab has nothing to fade
+            // from, and the first tab is selected before there is a second.
+            this.tabs.transition(Tabs.crossfade(
+                    (progress, done) -> krono.ramp(Dur.ms(160), Ease.OUT_CUBIC, progress, done)));
             // AUTO, not a fixed line: this line also reports what was opened or saved, and a long path wraps.
             // A fixed height clips the second line outside the padding instead of making room for it.
             this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+` terminal - Ctrl+S save - "
@@ -673,7 +717,7 @@ public final class TextEditorApp {
         private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> requests =
                 new java.util.concurrent.ConcurrentLinkedQueue<>();
 
-        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory) {
+        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, ProfileStore profiles) {
             this.gui = gui;
             this.ws = ws;
             this.app = app;
@@ -682,7 +726,8 @@ public final class TextEditorApp {
             this.folder = new FolderWindow(this::openPath, memory);
             // MainFrame reaches the editor the same way the file tree does: by enqueueing onto this one queue, so
             // a shell command that opens a tab is ordered with the modal dialogs and the tab-structure changes.
-            this.terminal = new TerminalWindow(this::openPath, this::revealPath, memory);
+            this.terminal = new TerminalWindow(this::openPath, this::revealPath, memory, profiles,
+                    () -> projectOf(memory));
         }
 
         /** Enqueue opening {@code file} into a tab — how the folder window's tree reaches the editor. */

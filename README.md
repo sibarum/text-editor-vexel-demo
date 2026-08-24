@@ -75,6 +75,51 @@ records, sizes, times and media types, not text to be re-parsed. It runs embedde
 design, and what the framework cannot do for it yet, is in [docs/mainframe-window.md](docs/mainframe-window.md);
 the original from-scratch scope it replaced is in [docs/terminal.md](docs/terminal.md).
 
+### Settings, profiles, and .vtext
+
+Right-click anywhere in the terminal for the settings menu. It lists the profiles you have, offers to create or
+edit one, and can make any of them the default — yours, or this project's.
+
+A **profile** is a name, a set of environment variables, and a set of directories to find binaries in: a
+toolchain, said once and applied whole. Applying one *merges* — the variables go over what the shell already has
+and the directories go on the front of the PATH, skipping any that are already there. Replacing the environment
+outright would be the more literal reading and it would break the session, because MainFrame seeds itself from
+the process and a replacement would take away PATHEXT and COMSPEC.
+
+**The editor is a form, and nobody drew it.** A profile is a name plus two lists of repeated details, which is
+exactly the shape MainFrame's `Form` was built for — so `Profile.definition()` states the fields and MainFrame's
+data entry does the rest: `!back`, `!clear`, `!cancel`, the review sheet before it counts, and refusing a variable
+name a child process could not receive. The same definition validates a record that never went near a keyboard,
+so the screen and the check cannot drift apart.
+
+That needed one thing from this window. MainFrame's forms are *printed* — write a prompt, read a line back — and
+the session had been built on a null reader. It now reads from
+[PromptPipe](src/main/java/dev/vexelray/demo/editor/terminal/PromptPipe.java), a queue with a `Reader` face, so a
+question lands in the scrollback and the answer is typed where every other line is typed. Which of the two a typed
+line *is* comes from the shell rather than from a mode the window is put into: `asking()` is true exactly while the
+job thread is blocked reading, so a form that finishes, cancels or fails hands the prompt back with nothing having
+to say so.
+
+**Every menu item runs a command.** `profile`, `profile-new`, `profile-edit`, `profile-drop`, `profile-use` and
+`profile-default` are real MainFrame commands with real `help` text, and the menu submits one and echoes it. So
+what the menu did is in the scrollback, and anything it can do can be scripted:
+
+```
+~/src/thing > profile | where paths > 0 | select name vars
+~/src/thing > profile-default rust-nightly --project
+```
+
+**Two scopes, and only one of them is machine-specific.** Profiles live with your own settings, because they hold
+absolute directories that are true of this machine and no other. A project records only which profile it *wants*,
+by name, in a `.vtext` file in its own directory — [ProjectSettings](src/main/java/dev/vexelray/demo/editor/ProjectSettings.java),
+the same forgiving properties format as everything else, meant to be committed. A checkout naming a profile this
+machine has never heard of is told so once and carries on. The project is the folder the file tree is showing, so
+the terminal can `cd` anywhere without changing which project you are in; with no folder open there is no project,
+and nothing is written anywhere.
+
+The profile the next command will run under is in the header, where a 5250 kept its library list — marked
+*(not applied)* while it is set but not yet in force, because that is the state that catches people out.
+
 ### It is a green screen
 
 MainFrame pipes typed records rather than text, which is the one idea it shares with the machine its name comes
