@@ -9,6 +9,7 @@ import dev.vexelray.gui.core.app.AppWindow;
 import dev.vexelray.gui.core.app.CloseRequest;
 import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.app.WindowInput;
+import dev.vexelray.gui.core.app.WindowMemory;
 import dev.vexelray.gui.core.app.WindowSpec;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;

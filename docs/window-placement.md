@@ -1,6 +1,13 @@
 # Window placement that survives a restart
 
-Status: **implemented** on `text-editor-buildout`.
+Status: **implemented**, and **`WindowMemory` now lives in the framework** —
+`dev.vexelray.gui.core.app.WindowMemory`, moved out of this app when the calculator wanted the same thing.
+Nothing here changed behaviourally; the class had no editor in it, and a second copy of it in a second demo is
+the duplication `AppWindow`'s own documentation argues against. Two things came with the move: the work-area
+lookup is now a `WindowMemory.Desktop` seam, so the clamp is tested against a fixture rather than against
+whatever monitors the build machine happens to have, and `watch(key, window, gui)` follows a window's zoom as
+well as its bounds. This app still calls the two-argument `watch`, so its zoom is not remembered — passing the
+`Gui` is all it would take.
 
 All three windows — editor, files, terminal — come back where they were left, at the size they were left,
 maximized if they were maximized, and *open if they were open*. State lives in

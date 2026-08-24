@@ -1,7 +1,7 @@
 package dev.vexelray.demo.editor.terminal;
 
 import dev.vexelray.demo.editor.Palettes;
-import dev.vexelray.demo.editor.WindowMemory;
+import dev.vexelray.gui.core.app.WindowMemory;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.app.AppWindow;
