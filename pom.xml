@@ -59,12 +59,13 @@
             <artifactId>snakeyaml-engine</artifactId>
             <version>2.7</version>
         </dependency>
-        <!-- The terminal window's shell. MainFrame is a library first: a Session that prints through a Renderer
-             over two streams, so the window embeds it in-process rather than driving its binary and scraping the
-             output. Zero runtime dependencies of its own. -->
+        <!-- The terminal window itself, not just the shell behind it. MainFrame ships its console as a
+             vexelray-gui component: this application supplies a ConsoleSpec saying what it wants in it (its
+             own commands, its own project, its own bottom line) and gets the window. mainframe-core, the shell
+             library with zero runtime dependencies of its own, comes in behind it. -->
         <dependency>
             <groupId>dev.mainframe</groupId>
-            <artifactId>mainframe</artifactId>
+            <artifactId>mainframe-vexel-gui</artifactId>
             <version>${mainframe.version}</version>
         </dependency>
         <!-- The frame clock, for the tab transition. Motion enters at the application edge and nowhere else:

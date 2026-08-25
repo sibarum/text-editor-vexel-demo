@@ -1,7 +1,23 @@
 # The MainFrame window — what was built
 
-Status: **implemented** on `text-editor-buildout`. Supersedes the shell half of
+Status: **implemented**, then **moved**. Supersedes the shell half of
 [terminal.md](terminal.md), which scoped a bash-alike written from scratch.
+
+> **Where the code is now.** Everything this document calls `terminal/` was extracted into MainFrame's own
+> [`mainframe-vexel-gui`](https://github.com/sibarum/mainframe/tree/main/mainframe-vexel-gui) module and
+> generalised, because MainFrame is the program and an editor is one of the things it opens. The renames, class
+> for class:
+>
+> | Here | There |
+> | --- | --- |
+> | `terminal/TerminalWindow` | `dev.mainframe.gui.console.Console` (+ `ConsoleSpec` for everything an application can disagree about) |
+> | `terminal/MainFrameShell` | `dev.mainframe.gui.console.ConsoleShell` (the `edit`/`reveal` builtins split out to `EditorApp` here) |
+> | `terminal/Scrollback`, `Ansi`, `LineSink`, `PromptPipe` | `dev.mainframe.gui.console.*`, unchanged |
+> | `terminal/Profile`, `ProfileStore`, `ProfileCommands` | `dev.mainframe.gui.profile.*`, behind a `ProfileApp` |
+> | `Palettes.PHOSPHOR`, `.HOT`, `.BEZEL` | `dev.mainframe.gui.console.Phosphor` |
+> | `ProjectSettings` | `dev.mainframe.gui.app.ProjectScope` (the filename is a parameter now) |
+>
+> The design below still describes the code. Read `terminal/X` as its right-hand column.
 
 `Ctrl+`` ` opens a second OS window running [MainFrame](../../mainframe) — a shell whose piped values are typed
 records, sizes, times and media types rather than text to be re-parsed. That replaced roughly 3 600 lines of

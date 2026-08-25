@@ -16,10 +16,14 @@ import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.krono.KronoGui;
 import dev.vexelray.gui.nfd.FileDialog;
-import dev.vexelray.demo.editor.terminal.ProfileStore;
-import dev.vexelray.demo.editor.terminal.TerminalWindow;
+import dev.mainframe.gui.app.ProjectScope;
+import dev.mainframe.gui.console.Console;
+import dev.mainframe.gui.console.ConsoleSpec;
+import dev.mainframe.gui.profile.ProfileApp;
+import dev.mainframe.gui.profile.ProfileStore;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Modals;
+import dev.vexelray.gui.widget.Ramp;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.gui.widget.TextField;
@@ -121,7 +125,7 @@ public final class TextEditorApp {
         // file each hold their own copy of it, so the second one to save would drop whatever the first had added.
         Settings settings = Settings.open("text-editor");
         WindowMemory memory = new WindowMemory(settings);
-        ProfileStore profiles = new ProfileStore(settings);
+        ProfileApp profiles = new ProfileApp(new ProfileStore(settings));
         try (Tactroller input = openInput();
              GuiApp app = new GuiApp(memory.config("main", "Text Editor", W, H)
                      .decorations(Decorations.CLIENT));
@@ -137,7 +141,7 @@ public final class TextEditorApp {
             // window the framework opens gets one from here.
             attachInput(input, app);
             app.input(TextEditorApp::windowInput);
-            FileActions files = new FileActions(gui, ws, app, memory, profiles);
+            FileActions files = new FileActions(gui, ws, app, memory, profiles, krono);
             files.shortcuts();
             // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
             // gate that can still ask about unsaved work while the window stays open.
@@ -182,6 +186,46 @@ public final class TextEditorApp {
     }
 
     /**
+     * The MainFrame console as this application wants it.
+     *
+     * <p>Said once and built twice — the real window and the headless capture below — because the whole point of
+     * a spec is that "which console this is" is a value rather than a constructor call scattered about. Note how
+     * little of it there is: the console is a component now, and everything on here is a place this application
+     * genuinely differs from any other that embeds one.
+     */
+    private static ConsoleSpec.Builder consoleSpec(WindowMemory memory, ProfileApp profiles) {
+        return ConsoleSpec.builder()
+                // This window has been called the terminal since before it was reusable, and the name is also
+                // the settings key its placement is stored under -- renaming it would move everyone's window.
+                .windowName("terminal")
+                .title("Terminal")
+                .memory(memory)
+                .project(() -> projectOf(memory))
+                .app(profiles)
+                .badge(profiles::badge)
+                .status(STATUS);
+    }
+
+    /** The bottom line, in this application's words: it has a profiles menu, and the console does not know that. */
+    private static final ConsoleSpec.Status STATUS = new ConsoleSpec.Status() {
+        @Override
+        public String ready() {
+            return "Ready.  right-click for profiles   help lists every command"
+                    + "   Ctrl+D closes this display";
+        }
+
+        @Override
+        public String running() {
+            return ConsoleSpec.Status.DEFAULT.running();
+        }
+
+        @Override
+        public String answering() {
+            return ConsoleSpec.Status.DEFAULT.answering();
+        }
+    };
+
+    /**
      * Render the terminal window headlessly: start MainFrame, run a few real lines against the real filesystem,
      * let the per-frame flush publish them, and write the PNG. {@code GuiApp.capture} takes one tree, so the
      * terminal needs its own entry point — and this one doubles as a smoke test of the whole path with no GPU
@@ -192,8 +236,12 @@ public final class TextEditorApp {
         // profiles are the real ones, read-only as far as this path goes -- the capture shows what is set up.
         Settings settings = Settings.open("text-editor");
         WindowMemory unused = new WindowMemory(settings);
-        try (TerminalWindow terminal = new TerminalWindow(f -> { }, d -> { }, unused,
-                new ProfileStore(settings), () -> projectOf(unused))) {
+        ProfileApp profiles = new ProfileApp(new ProfileStore(settings));
+        // The editor's own commands are registered here too, pointed at nothing: the capture is a smoke test of
+        // the command surface the real window has, and a surface missing edit and reveal is not that surface.
+        try (Console terminal = new Console(consoleSpec(unused, profiles)
+                .app(new EditorApp(f -> { }, d -> { }, () -> { }))
+                .build())) {
             terminal.start(Path.of("").toAbsolutePath());
             for (String line : List.of("version", "ls | where kind == \"file\" | select name size ext",
                     "ls | where nmae == \"x\"")) {
@@ -221,7 +269,8 @@ public final class TextEditorApp {
     private static void captureFolder(String path) throws Exception {
         // No window is opened here, so the memory is never asked for a placement and never written to.
         WindowMemory unused = new WindowMemory(Settings.open("text-editor"));
-        FolderWindow folder = new FolderWindow(f -> { }, unused);
+        // No clock either: a capture is one frame, and a tree mid-expansion is not what the still is of.
+        FolderWindow folder = new FolderWindow(f -> { }, d -> { }, unused, null);
         folder.setFolder(Path.of("").toAbsolutePath());
         Color page = folder.gui().theme().color(Role.PAGE);
         GuiApp.capture(folder.gui(), FolderWindow.DEFAULT_W, FolderWindow.DEFAULT_H,
@@ -230,18 +279,28 @@ public final class TextEditorApp {
     }
 
     /**
+     * The file a project's own settings go in. Dotted, so it sorts out of the way of the project's own files,
+     * and meant to be committed — it records the <em>name</em> of a profile and never its contents.
+     */
+    static final String PROJECT_FILE = ".vtext";
+
+    /**
      * The project, as of right now: the folder the file tree is showing.
      *
      * <p>Read on every call rather than captured, because it changes -- Ctrl+Shift+O picks a different one, and a
      * shell that had been told the old one at startup would go on writing that project's {@code .vtext}. The
      * folder outlives the file-tree window (closing the drawer does not close the project), which is why this
      * reads the remembered path rather than asking the window whether it is open.
+     *
+     * <p>What "a project" means is this application's decision, which is why the console takes one of these
+     * rather than working one out: an editor's project is the folder it is showing, and something else's would
+     * be something else.
      */
-    static ProjectSettings projectOf(WindowMemory memory) {
+    static ProjectScope projectOf(WindowMemory memory) {
         String shown = memory.shownPath("folder");
         return shown == null || shown.isBlank()
-                ? ProjectSettings.none()
-                : ProjectSettings.of(Path.of(shown));
+                ? ProjectScope.none()
+                : ProjectScope.at(Path.of(shown), PROJECT_FILE);
     }
 
     private static void zoomShortcuts(Gui gui) {
@@ -413,15 +472,29 @@ public final class TextEditorApp {
         Workspace(Gui gui, KronoGui krono) {
             this.gui = gui;
             this.tabs = new Tabs(gui);
-            // Changing tabs crossfades. Tabs supplies the motion -- opacity over both pages, the outgoing one
-            // floated over the incoming one so nothing reflows for the duration -- and Kronometer supplies the
-            // time; the seam between them is a DoubleConsumer and a Runnable, so this line is the only place the
-            // two meet and leaving it out gives back the instant switch. 160ms out-cubic: long enough to read as
-            // one document replacing another, short enough that Ctrl+Tab held down never has to wait for it.
+            // Changing tabs dissolves, with the arriving document travelling a short way in from the side the
+            // selection moved toward. Tabs supplies the motion -- opacity over both pages and a translate on the
+            // arriving one, the outgoing page floated over it so nothing reflows for the duration -- and
+            // Kronometer supplies the time; the seam between them is a DoubleConsumer and a Runnable, so this is
+            // the only line where the two meet, and leaving it out gives back the instant switch.
+            //
+            // Slide rather than a bare crossfade because these are documents in a bar that has an order, and a
+            // displacement is what makes the content agree with that order instead of the headers merely
+            // asserting it. A dissolve alone has nothing in it that moves, which is what reads as mechanical.
+            //
+            // LINEAR, and it has to be. Tabs eases the travel itself -- out-cubic on the displacement, which is
+            // what reads as weight in something arriving at a place -- and holds the fade underneath linear,
+            // because opacity has nowhere to arrive at and the eye reads it about as it is given. An out-cubic
+            // ramp here (which is what this line used to pass) is 87% through by the halfway point, so the whole
+            // visible part finished in the first third and the rest was a stall with nothing moving: a delay and
+            // then a jump, rather than a transition. Invisible to a test that checks only the endpoints, because
+            // the endpoints are perfect either way. 160ms: long enough to read as one document replacing
+            // another, short enough that Ctrl+Tab held down never has to wait for it.
+            //
             // Harmless under --capture, which never ticks the clock: a panel with one tab has nothing to fade
             // from, and the first tab is selected before there is a second.
-            this.tabs.transition(Tabs.crossfade(
-                    (progress, done) -> krono.ramp(Dur.ms(160), Ease.OUT_CUBIC, progress, done)));
+            this.tabs.transition(Tabs.slide(
+                    (progress, done) -> krono.ramp(Dur.ms(160), Ease.LINEAR, progress, done)));
             // AUTO, not a fixed line: this line also reports what was opened or saved, and a long path wraps.
             // A fixed height clips the second line outside the padding instead of making room for it.
             this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+` terminal - Ctrl+S save - "
@@ -589,10 +662,14 @@ public final class TextEditorApp {
         private static final Length GUTTER = Length.dp(12);
 
         private final java.util.function.Consumer<Path> openFile;
+        /** Where a directory row's "Open folder" sends it: the drawer re-roots there, as Ctrl+Shift+O does. */
+        private final java.util.function.Consumer<Path> showFolder;
         private final WindowMemory memory;
         private final Gui gui = new Gui();
         private final Node column;
         private final TitleBar titleBar;
+        /** How an expanding folder is timed, installed on every tree this window builds; null for the flip. */
+        private final Ramp motion;
         private TreeView<Path> tree;
         /** The framework's handle on this window, claimed the first time it is shown. */
         private AppWindow handle;
@@ -607,9 +684,30 @@ public final class TextEditorApp {
             return handle != null && handle.open();
         }
 
-        FolderWindow(java.util.function.Consumer<Path> openFile, WindowMemory memory) {
+        FolderWindow(java.util.function.Consumer<Path> openFile, java.util.function.Consumer<Path> showFolder,
+                     WindowMemory memory, KronoGui krono) {
             this.openFile = openFile;
+            this.showFolder = showFolder;
             this.memory = memory;
+            // Expanding a folder slides the rows below it down instead of teleporting them: the subtree's own
+            // height grows, so the rows below are displaced by making room rather than by a transform, and the
+            // tree's extent and its scrollbar go on describing the tree that is actually on screen.
+            //
+            // 160ms, the same as the tab change -- one application, one tempo -- but OUT_CUBIC where that ramp is
+            // LINEAR, and the difference is not a preference. There the ramp drives opacity, which has no place
+            // to arrive at (Tabs eases its own travel separately); here it drives a distance being covered, and
+            // decelerating into the place it stops is what reads as weight.
+            //
+            // One clock, two windows. Sound because nothing but a DoubleConsumer and a Runnable crosses this seam
+            // -- no node and no Gui, so the clock never learns which window it is timing -- and because both
+            // windows are presented by the one loop on the one thread: the tick in the main window's beforeFrame
+            // hook runs before either window's frame, so the rows this window presents are the ones that tick
+            // computed.
+            //
+            // Null under --capture-folder, which has no loop to tick it: the tree flips instantly, which is what
+            // every tree here did before there was motion and what a reduced-motion path would be.
+            this.motion = krono == null ? null
+                    : (progress, done) -> krono.ramp(Dur.ms(160), Ease.OUT_CUBIC, progress, done);
             // Before the first node: the drawer is the editor's own look swung round to the warm side of
             // neutral, so a glance at the taskbar tells the two windows apart before any text is read.
             gui.theme(Palettes.FILES);
@@ -655,6 +753,9 @@ public final class TextEditorApp {
             Path name = folder.getFileName();
             titleBar.title(name != null ? name.toString() : folder.toString());
             tree = new TreeView<>(gui, new FolderSource(folder));
+            // Per tree, not once per window: pointing the drawer at another folder builds a new one, and a tree
+            // that was never handed the ramp is a tree that flips.
+            tree.motion(motion);
             tree.node().width(Length.FILL).height(Length.grow(1));
             // Selection opens files (click or keyboard walk); Enter additionally expands a selected directory.
             tree.onSelect(p -> {
@@ -668,6 +769,25 @@ public final class TextEditorApp {
                     t.expand(p);
                 }
             });
+            // The row menu. Expand and Collapse arrive on it already — recursive, marked with the same +/− the
+            // row's own disclosure control uses, greyed on a row with nothing to open or nothing to shut — so
+            // what is added here is only what this drawer knows that the tree cannot: what a row *is* to this
+            // application. A file is something to open in a tab; a directory is somewhere to point the drawer.
+            //
+            // Both bodies enqueue rather than act, because both are the GUI thread's work and an action runs on
+            // the tree's handler executor. They go through the one queue everything else reaches the editor by,
+            // which is also what makes "Open folder" safe: by the time it is serviced, replacing the very tree
+            // whose menu ran it is an ordinary tab-structure change like any other.
+            tree.action(TreeView.Action.<Path>of("›", "Open", (p, job) -> openFile.accept(p))
+                    .enabledWhen(java.nio.file.Files::isRegularFile));
+            tree.action(TreeView.Action.<Path>of("»", "Open folder", (p, job) -> showFolder.accept(p))
+                    .shownWhen(java.nio.file.Files::isDirectory));
+            // The free-form door, for a line that is not a command on the item in that same sense: it is about
+            // the path as text, it applies to every row alike, and it has nothing long enough to need a job. The
+            // separator is unconditional — a rule that would open the menu or double another is dropped.
+            tree.onContextMenu((p, menu) -> menu
+                    .separator()
+                    .item("•", "Copy path", () -> gui.clipboard().set(p.toString())));
             column.append(tree.node());
             tree.focus();
         }
@@ -705,7 +825,7 @@ public final class TextEditorApp {
      */
     private static final class FileActions implements AutoCloseable {
         private static final List<FileDialog.Filter> FILTERS =
-                List.of(FileDialog.Filter.of("Text files", "txt", "md", "java", "json"));
+                List.of(FileDialog.Filter.of("Text files", "txt", "md", "java", "json", "py"));
 
         private final Gui gui;
         private final Workspace ws;
@@ -713,21 +833,33 @@ public final class TextEditorApp {
         private final long window;
         private final WindowMemory memory;
         private final FolderWindow folder;
-        private final TerminalWindow terminal;
+        private final Console terminal;
         private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> requests =
                 new java.util.concurrent.ConcurrentLinkedQueue<>();
 
-        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, ProfileStore profiles) {
+        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, ProfileApp profiles,
+                    KronoGui krono) {
             this.gui = gui;
             this.ws = ws;
             this.app = app;
             this.window = app.windowHandle();
             this.memory = memory;
-            this.folder = new FolderWindow(this::openPath, memory);
-            // MainFrame reaches the editor the same way the file tree does: by enqueueing onto this one queue, so
-            // a shell command that opens a tab is ordered with the modal dialogs and the tab-structure changes.
-            this.terminal = new TerminalWindow(this::openPath, this::revealPath, memory, profiles,
-                    () -> projectOf(memory));
+            // The clock goes through to the folder window, which is the only other window here with anything to
+            // animate: the terminal's scrollback is text arriving, not a widget changing shape.
+            this.folder = new FolderWindow(this::openPath, this::revealPath, memory, krono);
+            // The console is a component from mainframe-vexel-gui and knows nothing about editing. What makes it
+            // this application's console is the EditorApp plugged into it: edit, reveal, and a window to raise.
+            // Each of those reaches the editor the same way the file tree does, by enqueueing onto this one
+            // queue, so a shell command that opens a tab is ordered with the modal dialogs and the tab changes.
+            this.terminal = new Console(consoleSpec(memory, profiles)
+                    .app(new EditorApp(this::openPath, this::revealPath, this::raiseEditor))
+                    .build());
+        }
+
+        /** {@code launch "editor"}: bring the main window forward. Frame loop, via the console's own queue. */
+        private void raiseEditor() {
+            app.window().focus();
+            ws.status.text("Editor");
         }
 
         /** Enqueue opening {@code file} into a tab — how the folder window's tree reaches the editor. */

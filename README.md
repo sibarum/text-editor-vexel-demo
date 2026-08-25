@@ -65,6 +65,15 @@ they were open when you last closed it; a folder that has since gone away is rep
 records, sizes, times and media types, not text to be re-parsed. It runs embedded, in this process, so `edit` and
 `reveal` are real MainFrame commands with real `help` text:
 
+> **The window is not this application's.** It lives in MainFrame's own
+> [`mainframe-vexel-gui`](https://github.com/sibarum/mainframe/tree/main/mainframe-vexel-gui) module, because
+> MainFrame is the program and an editor is one of the things it opens — not the other way round. What this
+> application supplies is a `ConsoleSpec`: the name and title, the project the shell should consider itself in,
+> the bottom line's wording, and an `EditorApp` carrying `edit`, `reveal` and a window for `launch "editor"` to
+> raise. Everything else — the tube, the scrollback, the prompt, the history, profiles, forms — comes with the
+> component. See [`EditorApp.java`](src/main/java/dev/vexelray/demo/editor/EditorApp.java), which is the whole of
+> what the shell knows about editing.
+
 ```
 ~/Documents/GitHub/text-editor-vexel-demo > find "*Test.java" | first 3 | edit
 ~/Documents/GitHub/text-editor-vexel-demo > ls | where size > 1mb | sort-by size --reverse
@@ -94,7 +103,7 @@ so the screen and the check cannot drift apart.
 
 That needed one thing from this window. MainFrame's forms are *printed* — write a prompt, read a line back — and
 the session had been built on a null reader. It now reads from
-[PromptPipe](src/main/java/dev/vexelray/demo/editor/terminal/PromptPipe.java), a queue with a `Reader` face, so a
+[PromptPipe](https://github.com/sibarum/mainframe/blob/main/mainframe-vexel-gui/src/main/java/dev/mainframe/gui/console/PromptPipe.java), a queue with a `Reader` face, so a
 question lands in the scrollback and the answer is typed where every other line is typed. Which of the two a typed
 line *is* comes from the shell rather than from a mode the window is put into: `asking()` is true exactly while the
 job thread is blocked reading, so a form that finishes, cancels or fails hands the prompt back with nothing having
@@ -111,7 +120,7 @@ what the menu did is in the scrollback, and anything it can do can be scripted:
 
 **Two scopes, and only one of them is machine-specific.** Profiles live with your own settings, because they hold
 absolute directories that are true of this machine and no other. A project records only which profile it *wants*,
-by name, in a `.vtext` file in its own directory — [ProjectSettings](src/main/java/dev/vexelray/demo/editor/ProjectSettings.java),
+by name, in a `.vtext` file in its own directory — [ProjectScope](https://github.com/sibarum/mainframe/blob/main/mainframe-vexel-gui/src/main/java/dev/mainframe/gui/app/ProjectScope.java),
 the same forgiving properties format as everything else, meant to be committed. A checkout naming a profile this
 machine has never heard of is told so once and carries on. The project is the folder the file tree is showing, so
 the terminal can `cd` anywhere without changing which project you are in; with no folder open there is no project,
@@ -131,7 +140,7 @@ a centred title and a "Type command, press Enter." that stopped being news the s
 bottom row on a function-key legend. Those four rows are scrollback now. The header is one line: the working
 directory on the left, the date and time on the right — the only two things up there that ever changed.
 
-The look is a palette, not a set of overrides. `Palettes.PHOSPHOR` is one hue at nine lightnesses: accent, action
+The look is a palette, not a set of overrides. `Phosphor.THEME` is one hue at nine lightnesses: accent, action
 and danger all collapse onto the same green, because a tube has one colour and a beam that goes up or down. Two
 things fall out of that for free. The palette's `depth` anchor is the phosphor itself, so `Node.elevation` stops
 being a drop shadow and becomes the halo the glass throws on the bezel — one number, no special case anywhere in

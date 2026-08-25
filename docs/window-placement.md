@@ -146,4 +146,4 @@ process — the platform raises and flashes rather than pretending it worked.
   a `WindowConfig`, watch, debounce, write.
 - [TextEditorApp.java](../src/main/java/dev/vexelray/demo/editor/TextEditorApp.java) — `memory.config("main", …)`
   into the `GuiApp` constructor, `memory.watch` after each window exists, `memory.poll()` per frame,
-  `memory.save()` at shutdown. `FolderWindow.onCreated` and `TerminalWindow.onCreated` do the popup half.
+  `memory.save()` at shutdown. `FolderWindow.onCreated` and the console's own `onCreated` do the popup half.

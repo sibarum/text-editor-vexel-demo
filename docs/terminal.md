@@ -4,6 +4,9 @@ Status: **superseded**, and worth keeping. The terminal window shipped on `text-
 [MainFrame](../../mainframe) embedded as the shell instead of the bash-alike scoped below — see
 [mainframe-window.md](mainframe-window.md) for what was built and why.
 
+> **Note.** The terminal window described here now lives in MainFrame's `mainframe-vexel-gui` module as
+> `dev.mainframe.gui.console.Console` — see [mainframe-window.md](mainframe-window.md) for the class-by-class map.
+
 Which parts of this document still describe the code: §1 (a console, not an emulator), §3 (window and GUI
 architecture, the node budget, monospace being atlas face 1), §4 (threading and lifecycle), §8 (key bindings and
 the `Ctrl+C` conflict), §9 (ANSI as spans), §11 (safety), §12 (framework gaps), §13 (testing). Which parts are
