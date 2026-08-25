@@ -142,7 +142,10 @@ public final class TextEditorApp {
             // window the framework opens gets one from here.
             attachInput(input, app);
             app.input(TextEditorApp::windowInput);
-            FileActions files = new FileActions(gui, ws, app, memory, profiles, krono);
+            // The editor is this application's main window, so that is what a dialog parents to, and it already
+            // exists by the time anything can ask.
+            FileActions files =
+                    new FileActions(gui, ws, app, memory, profiles, krono, app::windowHandle, null);
             files.shortcuts();
             // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
             // gate that can still ask about unsaved work while the window stays open.
@@ -415,6 +418,175 @@ public final class TextEditorApp {
             bridge.pump();
         } catch (BackendException e) {
             // Transient poll failure — drop this frame's input rather than tear down the loop.
+        }
+    }
+
+    /**
+     * The editor as a window somebody else owns.
+     *
+     * <p>{@link #main} is the editor as its own program: it makes the frame loop, takes the main window, and
+     * opens a MainFrame terminal beside itself on Ctrl+`. This is the same editor the other way round — MainFrame
+     * is the program, the shell is the main window, and the editor is one of the things it opens. Same tabs, same
+     * highlighter, same file dialogs, same file tree; what differs is who owns the loop and who is ticking.
+     *
+     * <p>So it is a nested class rather than a file of its own. Everything it needs — {@link Workspace},
+     * {@link FileActions}, {@link FolderWindow}, the sizes — is private to {@link TextEditorApp} and stays that
+     * way, and the two arrangements cannot drift apart because they are built out of the same parts. See
+     * {@link Editor}, which is what MainFrame actually plugs in.
+     *
+     * <p><b>The documents outlive the window.</b> The tree belongs to this object, so closing the editor
+     * releases an OS window and leaves the tabs, the text and the zoom where they were: reopening it is the
+     * same session, not a new one. That is the console's own arrangement too.
+     *
+     * <p>All methods run on the frame loop.
+     */
+    public static final class Window {
+
+        /** The name this window is opened, raised and remembered under. */
+        private static final String KEY = "editor";
+
+        private final WindowMemory memory;
+        private final Gui gui = new Gui();
+        private final KronoGui krono;
+        private final Workspace ws;
+        /**
+         * The file tree, built now rather than with the rest of it, because the host binds the OS clipboard on
+         * every window it is told about and it asks once, before anything has been opened. A tree whose Gui
+         * turned up later would be the one window on the desk whose "Copy path" went nowhere.
+         */
+        private final FolderWindow folder;
+
+        /**
+         * Built on the first {@link #show}, not in the constructor, because it needs the application — the
+         * dialogs and the tree have to be opened onto something, and there is nothing until a host turns up.
+         */
+        private FileActions files;
+        private AppWindow handle;
+
+        /**
+         * Build the editor, without opening anything.
+         *
+         * @param memory where this window's placement, size and zoom are kept — shared with whatever else is on
+         *               this desk, because a window memory is one file with one key per window
+         */
+        public Window(WindowMemory memory) {
+            this.memory = memory;
+            gui.theme(Palettes.EDITOR);
+            gui.minSize(Length.em(30), Length.em(22));
+            this.krono = KronoGui.attach(gui);
+            this.ws = new Workspace(gui, krono);
+            // Method references on this, so the tree can be wired before the thing it reaches is built: both
+            // of these queue onto FileActions once there is one, and drop the request until then.
+            this.folder = new FolderWindow(this::openPath, this::revealPath, memory, krono);
+            zoomShortcuts(gui);
+        }
+
+        /** This window's Gui, so the host can bind its clipboard here as it does on every other window. */
+        public Gui gui() {
+            return gui;
+        }
+
+        /** Every tree this editor presents in a window of its own: the documents, and the file tree. */
+        public List<Gui> windows() {
+            return List.of(gui, folder.gui());
+        }
+
+        /** Whether the editor window is up right now. */
+        public boolean open() {
+            return handle != null && handle.open();
+        }
+
+        /**
+         * Open the editor on {@code app}, or raise it if it is already up.
+         *
+         * <p>Asking for the editor has to mean <em>the</em> editor, which is why this is one {@code show()}
+         * however many times it is called.
+         */
+        public void show(GuiApp app) {
+            if (files == null) {
+                // No profiles: MainFrame is the console here, so the editor must not open one of its own. The
+                // dialog owner is read late — this window may not exist yet on the frame this runs on.
+                files = new FileActions(gui, ws, app, memory, null, krono, this::ownerHandle, folder);
+                files.shortcuts();
+                files.restore();
+            }
+            if (handle == null) {
+                handle = app.window(KEY, () -> WindowSpec
+                        .of(memory.config(KEY, "Text Editor", W, H).decorations(Decorations.CLIENT), gui)
+                        .onCreated(this::onCreated)
+                        .onClosed(this::onClosed)
+                        // Closing the editor is not quitting here, but it can still lose work, so the same gate
+                        // the standalone editor puts in front of quitting goes in front of this close.
+                        .onCloseRequest(files::guardClose));
+            }
+            handle.show();
+        }
+
+        /**
+         * Where a modal file dialog parents: this window while it is up, and the desktop otherwise.
+         *
+         * <p>Zero is the right answer rather than a failure — a dialog raised by {@code edit} on a frame where
+         * the window has not been created yet is still a dialog that should appear.
+         */
+        private long ownerHandle() {
+            return handle != null && handle.open() ? handle.window().osHandle() : 0L;
+        }
+
+        /**
+         * Frame loop, once per frame, open or not. The queue is drained whether the window is up because a
+         * request made just before a close still has to land somewhere, and the clock is ticked because the
+         * file tree animates and outlives this window.
+         */
+        public void tick() {
+            if (files != null) {
+                files.drain();
+            }
+            krono.tick();
+        }
+
+        /** Open {@code file} in a tab. Enqueued, so it is safe from any thread. */
+        public void openPath(Path file) {
+            if (files != null) {
+                files.openPath(file);
+            }
+        }
+
+        /** Point the file tree at {@code dir}. Enqueued, so it is safe from any thread. */
+        public void revealPath(Path dir) {
+            if (files != null) {
+                files.revealPath(dir);
+            }
+        }
+
+        /**
+         * The window exists, and its input is already attached and pumping — the host did that from the factory
+         * it gave the framework. What is left is what only this window knows: which window its own title bar
+         * commands, where it should be, and what it was zoomed to.
+         */
+        private void onCreated(dev.vexelray.os.NativeWindow created) {
+            ws.titleBar.controls(WindowControls.of(created));
+            if (memory.maximized(KEY)) {
+                created.maximize();
+            } else {
+                memory.restoreBounds(KEY, created, W, H);
+            }
+            // Watched with its tree, so the UI zoom is remembered too: Ctrl+= is the same kind of decision as
+            // dragging the window bigger, and losing it on quit is the same loss.
+            memory.watch(KEY, created, gui);
+        }
+
+        /** The window is gone; the editor is not. What was recorded last stands. */
+        private void onClosed() {
+            memory.forget(KEY);
+            ws.titleBar.controls(WindowControls.NONE);
+        }
+
+        /** Stop the file tree and anything else this editor owns. The host's console is not ours to close. */
+        public void close() {
+            if (files != null) {
+                files.close();
+            }
+            krono.close();
         }
     }
 
@@ -919,30 +1091,65 @@ public final class TextEditorApp {
         private final Gui gui;
         private final Workspace ws;
         private final GuiApp app;
-        private final long window;
+        /**
+         * The OS window a modal file dialog parents to, asked for at the moment it is needed rather than
+         * captured once.
+         *
+         * <p>It has to be a supplier because the editor is not always the application's main window. When
+         * MainFrame is the program the editor is a window it opens, and a window opened that way does not exist
+         * until the frame loop services the request — so there is no handle to capture at construction, and a
+         * dialog parented to the {@code 0} that was captured instead is a dialog the window manager is entitled
+         * to put anywhere, including behind the window that asked for it.
+         */
+        private final java.util.function.LongSupplier owner;
         private final WindowMemory memory;
         private final FolderWindow folder;
+        /**
+         * This application's own terminal window, or {@code null} when MainFrame is the one hosting the editor
+         * and the console is therefore already on screen as the main window.
+         *
+         * <p>Null rather than a no-op stand-in because the difference is real and worth being able to see: with
+         * a terminal there is a Ctrl+` that opens it, and without one there is nothing to open, because the
+         * shell is what the editor was launched from.
+         */
         private final Console terminal;
         private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> requests =
                 new java.util.concurrent.ConcurrentLinkedQueue<>();
 
+        /**
+         * @param profiles the profiles this application's own console offers, or {@code null} when the editor is
+         *                 hosted by a console it did not open and must not open a second one
+         * @param owner    where a modal dialog parents; see {@link #owner}
+         */
         FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, ProfileApp profiles,
-                    KronoGui krono) {
+                    KronoGui krono, java.util.function.LongSupplier owner, FolderWindow folder) {
             this.gui = gui;
             this.ws = ws;
             this.app = app;
-            this.window = app.windowHandle();
+            this.owner = owner;
             this.memory = memory;
-            // The clock goes through to the folder window, which is the only other window here with anything to
-            // animate: the terminal's scrollback is text arriving, not a widget changing shape.
-            this.folder = new FolderWindow(this::openPath, this::revealPath, memory, krono);
+            // Handed in, or made here when nobody needed it earlier.
+            //
+            // The tree is a window of this editor's whose Gui exists whether or not it is on screen, and a host
+            // that binds the OS clipboard per window has to be able to see it before anything has been opened —
+            // which is before this object exists. So Window builds it and passes it down (see Window.windows()),
+            // while the standalone editor, which hands out its own windows and can wait, lets it be made here.
+            // The clock goes through to it either way: it is the only other window here with anything to
+            // animate, the terminal's scrollback being text arriving rather than a widget changing shape.
+            this.folder = folder != null ? folder
+                    : new FolderWindow(this::openPath, this::revealPath, memory, krono);
             // The console is a component from mainframe-vexel-gui and knows nothing about editing. What makes it
             // this application's console is the EditorApp plugged into it: edit, reveal, and a window to raise.
             // Each of those reaches the editor the same way the file tree does, by enqueueing onto this one
             // queue, so a shell command that opens a tab is ordered with the modal dialogs and the tab changes.
-            this.terminal = new Console(consoleSpec(memory, profiles)
-                    .app(new EditorApp(this::openPath, this::revealPath, this::raiseEditor))
-                    .build());
+            //
+            // Skipped entirely when MainFrame is the host: there the same three commands are registered against
+            // the console that is already running, by Editor, so building one here would be a second shell in a
+            // second window answering to the same keys.
+            this.terminal = profiles == null ? null
+                    : new Console(consoleSpec(memory, profiles)
+                            .app(new EditorApp(this::openPath, this::revealPath, this::raiseEditor))
+                            .build());
         }
 
         /** {@code launch "editor"}: bring the main window forward. Frame loop, via the console's own queue. */
@@ -966,7 +1173,9 @@ public final class TextEditorApp {
 
         /** Every Gui this application presents, main window first. */
         List<Gui> windows() {
-            return List.of(gui, folder.gui(), terminal.gui());
+            return terminal == null
+                    ? List.of(gui, folder.gui())
+                    : List.of(gui, folder.gui(), terminal.gui());
         }
 
         /**
@@ -980,11 +1189,18 @@ public final class TextEditorApp {
         void shortcuts() {
             bind(gui);
             bind(folder.gui());
-            bind(terminal.gui());
+            if (terminal != null) {
+                bind(terminal.gui());
+            }
         }
 
         private void bind(Gui g) {
-            g.shortcut(Key.GRAVE_ACCENT, () -> requests.add(this::openTerminal), Modifier.CONTROL);
+            // Only where there is a terminal of our own to open. Hosted by MainFrame there is not: the shell is
+            // the main window, so Ctrl+` is left unbound rather than bound to nothing — a key that swallows the
+            // chord and does nothing is worse than a key the window never claimed.
+            if (terminal != null) {
+                g.shortcut(Key.GRAVE_ACCENT, () -> requests.add(this::openTerminal), Modifier.CONTROL);
+            }
             g.shortcut(Key.O, () -> requests.add(this::open), Modifier.CONTROL);
             g.shortcut(Key.O, () -> requests.add(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
             g.shortcut(Key.S, () -> requests.add(this::save), Modifier.CONTROL);
@@ -997,7 +1213,9 @@ public final class TextEditorApp {
 
         /** GUI thread, once per frame. One request at a time — each may block on a modal dialog. */
         void drain() {
-            terminal.tick();
+            if (terminal != null) {
+                terminal.tick();
+            }
             // No tabs at all is not a state the rest of this class is written for: active() is null, so Ctrl+S
             // and every other command silently does nothing, which reads as an editor that has stopped working.
             // Ctrl+W never gets there — it empties the last tab rather than removing it — but Close on the
@@ -1010,7 +1228,9 @@ public final class TextEditorApp {
             // Which windows are up is read from the windows themselves, every frame, rather than written when
             // they open and close: see WindowMemory.open for why that distinction is the whole feature.
             memory.open("folder", folder.isOpen());
-            memory.open("terminal", terminal.isOpen());
+            if (terminal != null) {
+                memory.open("terminal", terminal.isOpen());
+            }
             Runnable r = requests.poll();
             if (r != null) {
                 r.run();
@@ -1035,7 +1255,7 @@ public final class TextEditorApp {
                     revealPath(dir);
                 }
             }
-            if (memory.wasOpen("terminal")) {
+            if (terminal != null && memory.wasOpen("terminal")) {
                 requests.add(this::openTerminal);
             }
         }
@@ -1068,7 +1288,7 @@ public final class TextEditorApp {
             try {
                 // No filter: every file is visible. TextFile refuses what the editor can't hold (binary,
                 // oversized, wrong charset), which is a better gate than hiding files by extension.
-                Path picked = FileDialog.open(window, null, startDir()).orElse(null);
+                Path picked = FileDialog.open(owner.getAsLong(), null, startDir()).orElse(null);
                 if (picked != null) {
                     loadInto(picked);
                 }
@@ -1079,7 +1299,7 @@ public final class TextEditorApp {
 
         private void openFolder() {
             try {
-                Path dir = FileDialog.pickFolder(window, startDir()).orElse(null);
+                Path dir = FileDialog.pickFolder(owner.getAsLong(), startDir()).orElse(null);
                 if (dir == null) {
                     return;
                 }
@@ -1141,7 +1361,7 @@ public final class TextEditorApp {
                 return;
             }
             try {
-                FileDialog.save(window, FILTERS, startDir(), tab.title()).ifPresent(target -> write(tab, target));
+                FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title()).ifPresent(target -> write(tab, target));
             } catch (RuntimeException e) {
                 ws.status.text("Save failed: " + e.getMessage());
             }
@@ -1205,7 +1425,7 @@ public final class TextEditorApp {
             // the active tab, so a Save As for a tab the user cannot see would be labelled from another one.
             ws.show(tab);
             try {
-                Path target = FileDialog.save(window, FILTERS, startDir(), tab.title()).orElse(null);
+                Path target = FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title()).orElse(null);
                 return target != null && write(tab, target);
             } catch (RuntimeException e) {
                 ws.status.text("Save failed: " + e.getMessage());
@@ -1236,10 +1456,17 @@ public final class TextEditorApp {
             return tab != null && tab.file != null ? tab.file.getParent() : null;
         }
 
-        /** Main window gone: stop MainFrame's job thread before the process starts tearing down. */
+        /**
+         * Main window gone: stop MainFrame's job thread before the process starts tearing down.
+         *
+         * <p>Only our own. A console we were handed belongs to whoever handed it over and is theirs to close —
+         * closing it from here would stop the shell that is still running when the editor window shuts.
+         */
         @Override
         public void close() {
-            terminal.close();
+            if (terminal != null) {
+                terminal.close();
+            }
         }
     }
 
