@@ -77,7 +77,11 @@ records, sizes, times and media types, not text to be re-parsed. It runs embedde
 ```
 ~/Documents/GitHub/text-editor-vexel-demo > find "*Test.java" | first 3 | edit
 ~/Documents/GitHub/text-editor-vexel-demo > ls | where size > 1mb | sort-by size --reverse
+~/Documents/GitHub/text-editor-vexel-demo > editor
 ```
+
+`apps` lists what is plugged into the shell, and `editor` brings this window forward — MainFrame names
+a command after every app that has a window, so typing a program's name runs it.
 
 `Up`/`Down` walk history, `Ctrl+L` clears, `Ctrl+C` interrupts a running command or copies the selection,
 `Ctrl+D` on an empty line (or `exit`) closes the window. The
