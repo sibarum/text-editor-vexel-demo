@@ -61,6 +61,9 @@ final class Highlighter {
     /** Extension -> TextMate scope name, for the bundled grammars. */
     private static final Map<String, String> EXT_TO_SCOPE = Map.ofEntries(
             Map.entry("java", "source.java"),
+            Map.entry("py", "source.python"),
+            Map.entry("pyw", "source.python"),
+            Map.entry("pyi", "source.python"),
             Map.entry("json", "source.json"),
             Map.entry("md", "text.html.markdown"),
             Map.entry("markdown", "text.html.markdown"),
@@ -82,7 +85,7 @@ final class Highlighter {
 
     private final Gui gui;
     private final TextField editor;
-    private final Registry registry = new Registry();
+    private final Registry registry = loadGrammars();
     private final AtomicLong generation = new AtomicLong();
 
     private volatile IGrammar grammar; // null = plain text
@@ -100,7 +103,14 @@ final class Highlighter {
     Highlighter(Gui gui, TextField editor) {
         this.gui = gui;
         this.editor = editor;
+        editor.onChange(text -> refresh());
+    }
+
+    /** A registry holding every bundled grammar. Package-private so a test can load the same set. */
+    static Registry loadGrammars() {
+        Registry registry = new Registry();
         registry.addGrammar(IGrammarSource.fromResource(Highlighter.class, "/grammars/java.tmLanguage.json"));
+        registry.addGrammar(IGrammarSource.fromResource(Highlighter.class, "/grammars/python.tmLanguage.json"));
         registry.addGrammar(IGrammarSource.fromResource(Highlighter.class, "/grammars/JSON.tmLanguage.json"));
         // Markdown references embedded-language scopes (fenced code blocks) that are not bundled;
         // TM4E treats a missing include as a no-op, so those blocks just render uncolored.
@@ -108,7 +118,7 @@ final class Highlighter {
         registry.addGrammar(IGrammarSource.fromResource(Highlighter.class, "/grammars/xml.tmLanguage.json"));
         registry.addGrammar(IGrammarSource.fromResource(Highlighter.class, "/grammars/html.tmLanguage.json"));
         registry.addGrammar(IGrammarSource.fromResource(Highlighter.class, "/grammars/JavaScript.tmLanguage.json"));
-        editor.onChange(text -> refresh());
+        return registry;
     }
 
     /** Stop this highlighter: in-flight and future refreshes become no-ops (its editor is being torn down). */
@@ -117,15 +127,18 @@ final class Highlighter {
         generation.incrementAndGet();
     }
 
+    /** The TextMate scope for {@code fileName}'s extension, or null for plain text (no name, no match). */
+    static String scopeFor(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        int dot = fileName.lastIndexOf('.');
+        return dot < 0 ? null : EXT_TO_SCOPE.get(fileName.substring(dot + 1).toLowerCase(Locale.ROOT));
+    }
+
     /** Pick the grammar for {@code fileName}'s extension (null name or unknown extension = plain text). */
     void language(String fileName) {
-        String scope = null;
-        if (fileName != null) {
-            int dot = fileName.lastIndexOf('.');
-            if (dot >= 0) {
-                scope = EXT_TO_SCOPE.get(fileName.substring(dot + 1).toLowerCase(Locale.ROOT));
-            }
-        }
+        String scope = scopeFor(fileName);
         grammar = scope == null ? null : registry.grammarForScopeName(scope);
         // A recognized format is code: switch the editor to the atlas's monospace face. Plain text reads
         // better in the proportional UI face, so an unknown extension switches back.
@@ -158,7 +171,7 @@ final class Highlighter {
         });
     }
 
-    private static List<Span> tokenize(IGrammar grammar, String text) {
+    static List<Span> tokenize(IGrammar grammar, String text) {
         if (text.length() > MAX_HIGHLIGHT_CHARS) {
             return List.of();
         }

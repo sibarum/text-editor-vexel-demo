@@ -67,6 +67,15 @@
             <artifactId>mainframe</artifactId>
             <version>${mainframe.version}</version>
         </dependency>
+        <!-- The frame clock, for the tab transition. Motion enters at the application edge and nowhere else:
+             vexelray-gui-widget declares its timing seam out of JDK types (a DoubleConsumer and a Runnable) and
+             this module satisfies it, so Tabs animates without ever naming Kronometer. Brings Kronometer in
+             transitively. -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-krono</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
         <!-- Native OS open/save dialogs (NFDe over Panama), at the application edge. -->
         <dependency>
             <groupId>dev.vexelray.gui</groupId>
@@ -84,6 +93,14 @@
             <artifactId>tactroller-clipboard</artifactId>
             <version>${tactroller.version}</version>
         </dependency>
+        <!-- Tests. TextFile is the one part of this application that is pure policy over bytes - no Gui, no
+             window, no clock - so it is the one part a plain JUnit run can hold to its word. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -95,6 +112,11 @@
                 <configuration>
                     <release>${maven.compiler.release}</release>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
             </plugin>
             <!-- Run: mvn compile exec:exec ; headless capture: mvn compile exec:exec "-Dapp.args=[dash][dash]capture" -->
             <plugin>
