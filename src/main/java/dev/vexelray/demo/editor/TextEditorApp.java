@@ -419,7 +419,7 @@ public final class TextEditorApp {
     }
 
     /** One open document: its widgets, its highlighter, and what saving must know about its file. */
-    private static final class EditorTab {
+    static final class EditorTab {
         final TextField editor;
         final Highlighter highlighter;
         final Node body;
@@ -460,10 +460,17 @@ public final class TextEditorApp {
 
     /**
      * The window's content: a {@link Tabs} panel of {@link EditorTab}s over a status line. The parallel
-     * {@code open} list and the widget's tab order are kept in lockstep — every structural change (add,
-     * close) goes through here, on the GUI thread via {@link FileActions#drain()}.
+     * {@code open} list and the widget's tab order are kept in lockstep — {@code open.get(i)} is the document
+     * on tab {@code i}, and every index this class computes assumes it.
+     *
+     * <p>Most structural changes are asked for here and serviced on the GUI thread by
+     * {@link FileActions#drain()}. One is not: the tab bar puts a <b>Close</b> item on every header's context
+     * menu itself, which removes a tab straight from the handler lane without passing through the queue. That
+     * arrives at {@link #tabRemoved}, and it is why the list is guarded rather than merely thread-confined —
+     * the lock is the bar's own monitor, because the invariant being protected spans both structures and a
+     * second lock taken in the other order would be a deadlock waiting for a right click during a frame.
      */
-    private static final class Workspace {
+    static final class Workspace {
         final Gui gui;
         final Tabs tabs;
         final Node status;
@@ -496,6 +503,10 @@ public final class TextEditorApp {
             // from, and the first tab is selected before there is a second.
             this.tabs.transition(Tabs.slide(
                     (progress, done) -> krono.ramp(Dur.ms(160), Ease.LINEAR, progress, done)));
+            // Before the welcome tab is added, so no tab can be removed without this being in place: the bar's
+            // own Close item is a removal this class never calls for, and a removal it does not see leaves
+            // `open` one document longer than the bar for the rest of the session.
+            this.tabs.onRemove(this::tabRemoved);
             // AUTO, not a fixed line: this line also reports what was opened or saved, and a long path wraps.
             // A fixed height clips the second line outside the padding instead of making room for it.
             this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+` terminal - Ctrl+S save - "
@@ -536,65 +547,126 @@ public final class TextEditorApp {
             EditorTab tab = new EditorTab(editor, new Highlighter(gui, editor), body, content);
             tab.file = file;
             tab.crlf = crlf;
-            open.add(tab);
-            tabs.add(tab.title(), body);
-            tabs.select(open.size() - 1);
+            synchronized (tabs) {
+                open.add(tab);
+                tabs.add(tab.title(), body);
+                tabs.select(open.size() - 1);
+            }
             tab.highlighter.language(tab.title());
             return tab;
         }
 
         EditorTab active() {
-            int i = tabs.selected();
-            return i >= 0 && i < open.size() ? open.get(i) : null;
+            synchronized (tabs) {
+                int i = tabs.selected();
+                return i >= 0 && i < open.size() ? open.get(i) : null;
+            }
         }
 
         /** Every open document with edits that are not on disk, in tab order. */
         List<EditorTab> unsaved() {
             List<EditorTab> out = new ArrayList<>();
-            for (EditorTab tab : open) {
-                if (tab.dirty()) {
-                    out.add(tab);
+            synchronized (tabs) {
+                for (EditorTab tab : open) {
+                    if (tab.dirty()) {
+                        out.add(tab);
+                    }
                 }
             }
             return out;
         }
 
-        int indexOf(Path file) {
-            for (int i = 0; i < open.size(); i++) {
-                if (file.equals(open.get(i).file)) {
-                    return i;
+        /** Bring the tab holding {@code file} to the front; false if no tab holds it. */
+        boolean showFile(Path file) {
+            synchronized (tabs) {
+                for (int i = 0; i < open.size(); i++) {
+                    if (file.equals(open.get(i).file)) {
+                        tabs.select(i);
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        /**
+         * Bring {@code tab} to the front, if it is still open. Resolving the index and using it under one lock
+         * rather than handing one out: an index is only true of the moment it was taken, and a close between
+         * the two would make this select a different document — or, for a tab that has since gone, tab 0,
+         * which is what {@link Tabs#select} clamps a -1 to.
+         */
+        void show(EditorTab tab) {
+            synchronized (tabs) {
+                int i = open.indexOf(tab);
+                if (i >= 0) {
+                    tabs.select(i);
                 }
             }
-            return -1;
+        }
+
+        /** True when nothing is open at all — see {@link FileActions#drain()}, which is what fixes it. */
+        boolean empty() {
+            synchronized (tabs) {
+                return open.isEmpty();
+            }
         }
 
         /** Re-label the active tab and re-pick its grammar — after an open-into or a save-as. */
         void retitleActive() {
-            EditorTab tab = active();
-            if (tab != null) {
+            EditorTab tab;
+            synchronized (tabs) {
+                tab = active();
+                if (tab == null) {
+                    return;
+                }
                 tabs.title(tabs.selected(), tab.title());
-                tab.highlighter.language(tab.title());
             }
+            tab.highlighter.language(tab.title());
         }
 
         /** Close the active tab. The last tab is not removed but reset to an empty untitled document. */
         void closeActive() {
-            int i = tabs.selected();
-            EditorTab tab = active();
-            if (tab == null) {
-                return;
+            synchronized (tabs) {
+                EditorTab tab = active();
+                if (tab == null) {
+                    return;
+                }
+                if (open.size() == 1) {
+                    tab.file = null;
+                    tab.crlf = false;
+                    tab.editor.text("");
+                    tab.savedText = "";
+                    retitleActive();
+                    status.text("Closed - one empty tab remains");
+                    return;
+                }
+                // Removing from the bar is the whole action: `open` shrinks in tabRemoved, which the bar calls
+                // back into. Doing it here as well would drop two documents for one close -- and leaving it
+                // here instead is what let the bar's own Close item drop none.
+                tabs.remove(tabs.selected());
             }
-            if (open.size() == 1) {
-                tab.file = null;
-                tab.crlf = false;
-                tab.editor.text("");
-                tab.savedText = "";
-                retitleActive();
-                status.text("Closed - one empty tab remains");
-                return;
+        }
+
+        /**
+         * A tab has left the bar — by {@link #closeActive}, or by <b>Close</b> on the header's context menu,
+         * which is the bar's own and reaches it without passing through this class at all. This is the single
+         * place {@code open} shrinks, so both routes cost exactly one document.
+         *
+         * <p>Called from inside {@code Tabs.remove}, on whichever thread asked for it, with both of the bar's
+         * lists already shrunk and the selection not yet moved. Holding the bar's monitor for the list edit is
+         * the point: a document removed a moment before or after its tab is a window in which {@code active()}
+         * answers with the wrong file.
+         */
+        private void tabRemoved(int index) {
+            EditorTab tab;
+            synchronized (tabs) {
+                if (index < 0 || index >= open.size()) {
+                    return;
+                }
+                tab = open.remove(index);
             }
-            open.remove(i);
-            tabs.remove(i);   // removes header and body from the tree; registrations die with them
+            // The page left the tree with the tab, so these came back dead rather than dormant. Closing them
+            // releases what the removal did not: the highlighter's pending tokenize and the field's own state.
             tab.highlighter.close();
             tab.editor.close();
         }
@@ -926,6 +998,15 @@ public final class TextEditorApp {
         /** GUI thread, once per frame. One request at a time — each may block on a modal dialog. */
         void drain() {
             terminal.tick();
+            // No tabs at all is not a state the rest of this class is written for: active() is null, so Ctrl+S
+            // and every other command silently does nothing, which reads as an editor that has stopped working.
+            // Ctrl+W never gets there — it empties the last tab rather than removing it — but Close on the
+            // header's own menu does, and the bar is entitled to remove what it was asked to. So the floor is
+            // put back here, on the GUI thread, where building a document's widgets belongs.
+            if (ws.empty()) {
+                ws.newTab("", null, false);
+                ws.status.text("Closed - one empty tab remains");
+            }
             // Which windows are up is read from the windows themselves, every frame, rather than written when
             // they open and close: see WindowMemory.open for why that distinction is the whole feature.
             memory.open("folder", folder.isOpen());
@@ -1012,9 +1093,7 @@ public final class TextEditorApp {
         /** Load {@code picked} into a tab: switch to it if already open, else reuse an empty untitled or add. */
         private void loadInto(Path picked) {
             try {
-                int existing = ws.indexOf(picked);
-                if (existing >= 0) {
-                    ws.tabs.select(existing);
+                if (ws.showFile(picked)) {
                     ws.status.text("Already open: " + picked.getFileName());
                     return;
                 }
@@ -1124,7 +1203,7 @@ public final class TextEditorApp {
             }
             // Selecting it first is not cosmetic: the save dialog's start directory and suggested name come from
             // the active tab, so a Save As for a tab the user cannot see would be labelled from another one.
-            ws.tabs.select(ws.open.indexOf(tab));
+            ws.show(tab);
             try {
                 Path target = FileDialog.save(window, FILTERS, startDir(), tab.title()).orElse(null);
                 return target != null && write(tab, target);
