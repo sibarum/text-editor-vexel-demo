@@ -43,6 +43,7 @@ import sibarum.tactroller.clipboard.ClipboardException;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -825,7 +826,23 @@ public final class TextEditorApp {
      */
     private static final class FileActions implements AutoCloseable {
         private static final List<FileDialog.Filter> FILTERS =
-                List.of(FileDialog.Filter.of("Text files", "txt", "md", "java", "json", "py"));
+                List.of(FileDialog.Filter.of("Text files", saveExtensions()));
+
+        /**
+         * The types the save dialogs offer, taken from the highlighter's extension table rather than
+         * repeated here: every format the editor can colour is a format it should be able to save as, and a
+         * hand-kept second copy of that list is a copy that goes stale. Plain {@code txt} leads because the
+         * OS appends the first extension when the user types a bare name; the rest are sorted, since
+         * {@code Map.of}'s iteration order is not stable across runs. Open takes no filter at all, on
+         * purpose - see {@link #open()}.
+         */
+        private static String[] saveExtensions() {
+            List<String> extensions = new ArrayList<>(Highlighter.knownExtensions());
+            extensions.remove("txt");
+            extensions.sort(Comparator.naturalOrder());
+            extensions.add(0, "txt");
+            return extensions.toArray(new String[0]);
+        }
 
         private final Gui gui;
         private final Workspace ws;
