@@ -28,6 +28,16 @@ Closing the window asks first if anything is unsaved: a dialog naming each chang
 (which prompts for a path for anything never saved, and cancels the quit if any write does not land), **Discard**
 and **Cancel**. Nothing to save closes straight through. See [docs/close-gate.md](docs/close-gate.md).
 
+Right-click a tab for **Close**, **Close all** and **Reveal in Navigator**. Close is the tab bar's own — the
+widget puts it on every header and wires it straight to its own removal, which is why `Workspace` learns about
+that route from `Tabs.onRemove` rather than by being asked. The other two are the editor's, because both are
+about what a tab *is* here that a tab bar cannot know. Close all leaves one empty tab behind, exactly as `Ctrl+W`
+on a last tab does, and goes through the same unsaved-work dialog quitting does: one click that can discard
+documents you last looked at an hour ago is not the risk closing the tab in front of you is. Reveal in Navigator
+points the file tree at the folder holding that document and selects its row — re-rooting the tree only if the
+drawer is somewhere else, so a reveal into a folder you have already opened up does not shut it again. It is
+greyed on a document that has never been saved, which is a reason it cannot be taken rather than a different menu.
+
 All three windows draw their own title bar, in the app's palette rather than the system's: `TitleBar` from
 `vexelray-gui-widget` over a window created with `Decorations.CLIENT`. It is an ordinary row of ordinary
 widgets — what makes it a title bar is two declarations, `WindowRegion.DRAG` on the strip and
@@ -59,6 +69,46 @@ longer fits, then nudged until it is fully on screen. Launch the app and the ter
 they were open when you last closed it; a folder that has since gone away is reported rather than reopened. See
 [docs/window-placement.md](docs/window-placement.md).
 
+## The native build
+
+```bash
+mvn -Pnative package                                 # target/editor.exe
+```
+
+It is one executable and nine JDK DLLs beside it, not one file. `native-image` copies `awt.dll`,
+`fontmanager.dll`, `freetype.dll`, `lcms.dll` and five others next to the exe and they are **required**:
+the text atlas ships as a PNG and `GuiApp.loadAtlasRgba` decodes it with `ImageIO`, so `java.desktop` is
+reachable from the first frame that draws a glyph. Moving them away breaks startup, not some optional path.
+
+The switches are the ones [mainframe-dist](../mainframe/mainframe-dist/README.md) found the hard way and
+each is load-bearing: `-H:+ForeignAPISupport` because the graphics stack, both input backends and the native
+file dialogs are Panama downcalls and Win32 calls back in through an upcall stub, `-H:+SharedArenaSupport`
+because raw input opens an `Arena.ofShared` on one thread and reads it on another,
+`-J-Djava.io.tmpdir=target/nitmp` because Windows Application Control blocks a brand-new unsigned `.exe`
+under `%TEMP%` and native-image's own probes are exactly that, and `/SUBSYSTEM:WINDOWS` +
+`/ENTRY:mainCRTStartup` so no console window appears beside the editor. The last two are the Windows
+linker's; a native build elsewhere drops them.
+
+`src/main/resources/META-INF/native-image` holds two files, kept apart on purpose. The first is this
+application's traced reflective surface — including the sixteen `grammars/*.tmLanguage.json`, joni's Unicode
+tables and TM4E's four `Raw*` grammar classes, which is the whole of the syntax highlighting, and the
+bundled `natives/windows-x64/nfd.dll` plus the downcall descriptors `Nfd`'s static initialiser builds, which
+is the whole of Ctrl+O. The second, `-signed-jar`, is a workaround: TM4E ships as a **signed** jar, the
+Eclipse signing certificate genuinely ends up in the image heap, and every type needed to represent an X.509
+certificate has to be registered or the build fails outright with `Type not found during analysis`. Deleting
+those because a native image has no jars to verify is the obvious-looking mistake.
+
+**Application Control will lie to you about this build.** `Unable to run 'WindowsDirectives.exe' to compute
+offsets in C data structures` is the policy blocking a probe — retry. `UnsatisfiedLinkError: Can't load
+library: awt` on the *result* is **not** a missing DLL: `awt.dll` imports from the `java.dll` and `jvm.dll`
+shims native-image generates fresh on every build, those are unsigned and hash-unique per build, and a
+blocked one leaves `awt.dll` unable to resolve its imports. Rebuild until a set is allowed through.
+
+Verified from the executable, not from the JVM arrangement: `--capture` draws the page, `--capture-terminal`
+renders the MainFrame console with this app's own commands in it, and `--capture-folder` renders the file
+tree. Highlighting and the file dialogs are not reachable from this executable headlessly — it takes no path
+argument — so the proof for those is `mainframe.exe`, which carries the same code and the same metadata.
+
 ## The terminal window
 
 **Ctrl+`** opens a second window running [MainFrame](../mainframe) — a shell whose piped values are typed
@@ -70,7 +120,7 @@ records, sizes, times and media types, not text to be re-parsed. It runs embedde
 > MainFrame is the program and an editor is one of the things it opens — not the other way round. What this
 > application supplies is a `ConsoleSpec`: the name and title, the project the shell should consider itself in,
 > the bottom line's wording, and an `EditorApp` carrying `edit`, `reveal` and a window for `launch "editor"` to
-> raise. Everything else — the tube, the scrollback, the prompt, the history, profiles, forms — comes with the
+> raise. Everything else — the tube, the scrollback, the prompt, the history, the forms — comes with the
 > component. See [`EditorApp.java`](src/main/java/dev/vexelray/demo/editor/EditorApp.java), which is the whole of
 > what the shell knows about editing.
 
@@ -88,22 +138,12 @@ a command after every app that has a window, so typing a program's name runs it.
 design, and what the framework cannot do for it yet, is in [docs/mainframe-window.md](docs/mainframe-window.md);
 the original from-scratch scope it replaced is in [docs/terminal.md](docs/terminal.md).
 
-### Settings, profiles, and .vtext
+### Data entry, and .vtext
 
-Right-click anywhere in the terminal for the settings menu. It lists the profiles you have, offers to create or
-edit one, and can make any of them the default — yours, or this project's.
-
-A **profile** is a name, a set of environment variables, and a set of directories to find binaries in: a
-toolchain, said once and applied whole. Applying one *merges* — the variables go over what the shell already has
-and the directories go on the front of the PATH, skipping any that are already there. Replacing the environment
-outright would be the more literal reading and it would break the session, because MainFrame seeds itself from
-the process and a replacement would take away PATHEXT and COMSPEC.
-
-**The editor is a form, and nobody drew it.** A profile is a name plus two lists of repeated details, which is
-exactly the shape MainFrame's `Form` was built for — so `Profile.definition()` states the fields and MainFrame's
-data entry does the rest: `!back`, `!clear`, `!cancel`, the review sheet before it counts, and refusing a variable
-name a child process could not receive. The same definition validates a record that never went near a keyboard,
-so the screen and the check cannot drift apart.
+**A form, and nobody drew it.** MainFrame's `Form` takes a name plus lists of repeated details, states the
+fields once, and its data entry does the rest: `!back`, `!clear`, `!cancel`, `!browse` for a folder chooser, and
+the review sheet before it counts. The same definition validates a record that never went near a keyboard, so the
+screen and the check cannot drift apart.
 
 That needed one thing from this window. MainFrame's forms are *printed* — write a prompt, read a line back — and
 the session had been built on a null reader. It now reads from
@@ -113,25 +153,20 @@ line *is* comes from the shell rather than from a mode the window is put into: `
 job thread is blocked reading, so a form that finishes, cancels or fails hands the prompt back with nothing having
 to say so.
 
-**Every menu item runs a command.** `profile`, `profile-new`, `profile-edit`, `profile-drop`, `profile-use` and
-`profile-default` are real MainFrame commands with real `help` text, and the menu submits one and echoes it. So
-what the menu did is in the scrollback, and anything it can do can be scripted:
+**Every menu item runs a command.** Right-click anywhere in the terminal for the menu; every entry on it submits
+a real MainFrame command with real `help` text, and echoes the line it submitted. So what the menu did is in the
+scrollback, and anything it can do can be scripted:
 
 ```
-~/src/thing > profile | where paths > 0 | select name vars
-~/src/thing > profile-default rust-nightly --project
+~/src/thing > find "*Test.java" | first 3 | edit
+~/src/thing > ls | where ext == "java" | select name size
 ```
 
-**Two scopes, and only one of them is machine-specific.** Profiles live with your own settings, because they hold
-absolute directories that are true of this machine and no other. A project records only which profile it *wants*,
-by name, in a `.vtext` file in its own directory — [ProjectScope](https://github.com/sibarum/mainframe/blob/main/mainframe-vexel-gui/src/main/java/dev/mainframe/gui/app/ProjectScope.java),
-the same forgiving properties format as everything else, meant to be committed. A checkout naming a profile this
-machine has never heard of is told so once and carries on. The project is the folder the file tree is showing, so
-the terminal can `cd` anywhere without changing which project you are in; with no folder open there is no project,
-and nothing is written anywhere.
-
-The profile the next command will run under is in the header, where a 5250 kept its library list — marked
-*(not applied)* while it is set but not yet in force, because that is the state that catches people out.
+**A project is not a working directory.** A project records settings by *name* in a `.vtext` file in its own
+directory — [ProjectScope](https://github.com/sibarum/mainframe/blob/main/mainframe-vexel-gui/src/main/java/dev/mainframe/gui/app/ProjectScope.java),
+the same forgiving properties format as everything else, meant to be committed, and holding nothing
+machine-specific. The project is the folder the file tree is showing, so the terminal can `cd` anywhere without
+changing which project you are in; with no folder open there is no project, and nothing is written anywhere.
 
 ### It is a green screen
 

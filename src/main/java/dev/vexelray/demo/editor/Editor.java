@@ -45,11 +45,30 @@ public final class Editor implements ConsoleApp {
     private final TextEditorApp.Window window;
 
     /**
+     * What the shell should be asked to run when a file has just been opened, or null for nothing.
+     *
+     * <p>A function of a path rather than anything to do with what is in the file, because this class has no
+     * business knowing. A host that wants to say something about a kind of file it recognises answers with a
+     * line of MainFrame and the console runs it, so what happened is in the scrollback and can be typed again;
+     * everything else answers null.
+     */
+    private final java.util.function.Function<Path, String> shellLineFor;
+
+    /**
      * @param memory where the editor's windows keep their placement and zoom — the desk's, shared with the
      *               console and with the file tree, because a window memory is one file with one key per window
      */
     public Editor(WindowMemory memory) {
+        this(memory, file -> null);
+    }
+
+    /**
+     * @param memory       as above
+     * @param shellLineFor asked about every file that is opened; a line it answers with is run in the console
+     */
+    public Editor(WindowMemory memory, java.util.function.Function<Path, String> shellLineFor) {
         this.window = new TextEditorApp.Window(memory);
+        this.shellLineFor = shellLineFor == null ? file -> null : shellLineFor;
     }
 
     @Override
@@ -78,6 +97,16 @@ public final class Editor implements ConsoleApp {
                 dir -> onEditor(console, () -> window.revealPath(dir)),
                 () -> onEditor(console, () -> { }))
                 .commands(registry, console);
+        // Here rather than in the constructor because this is the first hook handed the console, and running a
+        // line is the only thing the answer is ever used for. Submitted rather than acted on directly: an app
+        // that wants something done in this shell asks for it the way a person would, and it lands in the
+        // scrollback as a line anybody could have typed.
+        window.onOpened(file -> {
+            String line = shellLineFor.apply(file);
+            if (line != null) {
+                console.run(line);
+            }
+        });
     }
 
     /** The editor window always exists while MainFrame is running, so it can always be opened. */

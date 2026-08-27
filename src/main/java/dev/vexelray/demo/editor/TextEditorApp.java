@@ -19,8 +19,8 @@ import dev.vexelray.gui.nfd.FileDialog;
 import dev.mainframe.gui.app.ProjectScope;
 import dev.mainframe.gui.console.Console;
 import dev.mainframe.gui.console.ConsoleSpec;
-import dev.mainframe.gui.profile.ProfileApp;
-import dev.mainframe.gui.profile.ProfileStore;
+import dev.vexelray.gui.widget.Cue;
+import dev.vexelray.gui.widget.Cues;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Modals;
 import dev.vexelray.gui.widget.Ramp;
@@ -76,6 +76,46 @@ public final class TextEditorApp {
      */
     private static final Length GUTTER = Length.dp(16);
 
+    /**
+     * How long a <b>transition</b> takes here: a change between two states, both of which the eye can look at
+     * and check. The tab change and the file tree's expanding rows are both this, and they are this length
+     * because one application has one tempo — a window where every change is timed differently reads as several
+     * programs sharing a frame.
+     *
+     * <p>Short enough that Ctrl+Tab held down never has to wait for it, which is the ceiling on this number.
+     */
+    private static final Dur TRANSITION = Dur.ms(160);
+
+    /**
+     * How long a <b>cue</b> takes: a one-shot mark saying something happened, which — unlike a transition — has
+     * no end state at all. It exists only in the middle, so the thing it has to clear is not "did it arrive"
+     * but "was it noticed", and that threshold is the higher of the two. {@code Cue.scanline}'s own
+     * documentation puts it at about 150ms of visible motion, which a 160ms cue does not have once its attack
+     * and release are taken out of it.
+     *
+     * <p>So the two numbers differ on purpose, and the departure is the point rather than an oversight: the
+     * tempo above is what a change is worth, and this is what being seen costs.
+     */
+    private static final Dur CUE = Dur.ms(240);
+
+    /**
+     * How long a cue takes when it is reporting a <b>failure</b>. Longer than {@link #CUE} for the reason
+     * {@link Cues#play(Node, Cue, Ramp)} exists: an acknowledgement only has to be noticed, and a refusal is
+     * asking to be read — the status line beneath it has just been given a sentence explaining what did not
+     * happen, and a mark that has faded before the eye arrives at the words has marked nothing.
+     */
+    private static final Dur ALERT = Dur.ms(400);
+
+    /**
+     * How far the status line's new text rises into place, in em — so it scales with zoom, and so the distance
+     * stays the same fraction of the line's own height at every size.
+     *
+     * <p>Deliberately under half a line. The rise is there to say <em>this text is new</em> to someone who was
+     * looking somewhere else; anything far enough to read as travel would also be far enough to read as the
+     * layout moving, and the layout has not moved.
+     */
+    private static final float STATUS_RISE_EM = 0.35f;
+
     private static final String UNTITLED = "untitled.txt";
     private static final String WELCOME =
             "Welcome to the deceptively simple text editor.\n\n"
@@ -126,7 +166,6 @@ public final class TextEditorApp {
         // file each hold their own copy of it, so the second one to save would drop whatever the first had added.
         Settings settings = Settings.open("text-editor");
         WindowMemory memory = new WindowMemory(settings);
-        ProfileApp profiles = new ProfileApp(new ProfileStore(settings));
         try (Tactroller input = openInput();
              GuiApp app = new GuiApp(memory.config("main", "Text Editor", W, H)
                      .decorations(Decorations.CLIENT));
@@ -145,7 +184,7 @@ public final class TextEditorApp {
             // The editor is this application's main window, so that is what a dialog parents to, and it already
             // exists by the time anything can ask.
             FileActions files =
-                    new FileActions(gui, ws, app, memory, profiles, krono, app::windowHandle, null);
+                    new FileActions(gui, ws, app, memory, true, krono, app::windowHandle, null);
             files.shortcuts();
             // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
             // gate that can still ask about unsaved work while the window stays open.
@@ -197,7 +236,7 @@ public final class TextEditorApp {
      * little of it there is: the console is a component now, and everything on here is a place this application
      * genuinely differs from any other that embeds one.
      */
-    private static ConsoleSpec.Builder consoleSpec(WindowMemory memory, ProfileApp profiles) {
+    private static ConsoleSpec.Builder consoleSpec(WindowMemory memory) {
         return ConsoleSpec.builder()
                 // This window has been called the terminal since before it was reusable, and the name is also
                 // the settings key its placement is stored under -- renaming it would move everyone's window.
@@ -205,16 +244,14 @@ public final class TextEditorApp {
                 .title("Terminal")
                 .memory(memory)
                 .project(() -> projectOf(memory))
-                .app(profiles)
-                .badge(profiles::badge)
                 .status(STATUS);
     }
 
-    /** The bottom line, in this application's words: it has a profiles menu, and the console does not know that. */
+    /** The bottom line, in this application's words: it has an editor menu, and the console does not know that. */
     private static final ConsoleSpec.Status STATUS = new ConsoleSpec.Status() {
         @Override
         public String ready() {
-            return "Ready.  right-click for profiles   help lists every command"
+            return "Ready.  right-click for the editor   help lists every command"
                     + "   Ctrl+D closes this display";
         }
 
@@ -236,14 +273,12 @@ public final class TextEditorApp {
      * window and no keyboard.
      */
     private static void captureTerminal(String path) throws Exception {
-        // No window is opened here, so the memory is never asked for a placement and never written to. The
-        // profiles are the real ones, read-only as far as this path goes -- the capture shows what is set up.
+        // No window is opened here, so the memory is never asked for a placement and never written to.
         Settings settings = Settings.open("text-editor");
         WindowMemory unused = new WindowMemory(settings);
-        ProfileApp profiles = new ProfileApp(new ProfileStore(settings));
         // The editor's own commands are registered here too, pointed at nothing: the capture is a smoke test of
         // the command surface the real window has, and a surface missing edit and reveal is not that surface.
-        try (Console terminal = new Console(consoleSpec(unused, profiles)
+        try (Console terminal = new Console(consoleSpec(unused)
                 .app(new EditorApp(f -> { }, d -> { }, () -> { }))
                 .build())) {
             terminal.start(Path.of("").toAbsolutePath());
@@ -284,7 +319,7 @@ public final class TextEditorApp {
 
     /**
      * The file a project's own settings go in. Dotted, so it sorts out of the way of the project's own files,
-     * and meant to be committed — it records the <em>name</em> of a profile and never its contents.
+     * and meant to be committed — so it records a <em>name</em> for something and never a path to it.
      */
     static final String PROJECT_FILE = ".vtext";
 
@@ -464,6 +499,16 @@ public final class TextEditorApp {
         private AppWindow handle;
 
         /**
+         * Told about every file that has just been opened, so whoever is hosting this editor can decide whether
+         * their shell has anything to say about it — see {@link #onOpened}.
+         *
+         * <p>Held here as well as handed on, because it is set before the first {@link #show} as often as after:
+         * {@code Editor} wires it while the console's commands are being registered, which is long before there
+         * is a window to open onto.
+         */
+        private volatile java.util.function.Consumer<Path> opened = file -> { };
+
+        /**
          * Build the editor, without opening anything.
          *
          * @param memory where this window's placement, size and zoom are kept — shared with whatever else is on
@@ -486,6 +531,22 @@ public final class TextEditorApp {
             return gui;
         }
 
+        /**
+         * Be told when a file has been opened in a tab.
+         *
+         * <p>What a host does with that is theirs — this editor has no opinion about which files are interesting.
+         * A host that recognises a kind of file answers with a line of MainFrame and submits it into the console
+         * it already owns, so what happened is in the scrollback rather than in a dialog that has been dismissed.
+         *
+         * <p>Frame loop, on the frame the tab appeared.
+         */
+        public void onOpened(java.util.function.Consumer<Path> listener) {
+            this.opened = listener == null ? file -> { } : listener;
+            if (files != null) {
+                files.onOpened(this.opened);
+            }
+        }
+
         /** Every tree this editor presents in a window of its own: the documents, and the file tree. */
         public List<Gui> windows() {
             return List.of(gui, folder.gui());
@@ -504,9 +565,11 @@ public final class TextEditorApp {
          */
         public void show(GuiApp app) {
             if (files == null) {
-                // No profiles: MainFrame is the console here, so the editor must not open one of its own. The
-                // dialog owner is read late — this window may not exist yet on the frame this runs on.
-                files = new FileActions(gui, ws, app, memory, null, krono, this::ownerHandle, folder);
+                // No console of our own: MainFrame is the console here, so the editor must not open one, and the
+                // apps that would have gone in it are plugged into the host's console instead.
+                // The dialog owner is read late — this window may not exist yet on the frame this runs on.
+                files = new FileActions(gui, ws, app, memory, false, krono, this::ownerHandle, folder);
+                files.onOpened(opened);
                 files.shortcuts();
                 files.restore();
             }
@@ -649,9 +712,52 @@ public final class TextEditorApp {
         final TitleBar titleBar;
         final List<EditorTab> open = new ArrayList<>();
 
+        /**
+         * Timing for the status line's arrival, or null for no motion at all — the reduced-motion path, and what
+         * a clock that is never ticked has to be given rather than a ramp that would deliver its 0 and stop.
+         * That is not hypothetical: {@code ramp} delivers 0 before any time passes, so a status line faded in by
+         * a stalled clock would be a status line at zero opacity holding the message nobody can read.
+         */
+        private final Ramp arrival;
+
+        /**
+         * One-shot feedback on this window's nodes. {@link Cues#none()} where there is no clock, which is the
+         * honest collapse — a cue exists only in the middle, so "instantly" means "not at all".
+         *
+         * <p>Package-private, like {@link #tabs} and {@link #open} beside it and for the same reason: a cue is
+         * played and then forgotten, so the only way a test can ask whether the right node was marked is to ask
+         * this. {@link Cues#active()} is also the one number that says the class is at rest.
+         */
+        final Cues cues;
+
+        /**
+         * The longer timing {@link #warn} plays its ring on. Null alongside a {@link Cues#none()}, which plays
+         * nothing whatever ramp it is handed — so the two travel together and neither has to check the other.
+         */
+        private final Ramp alert;
+
+        /**
+         * Which {@link #arrive} owns the status line. A second message during the first one's fade supersedes
+         * it rather than fighting it for the node: two ramps writing one opacity every frame is a race settled
+         * by whichever landed last, and the loser's settle would then snap the winner's fade to its end a
+         * duration later. This is the same rule {@link Cues} keeps for overlays, kept here for the two
+         * properties a cue is not allowed to touch.
+         *
+         * <p>Atomic rather than a plain int because it is the identity in that rule and not merely a counter,
+         * even though every {@code say} here arrives on the GUI thread — everything that reports enqueues.
+         */
+        private final java.util.concurrent.atomic.AtomicInteger saying =
+                new java.util.concurrent.atomic.AtomicInteger();
+
         Workspace(Gui gui, KronoGui krono) {
             this.gui = gui;
             this.tabs = new Tabs(gui);
+            this.arrival = krono == null ? null
+                    : (progress, done) -> krono.ramp(TRANSITION, Ease.LINEAR, progress, done);
+            this.cues = krono == null ? Cues.none()
+                    : new Cues((progress, done) -> krono.ramp(CUE, Ease.LINEAR, progress, done));
+            this.alert = krono == null ? null
+                    : (progress, done) -> krono.ramp(ALERT, Ease.LINEAR, progress, done);
             // Changing tabs dissolves, with the arriving document travelling a short way in from the side the
             // selection moved toward. Tabs supplies the motion -- opacity over both pages and a translate on the
             // arriving one, the outgoing page floated over it so nothing reflows for the duration -- and
@@ -674,7 +780,7 @@ public final class TextEditorApp {
             // Harmless under --capture, which never ticks the clock: a panel with one tab has nothing to fade
             // from, and the first tab is selected before there is a second.
             this.tabs.transition(Tabs.slide(
-                    (progress, done) -> krono.ramp(Dur.ms(160), Ease.LINEAR, progress, done)));
+                    (progress, done) -> krono.ramp(TRANSITION, Ease.LINEAR, progress, done)));
             // Before the welcome tab is added, so no tab can be removed without this being in place: the bar's
             // own Close item is a removal this class never calls for, and a removal it does not see leaves
             // `open` one document longer than the bar for the rest of the session.
@@ -702,6 +808,125 @@ public final class TextEditorApp {
             gui.root().background(gui.theme().color(Role.PAGE)).children(titleBar.node(), root);
 
             newTab(WELCOME, null, false);
+        }
+
+        /**
+         * Report something that happened, on the status line.
+         *
+         * <p><b>Why this is a method and not {@code status.text(...)}.</b> A line of text replaced in place is
+         * the one kind of change a person looking somewhere else cannot notice: nothing moves, nothing appears,
+         * and the only evidence that anything happened is a sentence that was not there a moment ago in a strip
+         * that always has a sentence in it. Saving the same file twice, in particular, produced no observable
+         * difference whatever — the second save wrote the identical string over the first. So the change gets
+         * motion of its own, and every report in this application goes through here or through {@link #warn}.
+         */
+        void say(String message) {
+            arrive(message);
+        }
+
+        /**
+         * Report something that did <em>not</em> happen — a refusal or a failure.
+         *
+         * <p>The same arrival as {@link #say}, plus a ring: {@code Cue.ring} pulses twice rather than once,
+         * which is what distinguishes a refusal from an acknowledgement at a glance, and it is an outline rather
+         * than a tint, so it does not lie over the sentence it is drawing attention to. That is the whole reason
+         * this is a ring and the save acknowledgement is a wash — a wash over the status line would cover the
+         * explanation at exactly the moment it asked to be read.
+         *
+         * <p>{@link #ALERT} rather than the house cue length, for the reason stated there.
+         */
+        void warn(String message) {
+            arrive(message);
+            cues.play(status, Cue.ring(gui.theme().color(Role.DANGER)), alert);
+        }
+
+        /**
+         * Acknowledge that {@code tab} has just been written to disk: a wash over the page that was saved.
+         *
+         * <p>Ctrl+S is the action here that gets repeated most and read least. It already reported itself on the
+         * status line, but a line of text is the wrong shape for an answer to a keystroke — by the time it has
+         * been read, the question it answered has been forgotten. A tint over the document says <em>this
+         * one, now</em> without being read at all, which is what a save wants and what a sentence cannot do.
+         *
+         * <p>{@link Role#HIGHLIGHT} rather than a bare accent: it is the accent already at the alpha a wash
+         * wants, and a wash takes the colour's own alpha as its peak — handed an opaque one it would blank the
+         * document it is confirming, for a frame, in the middle of the confirmation.
+         *
+         * <p>Played on the tab's page rather than the window, and so a save-all flashes each document as it
+         * lands: the ones that are not on screen paint into an overlay nobody is looking at and clear it again,
+         * which costs nothing and keeps this a statement about a document rather than about the window.
+         */
+        void saved(EditorTab tab) {
+            cues.play(tab.body, Cue.wash(gui.theme().color(Role.HIGHLIGHT)));
+        }
+
+        /**
+         * Mark {@code tab}'s header as having just received a file: a single pulse of the accent around it.
+         *
+         * <p><b>The header, not the page.</b> The page already animates — it slides in under {@code Tabs.slide}
+         * — so a mark there would be motion laid over motion saying the same thing. The header is the half of a
+         * tab that does <em>not</em> move when the selection lands on it, and it is the half that is still on
+         * screen for every document this did not select. That is the case worth having: {@code ls | where ext ==
+         * "java" | first 3 | edit} opens three tabs and can only select the last, and without this the other two
+         * arrive as headers that were silently not there a moment ago.
+         *
+         * <p><b>One pulse, where {@link #warn} takes two.</b> {@code Cue.ring}'s repeat is what the eye reads as
+         * insistence, which is the right shape for a refusal and the wrong one for a document turning up where
+         * it was asked to be. Same cue, same colour vocabulary, one difference — so the two never have to be
+         * told apart by reading the status line.
+         *
+         * <p>Null is an ordinary answer here: the caller is often handing over {@link #active()}, which is null
+         * when there is nothing open. So is a tab that has been closed between the request and this call, which
+         * the bar's own Close item makes possible without passing through the queue — the index is resolved
+         * under the same lock every other index here is, and a tab that has gone is simply not marked.
+         */
+        void arrived(EditorTab tab) {
+            if (tab == null) {
+                return;
+            }
+            Node header;
+            synchronized (tabs) {
+                int i = open.indexOf(tab);
+                if (i < 0) {
+                    return;
+                }
+                header = tabs.header(i);
+            }
+            // Outside the lock: playing a cue is the bar's business only in that the node is one of its, and
+            // Cues is safe from any thread. Nothing here needs the two structures to agree any more.
+            cues.play(header, Cue.ring(gui.theme().color(Role.ACCENT), 1));
+        }
+
+        /**
+         * Put {@code message} on the status line and bring it in: a fade with a short rise under it.
+         *
+         * <p><b>One ramp, two curves, and it has to be.</b> The fade is taken linear because opacity has nowhere
+         * to arrive at — the eye reads it about as it is given, and easing it spends most of the duration at a
+         * value indistinguishable from the end. The rise is a distance being covered and is eased into its
+         * stop, which is what reads as weight rather than as a slide that was switched off. So the ease is
+         * applied inside the sample rather than by the ramp: that is the same division {@code Tabs.slide} makes
+         * between its own travel and the fade underneath it, and the reason the ramp driving both is LINEAR.
+         */
+        private void arrive(String message) {
+            status.text(message);
+            if (arrival == null) {
+                return;
+            }
+            int mine = saying.incrementAndGet();
+            arrival.run(
+                    t -> {
+                        if (saying.get() != mine) {
+                            return;   // superseded: a newer message owns the line and will settle it
+                        }
+                        status.opacity((float) t);
+                        status.translate(0f, STATUS_RISE_EM * (1f - Ease.OUT_CUBIC.at((float) t)));
+                    },
+                    () -> {
+                        if (saying.get() == mine) {
+                            status.opacity(1f);
+                            status.translate(0f, 0f);
+                        }
+                    });
         }
 
         /** Open a new tab holding {@code content}, select it, and return it. */
@@ -776,6 +1001,20 @@ public final class TextEditorApp {
             }
         }
 
+        /**
+         * The document on tab {@code index}, or null if there is no such tab.
+         *
+         * <p>What a header's context menu is built from. That menu is built on a worker thread at the moment of
+         * the click, off an index the bar resolved a moment earlier, so it asks under the same lock everything
+         * else does rather than trusting the number it was handed — a tab removed in between answers null here,
+         * and an item aimed at a document that is no longer open is an item that comes out greyed.
+         */
+        EditorTab at(int index) {
+            synchronized (tabs) {
+                return index >= 0 && index < open.size() ? open.get(index) : null;
+            }
+        }
+
         /** True when nothing is open at all — see {@link FileActions#drain()}, which is what fixes it. */
         boolean empty() {
             synchronized (tabs) {
@@ -809,13 +1048,38 @@ public final class TextEditorApp {
                     tab.editor.text("");
                     tab.savedText = "";
                     retitleActive();
-                    status.text("Closed - one empty tab remains");
+                    say("Closed - one empty tab remains");
                     return;
                 }
                 // Removing from the bar is the whole action: `open` shrinks in tabRemoved, which the bar calls
                 // back into. Doing it here as well would drop two documents for one close -- and leaving it
                 // here instead is what let the bar's own Close item drop none.
                 tabs.remove(tabs.selected());
+            }
+        }
+
+        /**
+         * Close every tab — <b>Close all</b> on a header's context menu. The last one is emptied rather than
+         * removed, exactly as {@link #closeActive} leaves it, so the editor is never without a document to type
+         * into and {@link FileActions#drain()} never has to put the floor back.
+         *
+         * <p>Back to front, for two reasons. Removing from the end never shifts an index this loop has still to
+         * use; and {@link Tabs#remove} reselects after every removal, so front to back would walk the selection
+         * through each surviving document on the way out. Neither costs a transition — a removal reselects from
+         * "nothing selected", which is the one path {@code Tabs} does not animate.
+         *
+         * <p>One lock for the whole sweep, not one per tab: {@code open} and the bar disagree in between, and a
+         * thread that read {@link #active()} halfway through this would be told about a document that is on its
+         * way out.
+         */
+        void closeAll() {
+            synchronized (tabs) {
+                for (int i = open.size() - 1; i > 0; i--) {
+                    tabs.remove(i);
+                }
+                // Whatever survives is tab 0, which is where the selection has ended up — so this is the same
+                // call Ctrl+W on a last tab makes, and the emptying rule is stated in exactly one place.
+                closeActive();
             }
         }
 
@@ -915,7 +1179,18 @@ public final class TextEditorApp {
         private final TitleBar titleBar;
         /** How an expanding folder is timed, installed on every tree this window builds; null for the flip. */
         private final Ramp motion;
+        /**
+         * One-shot marks on this window's rows — see {@link #reveal}. Its own, not the editor's: a {@code Cues}
+         * holds what is playing by node id, and the two windows have separate node spaces.
+         */
+        private final Cues cues;
         private TreeView<Path> tree;
+        /**
+         * The folder {@link #tree} is rooted at, absolute and normalized, or null before there is one. Kept in
+         * that one form because the only thing it is for is being compared against — see {@link #reveal}, which
+         * would otherwise rebuild a tree that is already showing the right folder under a different spelling.
+         */
+        private Path shown;
         /** The framework's handle on this window, claimed the first time it is shown. */
         private AppWindow handle;
 
@@ -952,7 +1227,9 @@ public final class TextEditorApp {
             // Null under --capture-folder, which has no loop to tick it: the tree flips instantly, which is what
             // every tree here did before there was motion and what a reduced-motion path would be.
             this.motion = krono == null ? null
-                    : (progress, done) -> krono.ramp(Dur.ms(160), Ease.OUT_CUBIC, progress, done);
+                    : (progress, done) -> krono.ramp(TRANSITION, Ease.OUT_CUBIC, progress, done);
+            this.cues = krono == null ? Cues.none()
+                    : new Cues((progress, done) -> krono.ramp(CUE, Ease.LINEAR, progress, done));
             // Before the first node: the drawer is the editor's own look swung round to the warm side of
             // neutral, so a glance at the taskbar tells the two windows apart before any text is read.
             gui.theme(Palettes.FILES);
@@ -977,6 +1254,70 @@ public final class TextEditorApp {
          */
         void show(GuiApp app, Path folder) {
             setFolder(folder);
+            raise(app, folder);
+        }
+
+        /**
+         * Show {@code file} in the drawer — <b>Reveal in Navigator</b> on a tab: the folder holding it, with the
+         * file's own row selected.
+         *
+         * <p>Re-rooted only when the drawer is somewhere else. A tree already showing this folder keeps whatever
+         * the user has opened in it: rebuilding one to land on a row that is already there would shut every
+         * other row on the way, which is the opposite of what asking to be shown where something is means.
+         *
+         * <p>Selecting the row is a selection like any other, so this drawer's own rule runs on it and the file
+         * is brought forward in a tab. That is wanted rather than tolerated — a reveal is asked for <em>about</em>
+         * a document, and the document arriving in front is what the two windows agreeing looks like.
+         */
+        void reveal(GuiApp app, Path file) {
+            // In the tree's own spelling, not the caller's: its items come out of Files.list, so a row exists
+            // for the absolute normalized path and for nothing else that names the same file.
+            Path target = file.toAbsolutePath().normalize();
+            Path dir = target.getParent();
+            if (dir == null) {
+                return;
+            }
+            if (tree != null && dir.equals(shown)) {
+                raise(app, dir);
+            } else {
+                show(app, dir);
+            }
+            tree.select(target);
+            mark(target);
+        }
+
+        /**
+         * Pulse the row for {@code item}, so a reveal can be seen to have happened.
+         *
+         * <p><b>The case this exists for is the one where nothing else changes.</b> Revealing a file in a folder
+         * the drawer is already showing is deliberately not a rebuild — see {@link #reveal} — so if the window
+         * was already forward and the row already selected, a correct reveal and a reveal that silently failed
+         * looked exactly alike: nothing moved, and the only difference was a line of text in the other window.
+         * This is the difference, and it is on the row rather than on the tree because which file was revealed
+         * is the entire content of the answer.
+         *
+         * <p>One pulse of the accent, which is the tab bar's mark for the same event — a thing you asked for
+         * turning up where it lives. The accent survives {@link Palettes#FILES}' hue shift untouched, so it is
+         * literally the same colour in both windows rather than merely the same idea.
+         *
+         * <p><b>A row that is not there is not an error.</b> A tree materialises rows as folders open, so an
+         * item under something collapsed has none; nor has a file the source no longer offers. Both are ordinary
+         * and both are simply not marked.
+         *
+         * <p>The freshly-opened window is the weak case and knowingly so: the tree was built this frame and has
+         * not been laid out, so a cue on it paints nothing until it has been. {@code Cues} reads the box every
+         * sample rather than capturing it, so the mark appears as soon as there is somewhere to put it and is
+         * merely shortened — and that is the case where a whole window arriving has already said plenty.
+         */
+        private void mark(Path item) {
+            Node row = tree.rowNode(item);
+            if (row != null) {
+                cues.play(row, Cue.ring(gui.theme().color(Role.ACCENT), 1));
+            }
+        }
+
+        /** Bring the window up — creating it the first time — and remember what it is showing. */
+        private void raise(GuiApp app, Path folder) {
             // Remembered so the next launch can point the tree at the same place, not just at the same rectangle.
             memory.shownPath("folder", folder);
             // One call for both cases: show() creates the window if it is closed and raises it if it is not.
@@ -997,6 +1338,7 @@ public final class TextEditorApp {
             }
             Path name = folder.getFileName();
             titleBar.title(name != null ? name.toString() : folder.toString());
+            shown = folder.toAbsolutePath().normalize();
             tree = new TreeView<>(gui, new FolderSource(folder));
             // Per tree, not once per window: pointing the drawer at another folder builds a new one, and a tree
             // that was never handed the ramp is a tree that flips.
@@ -1116,12 +1458,15 @@ public final class TextEditorApp {
         private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> requests =
                 new java.util.concurrent.ConcurrentLinkedQueue<>();
 
+        /** Told about a file that has just been loaded into a tab. Set by whoever owns the console. */
+        private volatile java.util.function.Consumer<Path> opened = file -> { };
+
         /**
-         * @param profiles the profiles this application's own console offers, or {@code null} when the editor is
-         *                 hosted by a console it did not open and must not open a second one
-         * @param owner    where a modal dialog parents; see {@link #owner}
+         * @param ownConsole whether to open a terminal of this application's own — false when the editor is
+         *                   hosted by a console it did not open and must not open a second one
+         * @param owner      where a modal dialog parents; see {@link #owner}
          */
-        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, ProfileApp profiles,
+        FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, boolean ownConsole,
                     KronoGui krono, java.util.function.LongSupplier owner, FolderWindow folder) {
             this.gui = gui;
             this.ws = ws;
@@ -1146,16 +1491,62 @@ public final class TextEditorApp {
             // Skipped entirely when MainFrame is the host: there the same three commands are registered against
             // the console that is already running, by Editor, so building one here would be a second shell in a
             // second window answering to the same keys.
-            this.terminal = profiles == null ? null
-                    : new Console(consoleSpec(memory, profiles)
+            this.terminal = !ownConsole ? null
+                    : new Console(consoleSpec(memory)
                             .app(new EditorApp(this::openPath, this::revealPath, this::raiseEditor))
                             .build());
+            // The header menu, past the Close the bar puts there itself. These two are the application's because
+            // both are about what a tab *is* here that the bar cannot know: one document among others, and a file
+            // somewhere on disk. Wired here rather than in Workspace for the second of those — reveal needs the
+            // file tree and the frame loop, neither of which the workspace has ever heard of.
+            //
+            // Built on a worker thread at the moment of the click, so what it reads it reads through `at`; both
+            // bodies enqueue rather than act, like the file tree's own menu, because closing tabs and opening
+            // windows are the GUI thread's work and they belong in the same order as the dialogs.
+            ws.tabs.onContextMenu((index, menu) -> {
+                Path file = fileOn(index);
+                menu.item("Close all", this::closeAllTabs)
+                        .separator()
+                        // Greyed rather than absent on a never-saved document: the item is what this menu offers
+                        // about a tab, and a tab with nothing on disk is a reason it cannot be taken, not a
+                        // different menu. Same rule the tree's own Open follows on a row that is a directory.
+                        .item("Reveal in Navigator", file != null, () -> revealFile(file));
+            });
+        }
+
+        /** The path of the document on tab {@code index}, or null if it has none or the tab has gone. */
+        private Path fileOn(int index) {
+            EditorTab tab = ws.at(index);
+            return tab == null ? null : tab.file;
+        }
+
+        /** Be told when a file has been loaded into a tab. See {@link Window#onOpened}. */
+        void onOpened(java.util.function.Consumer<Path> listener) {
+            this.opened = listener == null ? file -> { } : listener;
+        }
+
+        /**
+         * Run {@code line} in this editor's own shell, with the shell where it can be answered.
+         *
+         * <p>Opening the window first is the whole of it: a line submitted this way may well be a form, and a
+         * form asking questions into a window nobody can see is a shell that has silently stopped responding.
+         * Only usable in the arrangement where the terminal is ours — where MainFrame is the host, its window is
+         * already the main one and the line goes through {@code ConsoleContext.run} instead.
+         *
+         * <p>This is the other half of {@link Window#onOpened}: a host wires that, and this is what it calls.
+         */
+        void runInShell(String line) {
+            if (terminal == null) {
+                return;
+            }
+            openTerminal();
+            terminal.run(line);
         }
 
         /** {@code launch "editor"}: bring the main window forward. Frame loop, via the console's own queue. */
         private void raiseEditor() {
             app.window().focus();
-            ws.status.text("Editor");
+            ws.say("Editor");
         }
 
         /** Enqueue opening {@code file} into a tab — how the folder window's tree reaches the editor. */
@@ -1167,8 +1558,80 @@ public final class TextEditorApp {
         void revealPath(Path dir) {
             requests.add(() -> {
                 folder.show(app, dir);
-                ws.status.text("Folder: " + dir);
+                ws.say("Folder: " + dir);
             });
+        }
+
+        /**
+         * <b>Reveal in Navigator</b> on a tab: point the file tree at the folder holding {@code file} and select
+         * its row. Enqueued for the same reason every other structural request is — the menu body runs on the
+         * handler executor, and opening a window belongs to the frame loop.
+         *
+         * <p>Absolute first, because a tab's path is only as absolute as whoever opened it: the dialogs hand over
+         * absolute paths, but {@code edit} takes rows off a pipe and a {@code path} cell can be relative. A
+         * relative one has no parent to root the drawer at, and the row this then looks for is one the tree can
+         * never have built — the tree's own items come from {@code Files.list}, which is always absolute.
+         *
+         * <p>A file that has gone from disk since it was opened is reported rather than revealed. Pointing the
+         * drawer at it anyway is worse than saying so: {@link FolderSource} shows an unreadable directory as an
+         * empty one, so the result would be an empty tree under the right name — a folder that looks emptied.
+         */
+        private void revealFile(Path file) {
+            requests.add(() -> {
+                Path target = file.toAbsolutePath().normalize();
+                if (target.getParent() == null || !java.nio.file.Files.exists(target)) {
+                    ws.warn("Can't reveal " + target.getFileName() + ": it is no longer on disk");
+                    return;
+                }
+                folder.reveal(app, target);
+                ws.say("Revealed " + target);
+            });
+        }
+
+        /**
+         * <b>Close all</b> on a tab's context menu. Every document goes, and the last tab is emptied rather than
+         * removed — the floor {@link Workspace#closeAll} keeps.
+         *
+         * <p>Unsaved work is asked about first, and that is the one way this differs from <b>Close</b> beside it.
+         * Close risks the document the user is looking at and picked out; this risks every document open,
+         * including the ones they last saw an hour ago and cannot see now. So it goes through the gate quitting
+         * goes through, with the same three answers over the same message naming what is at stake.
+         *
+         * <p>Handler thread, like every other menu body: {@link Modals} queues the dialog onto the GUI thread
+         * itself, and each answer enqueues, so the closing happens where tab structure belongs.
+         */
+        private void closeAllTabs() {
+            List<EditorTab> unsaved = ws.unsaved();
+            if (unsaved.isEmpty()) {
+                requests.add(this::closeAll);
+                return;
+            }
+            Modals.show(Modal.of("Close all tabs", unsavedMessage(unsaved))
+                    .defaultButton("Save all", () -> requests.add(this::saveAllThenCloseAll))
+                    .button("Discard", () -> requests.add(this::closeAll))
+                    .cancelButton("Cancel", () -> { }));
+        }
+
+        /** GUI thread: close every tab, and say how many that was — the bar itself is about to look untouched. */
+        private void closeAll() {
+            int closed = ws.tabs.count();
+            ws.closeAll();
+            ws.say("Closed " + closed + (closed == 1 ? " tab" : " tabs") + " - one empty tab remains");
+        }
+
+        /**
+         * GUI thread: save every changed document, then close them all. The twin of {@link #saveAllThenClose},
+         * and the same rule — a document that does not land stops the sweep, because writing everything is what
+         * was asked for and closing anyway is exactly the loss the question was put to prevent.
+         */
+        private void saveAllThenCloseAll() {
+            for (EditorTab tab : ws.unsaved()) {
+                if (!saveTab(tab)) {
+                    ws.warn("Still open: " + tab.describe() + " was not saved");
+                    return;
+                }
+            }
+            closeAll();
         }
 
         /** Every Gui this application presents, main window first. */
@@ -1223,7 +1686,7 @@ public final class TextEditorApp {
             // put back here, on the GUI thread, where building a document's widgets belongs.
             if (ws.empty()) {
                 ws.newTab("", null, false);
-                ws.status.text("Closed - one empty tab remains");
+                ws.say("Closed - one empty tab remains");
             }
             // Which windows are up is read from the windows themselves, every frame, rather than written when
             // they open and close: see WindowMemory.open for why that distinction is the whole feature.
@@ -1250,7 +1713,7 @@ public final class TextEditorApp {
             if (memory.wasOpen("folder")) {
                 Path dir = savedFolder();
                 if (dir == null) {
-                    requests.add(() -> ws.status.text("Last folder is no longer there - not reopening it"));
+                    requests.add(() -> ws.warn("Last folder is no longer there - not reopening it"));
                 } else {
                     revealPath(dir);
                 }
@@ -1281,7 +1744,7 @@ public final class TextEditorApp {
         private void openTerminal() {
             Path start = startDir();
             terminal.show(app, start != null ? start : Path.of("").toAbsolutePath());
-            ws.status.text("Terminal: MainFrame - Ctrl+` to return to it");
+            ws.say("Terminal: MainFrame - Ctrl+` to return to it");
         }
 
         private void open() {
@@ -1293,7 +1756,7 @@ public final class TextEditorApp {
                     loadInto(picked);
                 }
             } catch (RuntimeException e) {
-                ws.status.text("Open failed: " + e.getMessage());
+                ws.warn("Open failed: " + e.getMessage());
             }
         }
 
@@ -1304,9 +1767,9 @@ public final class TextEditorApp {
                     return;
                 }
                 folder.show(app, dir);
-                ws.status.text("Folder: " + dir);
+                ws.say("Folder: " + dir);
             } catch (RuntimeException e) {
-                ws.status.text("Open folder failed: " + e.getMessage());
+                ws.warn("Open folder failed: " + e.getMessage());
             }
         }
 
@@ -1314,7 +1777,11 @@ public final class TextEditorApp {
         private void loadInto(Path picked) {
             try {
                 if (ws.showFile(picked)) {
-                    ws.status.text("Already open: " + picked.getFileName());
+                    ws.say("Already open: " + picked.getFileName());
+                    // The tab showFile just selected, which is the whole answer to "where?" — this is the path
+                    // where the request produced no new document and the least happened, so it is the one that
+                    // most needs pointing at.
+                    ws.arrived(ws.active());
                     return;
                 }
                 TextFile.Loaded loaded;
@@ -1322,7 +1789,7 @@ public final class TextEditorApp {
                     loaded = TextFile.load(picked);
                 } catch (TextFile.Unsupported e) {
                     // Refused, not failed: no tab is touched and the reason is shown.
-                    ws.status.text("Can't open " + picked.getFileName() + ": " + e.getMessage());
+                    ws.warn("Can't open " + picked.getFileName() + ": " + e.getMessage());
                     return;
                 }
                 EditorTab tab = ws.active();
@@ -1334,12 +1801,19 @@ public final class TextEditorApp {
                     tab.savedText = loaded.text();
                     ws.retitleActive();
                 } else {
-                    ws.newTab(loaded.text(), picked, loaded.crlf());
+                    tab = ws.newTab(loaded.text(), picked, loaded.crlf());
                 }
                 String note = loaded.notes().isEmpty() ? "" : " (" + String.join("; ", loaded.notes()) + ")";
-                ws.status.text("Opened " + picked + note);
+                ws.say("Opened " + picked + note);
+                // Both branches above end with the document on `tab`, whichever way it got there — the reused
+                // placeholder is as much an arrival as the added tab, and it is the one whose header did not
+                // change shape to announce itself.
+                ws.arrived(tab);
+                // The file is in a tab and the status line says so; only now is it true that it was opened, and
+                // only the path is passed on -- what is interesting about a file is not this class's business.
+                opened.accept(picked);
             } catch (RuntimeException | java.io.IOException e) {
-                ws.status.text("Open failed: " + e.getMessage());
+                ws.warn("Open failed: " + e.getMessage());
             }
         }
 
@@ -1363,7 +1837,7 @@ public final class TextEditorApp {
             try {
                 FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title()).ifPresent(target -> write(tab, target));
             } catch (RuntimeException e) {
-                ws.status.text("Save failed: " + e.getMessage());
+                ws.warn("Save failed: " + e.getMessage());
             }
         }
 
@@ -1409,7 +1883,7 @@ public final class TextEditorApp {
             for (EditorTab tab : ws.unsaved()) {
                 if (!saveTab(tab)) {
                     request.cancel();
-                    ws.status.text("Still open: " + tab.describe() + " was not saved");
+                    ws.warn("Still open: " + tab.describe() + " was not saved");
                     return;
                 }
             }
@@ -1428,7 +1902,7 @@ public final class TextEditorApp {
                 Path target = FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title()).orElse(null);
                 return target != null && write(tab, target);
             } catch (RuntimeException e) {
-                ws.status.text("Save failed: " + e.getMessage());
+                ws.warn("Save failed: " + e.getMessage());
                 return false;
             }
         }
@@ -1443,10 +1917,14 @@ public final class TextEditorApp {
                 tab.file = target;
                 tab.savedText = text;
                 ws.retitleActive();
-                ws.status.text("Saved " + target);
+                ws.say("Saved " + target);
+                // After the line, not before it: both are reports of the same event, and the wash is the one
+                // that will be seen first — a cue starts painting on the frame it is played, so playing it
+                // ahead of the text would put the flash on a status line still holding the previous message.
+                ws.saved(tab);
                 return true;
             } catch (java.io.IOException e) {
-                ws.status.text("Save failed: " + e.getMessage());
+                ws.warn("Save failed: " + e.getMessage());
                 return false;
             }
         }

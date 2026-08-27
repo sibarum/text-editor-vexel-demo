@@ -197,5 +197,88 @@
                 </dependency>
             </dependencies>
         </profile>
+
+        <!--
+          mvn -Pnative package  ->  target/editor.exe
+
+          The switches are the ones mainframe-dist found the hard way, and each is load-bearing. This is the
+          editor on its own; the same program also ships inside mainframe.exe, where dist names them again
+          because a profile does not travel with a dependency.
+
+          What native-image needs to know beyond the switches is in src/main/resources/META-INF/native-image.
+          Two files, kept apart on purpose: one is the traced reflective surface of this application, and
+          -signed-jar is a workaround. TM4E ships as a *signed* jar, the Eclipse signing certificate ends up
+          in the image heap, and every type needed to represent an X.509 certificate then has to be
+          registered or the build fails outright with Type not found during analysis. Deleting those because
+          a native image has no jars to verify is the obvious-looking mistake.
+        -->
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <!-- native-image compiles small probe executables and runs them to measure the
+                             platform. Windows Application Control blocks a brand-new unsigned .exe under
+                             %TEMP%, so the probes are pointed at target/nitmp instead, which this creates. -->
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>make-native-temp-dir</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target>
+                                        <mkdir dir="${project.build.directory}/nitmp"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>0.10.6</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals><goal>compile-no-fork</goal></goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>editor</imageName>
+                            <mainClass>${app.mainClass}</mainClass>
+                            <buildArgs>
+                                <buildArg>--no-fallback</buildArg>
+                                <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
+                                <!-- The graphics stack and both input backends are Panama downcalls, and Win32
+                                     calls back in through an upcall stub for the window procedure. The
+                                     signatures themselves are in reachability-metadata.json. -->
+                                <buildArg>-H:+ForeignAPISupport</buildArg>
+                                <!-- The input backend gives each raw-input registration its own Arena.ofShared,
+                                     because the window procedure that reads it runs on a different thread from
+                                     the one that opened it. Without this the application runs and then throws
+                                     on the way out, when the backend closes them. -->
+                                <buildArg>-H:+SharedArenaSupport</buildArg>
+                                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
+                                <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>-J-Djava.io.tmpdir=${project.build.directory}/nitmp</buildArg>
+                                <!-- No console window. native-image links a console-subsystem executable, so
+                                     Windows hands the process a black terminal before anything runs - and
+                                     because that console owns the process group, closing it kills the
+                                     editor. /ENTRY is not optional alongside it: /SUBSYSTEM:WINDOWS makes
+                                     the linker look for WinMain, and the image's entry point is an ordinary
+                                     main. Windows linker options; a native build elsewhere drops these two. -->
+                                <buildArg>-H:NativeLinkerOption=/SUBSYSTEM:WINDOWS</buildArg>
+                                <buildArg>-H:NativeLinkerOption=/ENTRY:mainCRTStartup</buildArg>
+                            </buildArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>

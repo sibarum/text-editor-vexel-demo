@@ -1,6 +1,9 @@
 package dev.vexelray.demo.editor;
 
+import dev.mainframe.gui.app.ConsoleApp;
 import dev.mainframe.gui.desktop.Desktop;
+import dev.vexelray.gui.core.app.Settings;
+import dev.vexelray.gui.core.app.WindowMemory;
 
 import java.util.List;
 
@@ -12,7 +15,6 @@ import java.util.List;
  *
  * ~ > apps
  * name      launchable  summary
- * profiles  false       named sets of environment variables and binary directories
  * editor    true        open files in tabs, and point the file tree at a directory
  *
  * ~ > editor                                        # or launch "editor"
@@ -21,9 +23,9 @@ import java.util.List;
  * ~ > reveal ./src/main/java
  * }</pre>
  *
- * <h2>Why this is six lines</h2>
+ * <h2>Why this is a handful of lines</h2>
  * Everything that is not the editor is somebody else's now. The frame loop, the window memory, the input
- * backend, the clipboard, the dialogs, the title bar, the shell and its profiles are all in
+ * backend, the clipboard, the dialogs, the title bar and the shell are all in
  * {@link Desktop#run}, which is one boot shared by every application built this way. What is left here is the
  * one fact this application has that no other does: which apps are in it.
  *
@@ -44,7 +46,21 @@ public final class TextEditorDesktop {
     }
 
     public static void main(String[] args) throws Exception {
-        Desktop.run("text-editor", "MainFrame",
-                (settings, memory) -> List.of(new Editor(memory)), args);
+        Desktop.run("text-editor", "MainFrame", TextEditorDesktop::apps, args);
+    }
+
+    /**
+     * What is in this application: the editor.
+     *
+     * <p>One app, and the list is the point rather than its length — another {@link ConsoleApp} added here is a
+     * line, not a redesign. {@link Editor} can also be told what to ask the shell when a file is opened; nothing
+     * asks for anything at the moment, and the seam is left because that is a decision about this application
+     * rather than about the editor.
+     *
+     * @param settings this application's settings, shared with the standalone editor; unused while the editor is
+     *                 the only app here, since its own state lives in the window memory
+     */
+    private static List<ConsoleApp> apps(Settings settings, WindowMemory memory) {
+        return List.of(new Editor(memory));
     }
 }

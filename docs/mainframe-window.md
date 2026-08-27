@@ -13,7 +13,7 @@ Status: **implemented**, then **moved**. Supersedes the shell half of
 > | `terminal/TerminalWindow` | `dev.mainframe.gui.console.Console` (+ `ConsoleSpec` for everything an application can disagree about) |
 > | `terminal/MainFrameShell` | `dev.mainframe.gui.console.ConsoleShell` (the `edit`/`reveal` builtins split out to `EditorApp` here) |
 > | `terminal/Scrollback`, `Ansi`, `LineSink`, `PromptPipe` | `dev.mainframe.gui.console.*`, unchanged |
-> | `terminal/Profile`, `ProfileStore`, `ProfileCommands` | `dev.mainframe.gui.profile.*`, behind a `ProfileApp` |
+> | `terminal/Profile`, `ProfileStore`, `ProfileCommands` | gone — environment profiles were cut from MainFrame; its `Form` is what the screens are built from now |
 > | `Palettes.PHOSPHOR`, `.HOT`, `.BEZEL` | `dev.mainframe.gui.console.Phosphor` |
 > | `ProjectSettings` | `dev.mainframe.gui.app.ProjectScope` (the filename is a parameter now) |
 >

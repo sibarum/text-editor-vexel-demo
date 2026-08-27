@@ -9,6 +9,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -154,6 +155,90 @@ class TabBookkeepingTest {
             assertEquals(1, ws.open.size());
             assertEquals("", ws.active().editor.text(), "reset to an empty untitled document");
             assertFalse(ws.active().dirty(), "and not counted as unsaved work");
+        }
+    }
+
+    /**
+     * <b>Close all</b> is the bulk version of the removal this whole file is about, so it is the one command
+     * most able to leave the two lists a different length: it removes many tabs in a row without a frame in
+     * between, and each removal moves the selection under the next one.
+     */
+    @Test
+    void closeAllLeavesOneEmptyTabAndNoDocumentsBehind() {
+        try (Harness h = Harness.open()) {
+            TextEditorApp.Workspace ws = h.ws();
+            openFile(ws, "A.txt");
+            openFile(ws, "B.txt");
+            openFile(ws, "C.txt");
+            assertEquals(4, ws.open.size(), "the welcome tab and three files");
+
+            ws.closeAll();
+
+            assertConsistent(ws);
+            assertEquals(1, ws.open.size(), "four tabs in, one out");
+            assertEquals("", ws.active().editor.text(), "and it is an empty untitled document");
+            assertNull(ws.active().file);
+            assertFalse(ws.active().dirty(), "not counted as unsaved work");
+            assertFalse(ws.showFile(Path.of("B.txt")), "no tab still claims a file that was closed");
+        }
+    }
+
+    /** The selection walks backwards over every tab on the way out; it must arrive somewhere real. */
+    @Test
+    void closeAllFromAnyStartingSelectionEndsOnTheTabThatSurvives() {
+        for (int start = 0; start < 4; start++) {
+            try (Harness h = Harness.open()) {
+                TextEditorApp.Workspace ws = h.ws();
+                openFile(ws, "A.txt");
+                openFile(ws, "B.txt");
+                openFile(ws, "C.txt");
+                ws.tabs.select(start);
+
+                ws.closeAll();
+
+                assertConsistent(ws);
+                assertEquals(0, ws.tabs.selected(), "selection " + start + " ended up on the one tab left");
+                assertEquals(1, ws.open.size());
+            }
+        }
+    }
+
+    /** Asked for when there is nothing to close, it is the same reset Ctrl+W does — not an editor with no tabs. */
+    @Test
+    void closeAllOnASingleTabEmptiesItRatherThanRemovingIt() {
+        try (Harness h = Harness.open()) {
+            TextEditorApp.Workspace ws = h.ws();
+            ws.active().editor.text("typed but never saved");
+
+            ws.closeAll();
+
+            assertConsistent(ws);
+            assertEquals(1, ws.open.size(), "the editor is never left with no document");
+            assertEquals("", ws.active().editor.text());
+        }
+    }
+
+    /** And it agrees with the other two routes, so a session mixing all three stays consistent. */
+    @Test
+    void closeAllAgreesWithTheOtherTwoWaysToClose() {
+        try (Harness h = Harness.open()) {
+            TextEditorApp.Workspace ws = h.ws();
+            openFile(ws, "A.txt");
+            openFile(ws, "B.txt");
+            openFile(ws, "C.txt");
+
+            closeFromHeaderMenu(ws, 0);   // the welcome tab
+            assertConsistent(ws);
+            ws.closeActive();             // Ctrl+W
+            assertConsistent(ws);
+            ws.closeAll();
+            assertConsistent(ws);
+
+            // Everything still works afterwards: the list the commands resolve against is the bar's own.
+            openFile(ws, "D.txt");
+            assertConsistent(ws);
+            assertTrue(ws.showFile(Path.of("D.txt")));
+            assertSame(ws.open.get(ws.tabs.selected()), ws.active());
         }
     }
 
