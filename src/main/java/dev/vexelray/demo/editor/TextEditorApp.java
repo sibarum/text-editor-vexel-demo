@@ -204,6 +204,7 @@ public final class TextEditorApp {
                 files.openTerminal();
             }
             TactrollerInputBridge bridge = input == null ? null : new TactrollerInputBridge(input, gui.bus());
+            FpsProbe probe = new FpsProbe(krono.kron());
             try {
                 app.run(gui, maxFrames, () -> {
                     pump(bridge);
@@ -214,8 +215,10 @@ public final class TextEditorApp {
                     // reconciles them -- the frame that presents a value is the frame that computed it.
                     krono.tick();
                     memory.poll();
+                    probe.sample();
                 });
             } finally {
+                probe.report("text editor, idle");
                 // Drop any dialog still queued: an application on its way out must not be held up by a question
                 // there is nobody left to answer.
                 dialogs.close();
