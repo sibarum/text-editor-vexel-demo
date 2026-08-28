@@ -1662,7 +1662,7 @@ public final class TextEditorApp {
             // the main window, so Ctrl+` is left unbound rather than bound to nothing — a key that swallows the
             // chord and does nothing is worse than a key the window never claimed.
             if (terminal != null) {
-                g.shortcut(Key.GRAVE_ACCENT, () -> requests.add(this::openTerminal), Modifier.CONTROL);
+                g.shortcut(Key.GRAVE_ACCENT, () -> requests.add(this::toggleTerminal), Modifier.CONTROL);
             }
             g.shortcut(Key.O, () -> requests.add(this::open), Modifier.CONTROL);
             g.shortcut(Key.O, () -> requests.add(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
@@ -1744,7 +1744,26 @@ public final class TextEditorApp {
         private void openTerminal() {
             Path start = startDir();
             terminal.show(app, start != null ? start : Path.of("").toAbsolutePath());
-            ws.say("Terminal: MainFrame - Ctrl+` to return to it");
+            ws.say("Terminal: MainFrame - Ctrl+` toggles it");
+        }
+
+        /**
+         * Ctrl+`: put the terminal up, or put it away when it is already up.
+         *
+         * <p>The same chord both ways. A surface you can only open is one you have to reach for the mouse to be
+         * rid of, and that is the whole of why an always-there terminal starts to feel like it is in the way.
+         *
+         * <p>Away means <em>hidden</em>, not gone: {@code dismiss} closes the display and leaves the session
+         * running behind it, so the scrollback, the history and anything still working are all still there when
+         * it comes back. Only the Ctrl+` binding toggles — restoring a remembered window, {@code --terminal} and
+         * the menu all still mean "show it", because none of those are someone asking for the opposite.
+         */
+        private void toggleTerminal() {
+            if (terminal.isOpen()) {
+                terminal.dismiss();
+                return;
+            }
+            openTerminal();
         }
 
         private void open() {
