@@ -204,7 +204,13 @@ public final class TextEditorApp {
                 files.openTerminal();
             }
             TactrollerInputBridge bridge = input == null ? null : new TactrollerInputBridge(input, gui.bus());
-            FpsProbe probe = new FpsProbe(krono.kron());
+            FpsProbe probe = new FpsProbe(krono.kron(), app::postWake, () -> gui.root().opacity(1f), gui.handlers());
+            if (maxFrames <= 0) {
+                // Render on demand: block until the kernel says a frame is due. Only on an uncapped run --
+                // a frame cap is a script, and blocking would make N frames of a still window take forever.
+                gui.onWork(app::postWake);   // mutations from worker-thread handlers wake the loop too
+                app.pacing(() -> krono.kron().sleepTimeout().nanos());
+            }
             try {
                 app.run(gui, maxFrames, () -> {
                     pump(bridge);
@@ -1697,8 +1703,8 @@ public final class TextEditorApp {
             if (terminal != null) {
                 memory.open("terminal", terminal.isOpen());
             }
-            Runnable r = requests.poll();
-            if (r != null) {
+            // Everything queued, not one request: a loop that parks has no next frame to leave the rest for.
+            for (Runnable r; (r = requests.poll()) != null; ) {
                 r.run();
             }
         }
