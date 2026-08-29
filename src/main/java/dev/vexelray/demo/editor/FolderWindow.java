@@ -28,7 +28,7 @@ import java.nio.file.Path;
  * input from the OS like one application, while every model change (opening a file into a tab) crosses to the
  * main window through {@link FileActions}' request queue on the one shared thread.
  *
- * <p>All methods run on the main thread: {@code show}/{@code setFolder} from the drain, the two lifecycle
+ * <p>All methods run on the main thread: {@code show}/{@code setFolder} from the frame loop, the two lifecycle
  * callbacks from the frame loop.
  */
 final class FolderWindow {

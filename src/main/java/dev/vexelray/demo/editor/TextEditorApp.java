@@ -105,6 +105,19 @@ public final class TextEditorApp {
      */
     static final float STATUS_RISE_EM = 0.35f;
 
+    /**
+     * The settings keys the windows opened from here are remembered under. Named rather than spelled out at
+     * each use, for the reason {@link FolderWindow#KEY} gives: each is read from more than one place, and a
+     * literal that has to agree across call sites is a rename waiting to orphan somebody's window.
+     *
+     * <p>MAIN_KEY is the standalone editor's own window. The MainFrame-hosted arrangement remembers its
+     * editor under EditorWindow's key instead, because there the main window is the shell.
+     */
+    static final String MAIN_KEY = "main";
+
+    /** @see #MAIN_KEY */
+    static final String TERMINAL_KEY = "terminal";
+
     static final String UNTITLED = "untitled.txt";
     static final String WELCOME =
             "Welcome to the deceptively simple text editor.\n\n"
@@ -176,16 +189,16 @@ public final class TextEditorApp {
         Settings settings = Settings.open("text-editor");
         WindowMemory memory = new WindowMemory(settings);
         try (Tactroller input = openInput();
-             GuiApp app = new GuiApp(memory.config("main", "Text Editor", W, H)
+             GuiApp app = new GuiApp(memory.config(MAIN_KEY, "Text Editor", W, H)
                      .decorations(Decorations.CLIENT));
              Clipboard clipboard = openClipboard()) {
             // The window exists at last, so the chrome can be pointed at it. Until now the bar has been a
             // working bar against WindowControls.NONE — which is also what --capture renders.
             ws.titleBar.controls(app.controls());
-            if (memory.maximized("main")) {
+            if (memory.maximized(MAIN_KEY)) {
                 app.window().maximize();
             }
-            memory.watch("main", app.window());
+            memory.watch(MAIN_KEY, app.window());
             // The main window is created before this class exists, so it still wires its own input; every other
             // window the framework opens gets one from here.
             attachInput(input, app);
@@ -239,8 +252,8 @@ public final class TextEditorApp {
             try {
                 app.run(gui, maxFrames, () -> {
                     pump(bridge);
-                    files.drain();
-                    // The clock after the queue, so a tab change serviced by drain() starts its crossfade on the
+                    files.perFrame();
+                    // The clock after the queue, so a tab change serviced this frame starts its crossfade on the
                     // same frame that selected it rather than a frame later. The tick returns with its batch
                     // complete, so the opacities this frame's motion produced are on the bus before Gui.frame
                     // reconciles them -- the frame that presents a value is the frame that computed it.
@@ -279,7 +292,7 @@ public final class TextEditorApp {
         return ConsoleSpec.builder()
                 // This window has been called the terminal since before it was reusable, and the name is also
                 // the settings key its placement is stored under -- renaming it would move everyone's window.
-                .windowName("terminal")
+                .windowName(TERMINAL_KEY)
                 .title("Terminal")
                 .memory(memory)
                 .project(() -> projectOf(memory))

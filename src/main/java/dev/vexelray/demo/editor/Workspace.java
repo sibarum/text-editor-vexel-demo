@@ -23,9 +23,9 @@ import java.util.List;
  * {@code open} list and the widget's tab order are kept in lockstep — {@code open.get(i)} is the document
  * on tab {@code i}, and every index this class computes assumes it.
  *
- * <p>Most structural changes are asked for here and serviced on the GUI thread by
- * {@link FileActions#drain()}. One is not: the tab bar puts a <b>Close</b> item on every header's context
- * menu itself, which removes a tab straight from the handler lane without passing through the queue. That
+ * <p>Most structural changes are asked for here and serviced on the GUI thread, having been posted to the
+ * frame loop by {@link FileActions}. One is not: the tab bar puts a <b>Close</b> item on every header's
+ * context menu itself, which removes a tab straight from the handler lane without being posted at all. That
  * arrives at {@link #tabRemoved}, and it is why the list is guarded rather than merely thread-confined —
  * the lock is the bar's own monitor, because the invariant being protected spans both structures and a
  * second lock taken in the other order would be a deadlock waiting for a right click during a frame.
@@ -331,7 +331,7 @@ final class Workspace {
         }
     }
 
-    /** True when nothing is open at all — see {@link FileActions#drain()}, which is what fixes it. */
+    /** True when nothing is open at all — see {@link FileActions#perFrame()}, which is what fixes it. */
     boolean empty() {
         synchronized (tabs) {
             return open.isEmpty();
@@ -396,7 +396,7 @@ final class Workspace {
     /**
      * Close every tab — <b>Close all</b> on a header's context menu. The last one is emptied rather than
      * removed, exactly as {@link #closeActive} leaves it, so the editor is never without a document to type
-     * into and {@link FileActions#drain()} never has to put the floor back.
+     * into and {@link FileActions#perFrame()} never has to put the floor back.
      *
      * <p>Back to front, for two reasons. Removing from the end never shifts an index this loop has still to
      * use; and {@link Tabs#remove} reselects after every removal, so front to back would walk the selection

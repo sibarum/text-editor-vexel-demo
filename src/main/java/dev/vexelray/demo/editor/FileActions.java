@@ -90,7 +90,7 @@ final class FileActions implements AutoCloseable {
         //
         // The tree is a window of this editor's whose Gui exists whether or not it is on screen, and a host
         // that binds the OS clipboard per window has to be able to see it before anything has been opened —
-        // which is before this object exists. So Window builds it and passes it down (see Window.windows()),
+        // which is before this object exists. So EditorWindow builds it and passes it down (see its windows()),
         // while the standalone editor, which hands out its own windows and can wait, lets it be made here.
         // The clock goes through to it either way: it is the only other window here with anything to
         // animate, the terminal's scrollback being text arriving rather than a widget changing shape.
@@ -133,7 +133,7 @@ final class FileActions implements AutoCloseable {
         return tab == null ? null : tab.file;
     }
 
-    /** Be told when a file has been loaded into a tab. See {@link Window#onOpened}. */
+    /** Be told when a file has been loaded into a tab. See {@link EditorWindow#onOpened}. */
     void onOpened(java.util.function.Consumer<Path> listener) {
         this.opened = listener == null ? file -> { } : listener;
     }
@@ -146,7 +146,7 @@ final class FileActions implements AutoCloseable {
      * Only usable in the arrangement where the terminal is ours — where MainFrame is the host, its window is
      * already the main one and the line goes through {@code ConsoleContext.run} instead.
      *
-     * <p>This is the other half of {@link Window#onOpened}: a host wires that, and this is what it calls.
+     * <p>This is the other half of {@link EditorWindow#onOpened}: a host wires that, and this is what it calls.
      */
     void runInShell(String line) {
         if (terminal == null) {
@@ -309,7 +309,7 @@ final class FileActions implements AutoCloseable {
      * the console, puts the tab floor back if the bar has been emptied, and reads which windows are up
      * from the windows themselves.
      */
-    void drain() {
+    void perFrame() {
         if (terminal != null) {
             terminal.tick();
         }
@@ -326,7 +326,7 @@ final class FileActions implements AutoCloseable {
         // they open and close: see WindowMemory.open for why that distinction is the whole feature.
         memory.open(FolderWindow.KEY, folder.isOpen());
         if (terminal != null) {
-            memory.open("terminal", terminal.isOpen());
+            memory.open(TextEditorApp.TERMINAL_KEY, terminal.isOpen());
         }
     }
 
@@ -348,7 +348,7 @@ final class FileActions implements AutoCloseable {
                 revealPath(dir);
             }
         }
-        if (terminal != null && memory.wasOpen("terminal")) {
+        if (terminal != null && memory.wasOpen(TextEditorApp.TERMINAL_KEY)) {
             app.post(this::openTerminal);
         }
     }

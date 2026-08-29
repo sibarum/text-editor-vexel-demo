@@ -128,7 +128,7 @@ public final class Editor implements ConsoleApp {
         console.host().ifPresent(window::show);
     }
 
-    /** The request queue and the frame clock are drained here. See {@link EditorWindow#tick}. */
+    /** The per-frame work and the frame clock are driven here. See {@link EditorWindow#tick}. */
     @Override
     public void tick() {
         window.tick();

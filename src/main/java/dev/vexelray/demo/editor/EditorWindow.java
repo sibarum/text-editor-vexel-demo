@@ -152,13 +152,13 @@ public final class EditorWindow {
     }
 
     /**
-     * Frame loop, once per frame, open or not. The queue is drained whether the window is up because a
+     * Frame loop, once per frame, open or not. The per-frame work runs whether the window is up because a
      * request made just before a close still has to land somewhere, and the clock is ticked because the
      * file tree animates and outlives this window.
      */
     public void tick() {
         if (files != null) {
-            files.drain();
+            files.perFrame();
         }
         krono.tick();
     }
