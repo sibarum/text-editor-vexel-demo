@@ -128,6 +128,13 @@ public final class TextEditorApp {
         // at (and its shutdown exercised) without a hand on the keyboard.
         boolean withTerminal = java.util.Arrays.asList(args).contains("--terminal");
         args = java.util.Arrays.stream(args).filter(s -> !s.equals("--terminal")).toArray(String[]::new);
+        // --profile turns on FpsProbe. Off by default, because it is not a passive instrument: besides
+        // printing a line every three seconds it deliberately pokes the loop -- a timeline post, a node
+        // mutated from a worker, a handler that does nothing -- to prove each wake path is still alive.
+        // Those are exactly the things worth checking, and exactly the things a shipped run should not be
+        // doing to itself on a timer.
+        boolean profile = java.util.Arrays.asList(args).contains("--profile");
+        args = java.util.Arrays.stream(args).filter(s -> !s.equals("--profile")).toArray(String[]::new);
 
         Gui gui = new Gui();
         // The editor keeps the framework's own look, unshifted — it is the reference the other two windows are
@@ -204,7 +211,18 @@ public final class TextEditorApp {
                 files.openTerminal();
             }
             TactrollerInputBridge bridge = input == null ? null : new TactrollerInputBridge(input, gui.bus());
-            FpsProbe probe = new FpsProbe(krono.kron(), app::postWake, () -> gui.root().opacity(1f), gui.handlers());
+            // Kernel to host: something arrived while you were asleep. Wired here, unconditionally, because it
+            // is what makes render-on-demand safe -- a parked loop has no next frame on which to notice a
+            // timeline post, so without this a click that starts an animation reaches an inbox nobody looks at
+            // and the window stays frozen. It is a single-slot listener, so there is exactly one call to it.
+            //
+            // It used to be FpsProbe's, taken as a constructor argument and installed there. That was fine
+            // while the probe was unconditional and fatal the moment it was not: making the instrument
+            // optional would have made the wake path optional with it.
+            krono.kron().onWork(app::postWake);
+            FpsProbe probe = profile
+                    ? new FpsProbe(krono.kron(), () -> gui.root().opacity(1f), gui.handlers())
+                    : null;
             if (maxFrames <= 0) {
                 // Render on demand: block until the kernel says a frame is due. Only on an uncapped run --
                 // a frame cap is a script, and blocking would make N frames of a still window take forever.
@@ -226,10 +244,15 @@ public final class TextEditorApp {
                     // reconciles them -- the frame that presents a value is the frame that computed it.
                     krono.tick();
                     memory.poll();
-                    probe.sample();
+                    if (probe != null) {
+                        probe.sample();
+                    }
                 });
             } finally {
-                probe.report("text editor, idle");
+                if (probe != null) {
+                    probe.report("text editor, idle");
+                    probe.close();
+                }
                 // Drop any dialog still queued: an application on its way out must not be held up by a question
                 // there is nobody left to answer.
                 dialogs.close();

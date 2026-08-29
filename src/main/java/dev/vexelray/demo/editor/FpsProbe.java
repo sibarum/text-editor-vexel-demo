@@ -13,10 +13,15 @@ import java.util.Map;
  * demand is that there are no frames to report from: a loop asleep on {@code sleepTimeout()} would
  * never reach a reporter driven by {@code sample()}, and the run would look dead instead of idle.
  *
- * <p><b>This owns the one call to {@link Kron#onWork}</b>, and takes the real wake as an argument rather
- * than installing a no-op of its own. A second call site would silently replace the first — a probe
- * constructed after the app's wiring would leave the loop with nothing to wake it, which is a frozen
- * window caused by the instrument measuring it.
+ * <p><b>Not a passive instrument, and off unless {@code --profile} asks for it.</b> Besides printing, it
+ * pokes the loop on a timer — a timeline post, a node mutated from a worker, a handler that does nothing —
+ * because a wake path that has quietly died is invisible in the frame counts and obvious the moment
+ * something is posted down it. Worth checking; not worth a shipped run doing to itself every few seconds.
+ *
+ * <p>It used to own the one call to {@link Kron#onWork} as well, taking the real wake as an argument.
+ * That had to move to the caller before this could be made optional: {@code onWork} is a single-slot
+ * listener and the only thing that wakes a parked loop, so a probe that installed it would have taken the
+ * window's ability to redraw with it when it was switched off.
  */
 final class FpsProbe implements AutoCloseable {
 
@@ -42,12 +47,10 @@ final class FpsProbe implements AutoCloseable {
     private long prevSampleNanos = -1;
     private long prevBudgetNanos;
 
-    FpsProbe(Kron kron, Runnable wake, Runnable mutateFromWorker,
-            java.util.concurrent.Executor handlers) {
+    FpsProbe(Kron kron, Runnable mutateFromWorker, java.util.concurrent.Executor handlers) {
         this.kron = kron;
         this.mutateFromWorker = mutateFromWorker;
         this.handlers = handlers;
-        kron.onWork(wake);
         this.reporter = Thread.ofPlatform().name("fps-probe").daemon(true).start(this::reportLoop);
     }
 

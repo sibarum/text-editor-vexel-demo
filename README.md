@@ -22,6 +22,17 @@ Headless capture to PNG (no GPU window / input backend needed):
 mvn compile exec:exec "-Dapp.args=--capture"
 ```
 
+Frame profile, for working on the render-on-demand loop:
+
+```bash
+mvn compile exec:exec "-Dapp.args=--profile"
+```
+
+That prints what the loop did against what the clock said it was allowed to skip, and every few seconds pokes
+one of the wake paths — a timeline post, a node mutated off the frame thread, a handler that changes nothing —
+to prove each still produces a frame. Off by default for that second reason: it is an instrument that moves
+what it measures, so a shipped run should not be running it on a timer.
+
 Ctrl+= / Ctrl+- / Ctrl+0 zoom the whole UI — every length is relative.
 
 Closing the window asks first if anything is unsaved: a dialog naming each changed document, with **Save all**
