@@ -52,14 +52,33 @@ public final class EditorApp implements ConsoleApp {
         this.raise = raise;
     }
 
+    /**
+     * What this app is called and what it says it does, and the menu it puts on the console.
+     *
+     * <p>Here rather than in each of the two {@code ConsoleApp}s that present the editor, because they are
+     * the same app to a shell whichever way round the program is: the standalone editor registers this class
+     * and the MainFrame-hosted one registers {@link Editor}, and a console that named them differently would
+     * be describing an implementation detail of who owns the frame loop.
+     */
+    static final String NAME = "editor";
+
+    /** @see #NAME */
+    static final String SUMMARY = "open files in tabs, and point the file tree at a directory";
+
+    /** @see #NAME */
+    static void editorMenu(MenuSink menu, ConsoleContext console) {
+        menu.item("Edit a file here...", () -> console.run("ls | where kind == \"file\" | first 1 | edit"));
+        menu.item("Show this directory in the file tree", () -> console.run("reveal"));
+    }
+
     @Override
     public String name() {
-        return "editor";
+        return NAME;
     }
 
     @Override
     public String summary() {
-        return "open files in tabs, and point the file tree at a directory";
+        return SUMMARY;
     }
 
     @Override
@@ -81,8 +100,7 @@ public final class EditorApp implements ConsoleApp {
 
     @Override
     public void menu(MenuSink menu, ConsoleContext console) {
-        menu.item("Edit a file here...", () -> console.run("ls | where kind == \"file\" | first 1 | edit"));
-        menu.item("Show this directory in the file tree", () -> console.run("reveal"));
+        editorMenu(menu, console);
     }
 
     /**

@@ -73,12 +73,12 @@ public final class Editor implements ConsoleApp {
 
     @Override
     public String name() {
-        return "editor";
+        return EditorApp.NAME;
     }
 
     @Override
     public String summary() {
-        return "open files in tabs, and point the file tree at a directory";
+        return EditorApp.SUMMARY;
     }
 
     /**
@@ -142,8 +142,7 @@ public final class Editor implements ConsoleApp {
 
     @Override
     public void menu(MenuSink menu, ConsoleContext console) {
-        menu.item("Edit a file here...", () -> console.run("ls | where kind == \"file\" | first 1 | edit"));
-        menu.item("Show this directory in the file tree", () -> console.run("reveal"));
+        EditorApp.editorMenu(menu, console);
     }
 
     /**
