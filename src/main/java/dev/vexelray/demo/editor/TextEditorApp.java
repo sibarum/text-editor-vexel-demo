@@ -4,7 +4,6 @@ import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.TextClipboard;
-import dev.vexelray.gui.core.WindowControls;
 import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.app.WindowInput;
 import dev.vexelray.gui.core.app.WindowMemory;
