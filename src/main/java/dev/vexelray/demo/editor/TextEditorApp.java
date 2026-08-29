@@ -350,8 +350,12 @@ public final class TextEditorApp {
      * be something else.
      */
     static ProjectScope projectOf(WindowMemory memory) {
+        // Blank rather than null is the whole of "nothing remembered": WindowMemory reads it out of Settings
+        // with "" for a default, so there is no null to test for. This used to check for one anyway, which
+        // read as though the two spellings both happened -- and FileActions.savedFolder, doing the same job
+        // three hundred lines down, tests only isBlank(). One of the two had to be wrong about the contract.
         String shown = memory.shownPath("folder");
-        return shown == null || shown.isBlank()
+        return shown.isBlank()
                 ? ProjectScope.none()
                 : ProjectScope.at(Path.of(shown), PROJECT_FILE);
     }
