@@ -1485,8 +1485,6 @@ public final class TextEditorApp {
          * shell is what the editor was launched from.
          */
         private final Console terminal;
-        private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> requests =
-                new java.util.concurrent.ConcurrentLinkedQueue<>();
 
         /** Told about a file that has just been loaded into a tab. Set by whoever owns the console. */
         private volatile java.util.function.Consumer<Path> opened = file -> { };
@@ -1581,12 +1579,26 @@ public final class TextEditorApp {
 
         /** Enqueue opening {@code file} into a tab — how the folder window's tree reaches the editor. */
         void openPath(Path file) {
-            requests.add(() -> loadInto(file));
+            app.post(() -> loadInto(file));
         }
 
-        /** Enqueue pointing the folder window at {@code dir} — MainFrame's {@code reveal}. */
+        /**
+         * Point the folder window at {@code dir} — MainFrame's {@code reveal}.
+         *
+         * <p>On {@link GuiApp#post} rather than this class's own queue, and the difference is a frame
+         * per hop. Both marshal onto the frame loop; only one of them is the queue the window operation
+         * itself uses. {@code post} drains to exhaustion at the top of an iteration, so the
+         * {@code app.post} that {@code show} makes internally is picked up by the <em>same</em> drain
+         * and the window opens in this frame. A queue of the application's own - drained mid-frame, from
+         * the host's {@code beforeFrame} hook - leaves that nested post for the next iteration, and the
+         * reveal takes as many frames as it has steps.
+         *
+         * <p>Invisible while the loop redrew unconditionally, because the next frame was always a few
+         * milliseconds away. Against a loop that parks it is the difference between a reveal and a
+         * reveal you can watch happen.
+         */
         void revealPath(Path dir) {
-            requests.add(() -> {
+            app.post(() -> {
                 folder.show(app, dir);
                 ws.say("Folder: " + dir);
             });
@@ -1594,8 +1606,9 @@ public final class TextEditorApp {
 
         /**
          * <b>Reveal in Navigator</b> on a tab: point the file tree at the folder holding {@code file} and select
-         * its row. Enqueued for the same reason every other structural request is — the menu body runs on the
-         * handler executor, and opening a window belongs to the frame loop.
+         * its row. Marshalled onto the frame loop because the menu body runs on the handler executor, and
+         * opening a window belongs to that loop — on {@link GuiApp#post}, which is the queue window
+         * operations actually use, so the whole reveal lands in one frame. See {@link #revealPath}.
          *
          * <p>Absolute first, because a tab's path is only as absolute as whoever opened it: the dialogs hand over
          * absolute paths, but {@code edit} takes rows off a pipe and a {@code path} cell can be relative. A
@@ -1607,7 +1620,7 @@ public final class TextEditorApp {
          * empty one, so the result would be an empty tree under the right name — a folder that looks emptied.
          */
         private void revealFile(Path file) {
-            requests.add(() -> {
+            app.post(() -> {
                 Path target = file.toAbsolutePath().normalize();
                 if (target.getParent() == null || !java.nio.file.Files.exists(target)) {
                     ws.warn("Can't reveal " + target.getFileName() + ": it is no longer on disk");
@@ -1633,12 +1646,12 @@ public final class TextEditorApp {
         private void closeAllTabs() {
             List<EditorTab> unsaved = ws.unsaved();
             if (unsaved.isEmpty()) {
-                requests.add(this::closeAll);
+                app.post(this::closeAll);
                 return;
             }
             Modals.show(Modal.of("Close all tabs", unsavedMessage(unsaved))
-                    .defaultButton("Save all", () -> requests.add(this::saveAllThenCloseAll))
-                    .button("Discard", () -> requests.add(this::closeAll))
+                    .defaultButton("Save all", () -> app.post(this::saveAllThenCloseAll))
+                    .button("Discard", () -> app.post(this::closeAll))
                     .cancelButton("Cancel", () -> { }));
         }
 
@@ -1692,19 +1705,27 @@ public final class TextEditorApp {
             // the main window, so Ctrl+` is left unbound rather than bound to nothing — a key that swallows the
             // chord and does nothing is worse than a key the window never claimed.
             if (terminal != null) {
-                g.shortcut(Key.GRAVE_ACCENT, () -> requests.add(this::toggleTerminal), Modifier.CONTROL);
+                g.shortcut(Key.GRAVE_ACCENT, () -> app.post(this::toggleTerminal), Modifier.CONTROL);
             }
-            g.shortcut(Key.O, () -> requests.add(this::open), Modifier.CONTROL);
-            g.shortcut(Key.O, () -> requests.add(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
-            g.shortcut(Key.S, () -> requests.add(this::save), Modifier.CONTROL);
-            g.shortcut(Key.S, () -> requests.add(this::saveAs), Modifier.CONTROL, Modifier.SHIFT);
-            g.shortcut(Key.N, () -> requests.add(() -> ws.newTab("", null, false)), Modifier.CONTROL);
-            g.shortcut(Key.W, () -> requests.add(ws::closeActive), Modifier.CONTROL);
-            g.shortcut(Key.TAB, () -> requests.add(() -> ws.cycle(+1)), Modifier.CONTROL);
-            g.shortcut(Key.TAB, () -> requests.add(() -> ws.cycle(-1)), Modifier.CONTROL, Modifier.SHIFT);
+            g.shortcut(Key.O, () -> app.post(this::open), Modifier.CONTROL);
+            g.shortcut(Key.O, () -> app.post(this::openFolder), Modifier.CONTROL, Modifier.SHIFT);
+            g.shortcut(Key.S, () -> app.post(this::save), Modifier.CONTROL);
+            g.shortcut(Key.S, () -> app.post(this::saveAs), Modifier.CONTROL, Modifier.SHIFT);
+            g.shortcut(Key.N, () -> app.post(() -> ws.newTab("", null, false)), Modifier.CONTROL);
+            g.shortcut(Key.W, () -> app.post(ws::closeActive), Modifier.CONTROL);
+            g.shortcut(Key.TAB, () -> app.post(() -> ws.cycle(+1)), Modifier.CONTROL);
+            g.shortcut(Key.TAB, () -> app.post(() -> ws.cycle(-1)), Modifier.CONTROL, Modifier.SHIFT);
         }
 
-        /** GUI thread, once per frame. One request at a time — each may block on a modal dialog. */
+        /**
+         * GUI thread, once per frame: the state this class reads from the windows themselves.
+         *
+         * <p>This used to also drain a queue of this class's own, one request per frame. The queue is
+         * gone — every command now goes to {@link GuiApp#post}, which is the queue the frame loop
+         * already had and the one window operations use, so a command that opens a window lands in a
+         * single frame rather than taking one per step. What is left here is only what genuinely has to
+         * be sampled per frame.
+         */
         void drain() {
             if (terminal != null) {
                 terminal.tick();
@@ -1724,10 +1745,6 @@ public final class TextEditorApp {
             if (terminal != null) {
                 memory.open("terminal", terminal.isOpen());
             }
-            // Everything queued, not one request: a loop that parks has no next frame to leave the rest for.
-            for (Runnable r; (r = requests.poll()) != null; ) {
-                r.run();
-            }
         }
 
         /**
@@ -1743,13 +1760,13 @@ public final class TextEditorApp {
             if (memory.wasOpen("folder")) {
                 Path dir = savedFolder();
                 if (dir == null) {
-                    requests.add(() -> ws.warn("Last folder is no longer there - not reopening it"));
+                    app.post(() -> ws.warn("Last folder is no longer there - not reopening it"));
                 } else {
                     revealPath(dir);
                 }
             }
             if (terminal != null && memory.wasOpen("terminal")) {
-                requests.add(this::openTerminal);
+                app.post(this::openTerminal);
             }
         }
 
@@ -1904,7 +1921,7 @@ public final class TextEditorApp {
                 return;
             }
             Modals.show(Modal.of("Unsaved changes", unsavedMessage(unsaved))
-                    .defaultButton("Save all", () -> requests.add(() -> saveAllThenClose(request)))
+                    .defaultButton("Save all", () -> app.post(() -> saveAllThenClose(request)))
                     .button("Discard", request::proceed)
                     .cancelButton("Cancel", request::cancel));
         }
