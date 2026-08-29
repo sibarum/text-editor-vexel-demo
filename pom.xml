@@ -23,6 +23,9 @@
         <vexelray.version>0.1.0-SNAPSHOT</vexelray.version>
         <tactroller.version>1.0-SNAPSHOT</tactroller.version>
         <mainframe.version>0.1.0-SNAPSHOT</mainframe.version>
+        <!-- Concordance: the source index behind the index/names/usages/impls commands. Installed to the local
+             .m2 by `mvn install` in the sibling concordance-indexer repo. -->
+        <concordance.version>0.1.0-SNAPSHOT</concordance.version>
 
         <app.mainClass>dev.vexelray.demo.editor.TextEditorApp</app.mainClass>
         <!-- Program args for exec:exec. One token each, because a Maven property is not a command line; the
@@ -69,6 +72,14 @@
             <groupId>dev.mainframe</groupId>
             <artifactId>mainframe-vexel-gui</artifactId>
             <version>${mainframe.version}</version>
+        </dependency>
+
+        <!-- The Concordance index, behind the index/names/usages/impls commands. A query returns rows with a
+             path column, so it pipes straight into edit. -->
+        <dependency>
+            <groupId>sibarum.concordance</groupId>
+            <artifactId>concordance-index</artifactId>
+            <version>${concordance.version}</version>
         </dependency>
         <!-- The frame clock, for the tab transition. Motion enters at the application edge and nowhere else:
              vexelray-gui-widget declares its timing seam out of JDK types (a DoubleConsumer and a Runnable) and

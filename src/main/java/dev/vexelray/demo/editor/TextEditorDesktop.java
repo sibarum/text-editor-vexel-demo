@@ -50,17 +50,21 @@ public final class TextEditorDesktop {
     }
 
     /**
-     * What is in this application: the editor.
+     * What is in this application: the editor, and Concordance.
      *
-     * <p>One app, and the list is the point rather than its length — another {@link ConsoleApp} added here is a
-     * line, not a redesign. {@link Editor} can also be told what to ask the shell when a file is opened; nothing
-     * asks for anything at the moment, and the seam is left because that is a decision about this application
-     * rather than about the editor.
+     * <p>The list is the point rather than its length — a second {@link ConsoleApp} was a line, not a redesign,
+     * and {@link ConcordanceApp} is that line. It brings {@code index}, {@code names}, {@code usages} and
+     * {@code impls}, whose rows carry a {@code path} column, which is what makes
+     * {@code usages area | first 5 | edit} work: the editor's own {@code edit} opens exactly those rows.
      *
-     * @param settings this application's settings, shared with the standalone editor; unused while the editor is
-     *                 the only app here, since its own state lives in the window memory
+     * <p>{@link Editor} can also be told what to ask the shell when a file is opened; nothing asks for anything
+     * at the moment, and the seam is left because that is a decision about this application rather than about
+     * the editor.
+     *
+     * @param settings this application's settings, shared with the standalone editor; unused while the editor's
+     *                 own state lives in the window memory and Concordance's index lives for the session
      */
     private static List<ConsoleApp> apps(Settings settings, WindowMemory memory) {
-        return List.of(new Editor(memory));
+        return List.of(new Editor(memory), new ConcordanceApp());
     }
 }
