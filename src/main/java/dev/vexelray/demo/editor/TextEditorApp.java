@@ -691,6 +691,26 @@ public final class TextEditorApp {
             return file != null ? file.getFileName().toString() : UNTITLED;
         }
 
+        /**
+         * Declare {@code text} to be what is on disk: the snapshot {@link #dirty()} compares against, and the
+         * position the field's undo history calls saved.
+         *
+         * <p>Both, because they answer different questions. The snapshot answers the editor's â whether the
+         * bytes differ from the file â and is deliberately not a flag, for the reason {@link #savedText} gives.
+         * {@code History.mark()} answers the one the field and anything subscribed to its
+         * {@code history().status()} asks, and it is a position rather than a flag for a related reason: undoing
+         * back past a save is dirty again, and redoing up to it is clean again. Setting only the snapshot left
+         * the history reporting dirty forever after the first keystroke of a session, which is what a menu item
+         * or a dirty dot wired to it would have repeated.
+         *
+         * <p>Harmless where the text was replaced with {@code editor.text(...)} rather than typed: that clears
+         * the history, so this marks the empty position it already stands at.
+         */
+        void savedAs(String text) {
+            savedText = text;
+            editor.history().mark();
+        }
+
         /** Whether this document has edits that are not on disk. */
         boolean dirty() {
             return !editor.text().equals(savedText);
@@ -797,7 +817,7 @@ public final class TextEditorApp {
             // AUTO, not a fixed line: this line also reports what was opened or saved, and a long path wraps.
             // A fixed height clips the second line outside the padding instead of making room for it.
             this.status = gui.text("Ctrl+O open - Ctrl+Shift+O folder - Ctrl+` terminal - Ctrl+S save - "
-                            + "Ctrl+N new - Ctrl+W close")
+                            + "Ctrl+N new - Ctrl+W close - Ctrl+Z undo")
                     .width(Length.FILL).height(Length.AUTO)
                     .textSize(Length.rem(0.875f)).textColor(gui.theme().color(Role.DIM))
                     .align(dev.vexelray.text.TextLayout.HAlign.LEFT, dev.vexelray.text.TextLayout.VAlign.MIDDLE)
@@ -1055,7 +1075,7 @@ public final class TextEditorApp {
                     tab.file = null;
                     tab.crlf = false;
                     tab.editor.text("");
-                    tab.savedText = "";
+                    tab.savedAs("");
                     retitleActive();
                     say("Closed - one empty tab remains");
                     return;
@@ -1826,7 +1846,7 @@ public final class TextEditorApp {
                     tab.file = picked;
                     tab.crlf = loaded.crlf();
                     tab.editor.text(loaded.text());
-                    tab.savedText = loaded.text();
+                    tab.savedAs(loaded.text());
                     ws.retitleActive();
                 } else {
                     tab = ws.newTab(loaded.text(), picked, loaded.crlf());
@@ -1943,7 +1963,7 @@ public final class TextEditorApp {
                 String text = tab.editor.text();
                 java.nio.file.Files.write(target, TextFile.encode(text, tab.crlf));
                 tab.file = target;
-                tab.savedText = text;
+                tab.savedAs(text);
                 ws.retitleActive();
                 ws.say("Saved " + target);
                 // After the line, not before it: both are reports of the same event, and the wash is the one
