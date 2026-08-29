@@ -208,7 +208,11 @@ public final class TextEditorApp {
             if (maxFrames <= 0) {
                 // Render on demand: block until the kernel says a frame is due. Only on an uncapped run --
                 // a frame cap is a script, and blocking would make N frames of a still window take forever.
-                app.pacing(() -> krono.kron().sleepTimeout().nanos());
+                // Every deadline this application holds, in one place - which is what the supplier is for.
+                // The clock knows about animations; it does not know the window placement is 700ms from
+                // being written, and a loop that parks has no next frame to discover that on.
+                app.pacing(() -> Math.min(
+                        krono.kron().sleepTimeout().nanos(), memory.nanosUntilSettle()));
                 app.idleRefresh(200_000_000L)   // 5 Hz floor while focused: a missed wake is late, never lost
                    .maxFrameRate(16_666_666L);  // 60 Hz ceiling while animating
             }
