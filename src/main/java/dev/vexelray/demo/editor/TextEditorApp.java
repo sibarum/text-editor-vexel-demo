@@ -1065,10 +1065,30 @@ public final class TextEditorApp {
             EditorTab tab;
             synchronized (tabs) {
                 tab = active();
-                if (tab == null) {
+            }
+            if (tab != null) {
+                retitle(tab);
+            }
+        }
+
+        /**
+         * Re-label {@code tab}'s own header and re-pick its grammar, wherever it sits in the bar.
+         *
+         * <p>Separate from {@link #retitleActive} because saving is not always about the tab in front. A
+         * <b>Save all</b> walks every unsaved document, and one that already has a path is written without
+         * ever being selected — so the retitle that follows the write has to name the tab that was written
+         * rather than whichever one happens to be showing.
+         *
+         * <p>A tab that has left the bar is simply not retitled: the index is resolved under the same lock
+         * every other index here is, and the bar's own Close item can remove one at any point.
+         */
+        void retitle(EditorTab tab) {
+            synchronized (tabs) {
+                int i = open.indexOf(tab);
+                if (i < 0) {
                     return;
                 }
-                tabs.title(tabs.selected(), tab.title());
+                tabs.title(i, tab.title());
             }
             tab.highlighter.language(tab.title());
         }
@@ -1990,7 +2010,10 @@ public final class TextEditorApp {
                 java.nio.file.Files.write(target, TextFile.encode(text, tab.crlf));
                 tab.file = target;
                 tab.savedAs(text);
-                ws.retitleActive();
+                // This tab, not the selected one. Save all writes documents that are not in front, and a
+                // never-saved one has just been given its first name here -- so the header that has to change
+                // is the one belonging to the tab that was written.
+                ws.retitle(tab);
                 ws.say("Saved " + target);
                 // After the line, not before it: both are reports of the same event, and the wash is the one
                 // that will be seen first — a cue starts painting on the frame it is played, so playing it
