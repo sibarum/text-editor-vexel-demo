@@ -131,9 +131,19 @@ final class Highlighter {
     private static final int MAX_HIGHLIGHT_CHARS = 512 * 1024;
     private static final int MAX_HIGHLIGHT_LINE_CHARS = 20_000;
 
+    /**
+     * The bundled grammars, parsed once for the process rather than once per open document.
+     *
+     * <p>Held in a holder class so the parse is paid on the first document that wants a grammar and not on
+     * the first touch of any static here: {@link #knownExtensions()} feeds the save dialog's filter list, and
+     * that is read while the file actions are being built, long before anything needs tokenizing.
+     */
+    private static final class Grammars {
+        static final Registry REGISTRY = loadGrammars();
+    }
+
     private final Gui gui;
     private final TextField editor;
-    private final Registry registry = loadGrammars();
     private final AtomicLong generation = new AtomicLong();
 
     private volatile IGrammar grammar; // null = plain text
@@ -223,11 +233,24 @@ final class Highlighter {
     /** Pick the grammar for {@code fileName}'s extension (null name or unknown extension = plain text). */
     void language(String fileName) {
         String scope = scopeFor(fileName);
-        grammar = scope == null ? null : registry.grammarForScopeName(scope);
+        grammar = scope == null ? null : grammarFor(scope);
         // A recognized format is code: switch the editor to the atlas's monospace face. Plain text reads
         // better in the proportional UI face, so an unknown extension switches back.
         editor.node().font(grammar != null ? 1 : 0);
         refresh();
+    }
+
+    /**
+     * The shared grammar for {@code scope}.
+     *
+     * <p>Locked because {@code grammarForScopeName} is not a lookup: the first ask for a scope compiles a
+     * {@code Grammar} and caches it in the registry's own map. One registry for the process means that write
+     * is now reachable from more than one document, and this is the only place it happens.
+     */
+    static IGrammar grammarFor(String scope) {
+        synchronized (Grammars.class) {
+            return Grammars.REGISTRY.grammarForScopeName(scope);
+        }
     }
 
     /** Re-tokenize the editor's current text on a worker and commit the spans if still current. */
@@ -255,10 +278,30 @@ final class Highlighter {
         });
     }
 
+    /**
+     * Tokenize {@code text}, one document at a time per grammar.
+     *
+     * <p><b>The lock is load-bearing and not obvious.</b> A {@code Grammar} compiles its rules lazily while
+     * tokenizing — it hands out rule ids from a counter and stores the compiled rules in a plain map as it
+     * goes — so it is mutable state, not a parsed constant. That was nobody else's business while every
+     * document had a registry of its own; now that the registry is shared, two tabs of the same language
+     * tokenizing at once on the {@link Gui#async} workers would be two threads mutating one counter and one
+     * map. Opening several files in one go is exactly that case: {@code ls | first 3 | edit}.
+     *
+     * <p>Per grammar rather than one lock for all of them, so a Java document and a Python one never wait on
+     * each other. Contention is slight in practice regardless — a document only re-tokenizes when its own
+     * text changes, and only one document is being typed into.
+     */
     static List<Span> tokenize(IGrammar grammar, String text) {
         if (text.length() > MAX_HIGHLIGHT_CHARS) {
             return List.of();
         }
+        synchronized (grammar) {
+            return tokenizeLines(grammar, text);
+        }
+    }
+
+    private static List<Span> tokenizeLines(IGrammar grammar, String text) {
         List<Span> spans = new ArrayList<>();
         IStateStack state = null;
         int lineStart = 0;

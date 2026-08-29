@@ -6,11 +6,19 @@ import org.eclipse.tm4e.core.grammar.IGrammar;
 import org.eclipse.tm4e.core.registry.Registry;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -176,5 +184,66 @@ final class GrammarBundleTest {
         assertEquals(KEYWORD, colorOf(markdown, "```python\ndef f():\n    pass\n```\n", "def"));
         assertTrue(Highlighter.tokenize(markdown, "```yaml\nkey: value\n```\n").size() > 2,
                 "a yaml fence should be more than its own backticks");
+    }
+
+    /**
+     * One registry for the process means one {@code Grammar} object shared by every tab of a language, and a
+     * {@code Grammar} compiles its rules lazily as it tokenizes — so this is several threads driving one piece
+     * of mutable state. {@code ls | first 3 | edit} does exactly this, and the first tokenize is the one that
+     * does the compiling, so the race is worst on a cold grammar rather than a warm one.
+     *
+     * <p>Asserts the answers rather than merely that nothing threw: a lost rule id does not have to crash, it
+     * can just as easily colour a token wrong, and that is the failure nobody would trace back to here.
+     */
+    @Test
+    void oneGrammarTokenizesTheSameUnderConcurrentDocuments() throws Exception {
+        String source = """
+                package p;
+                /* a comment */
+                final class C {
+                    String s = "text";
+                    int n = 42;
+                }
+                """;
+        String scope = Highlighter.scopeFor("Cold.java");
+        List<Span> expected = Highlighter.tokenize(grammarFor("Cold.java"), source);
+        assertFalse(expected.isEmpty(), "the sample should colour something to begin with");
+
+        int threads = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            // A fresh registry per round, because the mutation being guarded happens only on the way through
+            // the first document: the grammar hands out rule ids and fills its rule map as it compiles, and
+            // after that it is effectively read-only. Racing a grammar that has already tokenized once proves
+            // nothing, which is the trap this test fell into first time round.
+            for (int round = 0; round < 4; round++) {
+                IGrammar cold = Highlighter.loadGrammars().grammarForScopeName(scope);
+                CountDownLatch start = new CountDownLatch(1);
+                List<Future<List<Span>>> runs = new ArrayList<>();
+                for (int i = 0; i < threads; i++) {
+                    runs.add(pool.submit(() -> {
+                        start.await();
+                        return Highlighter.tokenize(cold, source);
+                    }));
+                }
+                start.countDown();
+                for (Future<List<Span>> run : runs) {
+                    assertEquals(expected, run.get(30, TimeUnit.SECONDS),
+                            "every thread should see the same colours");
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** The grammars are parsed once for the process, not once per document — the whole point of the holder. */
+    @Test
+    void everyDocumentOfALanguageGetsTheSameGrammarInstance() {
+        IGrammar first = Highlighter.grammarFor(Highlighter.scopeFor("A.java"));
+        IGrammar second = Highlighter.grammarFor(Highlighter.scopeFor("B.java"));
+        assertSame(first, second, "two Java documents should share one grammar");
+        assertNotSame(first, Highlighter.grammarFor(Highlighter.scopeFor("b.py")),
+                "different languages are still different grammars");
     }
 }
