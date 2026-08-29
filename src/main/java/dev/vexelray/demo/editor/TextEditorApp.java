@@ -208,8 +208,9 @@ public final class TextEditorApp {
             if (maxFrames <= 0) {
                 // Render on demand: block until the kernel says a frame is due. Only on an uncapped run --
                 // a frame cap is a script, and blocking would make N frames of a still window take forever.
-                gui.onWork(app::postWake);   // mutations from worker-thread handlers wake the loop too
                 app.pacing(() -> krono.kron().sleepTimeout().nanos());
+                app.idleRefresh(200_000_000L)   // 5 Hz floor while focused: a missed wake is late, never lost
+                   .maxFrameRate(16_666_666L);  // 60 Hz ceiling while animating
             }
             try {
                 app.run(gui, maxFrames, () -> {

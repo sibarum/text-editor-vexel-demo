@@ -27,6 +27,8 @@
         <app.mainClass>dev.vexelray.demo.editor.TextEditorApp</app.mainClass>
         <!-- Program args for exec:exec. One token each, because a Maven property is not a command line; the
              app drops blanks, so an unused slot costs nothing. Empty app.args = interactive. -->
+        <!-- Diagnostics: mvn compile exec:exec "-Dwake.trace=true" traces every frame-loop wake. -->
+        <wake.trace>false</wake.trace>
         <app.args></app.args>
         <app.args2></app.args2>
     </properties>
@@ -130,6 +132,7 @@
                     <classpathScope>runtime</classpathScope>
                     <arguments>
                         <argument>--enable-native-access=ALL-UNNAMED</argument>
+                        <argument>-Dvexelray.wake.trace=${wake.trace}</argument>
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>${app.mainClass}</argument>
