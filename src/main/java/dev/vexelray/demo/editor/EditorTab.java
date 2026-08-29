@@ -38,13 +38,12 @@ final class EditorTab {
      * Declare {@code text} to be what is on disk: the snapshot {@link #dirty()} compares against, and the
      * position the field's undo history calls saved.
      *
-     * <p>Both, because they answer different questions. The snapshot answers the editor's â whether the
-     * bytes differ from the file â and is deliberately not a flag, for the reason {@link #savedText} gives.
+     * <p>Both, because they answer different questions. The snapshot answers the editor's — whether the
+     * bytes differ from the file — and is deliberately not a flag, for the reason {@link #savedText} gives.
      * {@code History.mark()} answers the one the field and anything subscribed to its
      * {@code history().status()} asks, and it is a position rather than a flag for a related reason: undoing
-     * back past a save is dirty again, and redoing up to it is clean again. Setting only the snapshot left
-     * the history reporting dirty forever after the first keystroke of a session, which is what a menu item
-     * or a dirty dot wired to it would have repeated.
+     * back past a save is dirty again, and redoing up to it is clean again. Both have to be set: a dirty dot
+     * or a menu item wired to the history reads dirty from the first keystroke on if only the snapshot is.
      *
      * <p>Harmless where the text was replaced with {@code editor.text(...)} rather than typed: that clears
      * the history, so this marks the empty position it already stands at.

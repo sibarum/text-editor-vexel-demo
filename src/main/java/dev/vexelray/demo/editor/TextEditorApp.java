@@ -82,8 +82,8 @@ public final class TextEditorApp {
      * documentation puts it at about 150ms of visible motion, which a 160ms cue does not have once its attack
      * and release are taken out of it.
      *
-     * <p>So the two numbers differ on purpose, and the departure is the point rather than an oversight: the
-     * tempo above is what a change is worth, and this is what being seen costs.
+     * <p>So this and {@link #TRANSITION} differ on purpose: the tempo above is what a change is worth, and
+     * this is what being seen costs.
      */
     static final Dur CUE = Dur.ms(240);
 
@@ -394,9 +394,9 @@ public final class TextEditorApp {
      * How input reaches every window the framework opens for us — the file tree, the terminal, any dialog. One
      * backend per window, attached at creation, pumped by the frame loop, released with the window.
      *
-     * <p>This is the same four lines each of those windows used to run for itself, plus the per-frame pump and
-     * the teardown, said once. The framework cannot do it alone: it speaks {@code tactroller-api} and Atchung
-     * topics, but the bridge between them is chosen here, at the application edge.
+     * <p>Said once for every window rather than per window. The framework cannot do it alone: it speaks
+     * {@code tactroller-api} and Atchung topics, but the bridge between them is chosen here, at the
+     * application edge.
      */
     private static WindowInput windowInput(dev.vexelray.os.NativeWindow window, Gui gui) {
         try {

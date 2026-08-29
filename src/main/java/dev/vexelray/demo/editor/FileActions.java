@@ -21,8 +21,9 @@ import java.util.List;
  * File actions over the native OS dialogs in vexelray-gui-nfd, operating on the workspace's active tab.
  *
  * <p>NFD dialogs are modal and must run on the GUI thread, but shortcut handlers run on worker threads —
- * so the shortcuts only enqueue, and {@link #drain()} services one request per frame from the app's
- * beforeFrame hook. Tab-structure changes ride the same queue so they are ordered with the file I/O.
+ * so nothing here acts where it was called. Every command goes to {@link GuiApp#post}, which is the frame
+ * loop's own queue and the one window operations already use, so tab-structure changes, file I/O and
+ * opening a window are all ordered against each other.
  */
 final class FileActions implements AutoCloseable {
     private static final List<FileDialog.Filter> FILTERS =
@@ -302,13 +303,11 @@ final class FileActions implements AutoCloseable {
     }
 
     /**
-     * GUI thread, once per frame: the state this class reads from the windows themselves.
+     * GUI thread, once per frame: the three things that have to be sampled rather than reported.
      *
-     * <p>This used to also drain a queue of this class's own, one request per frame. The queue is
-     * gone — every command now goes to {@link GuiApp#post}, which is the queue the frame loop
-     * already had and the one window operations use, so a command that opens a window lands in a
-     * single frame rather than taking one per step. What is left here is only what genuinely has to
-     * be sampled per frame.
+     * <p>Despite the name this drains no queue of its own — commands go to {@link GuiApp#post}. It ticks
+     * the console, puts the tab floor back if the bar has been emptied, and reads which windows are up
+     * from the windows themselves.
      */
     void drain() {
         if (terminal != null) {

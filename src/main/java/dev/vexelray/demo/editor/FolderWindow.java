@@ -69,7 +69,7 @@ final class FolderWindow {
     /** The framework's handle on this window, claimed the first time it is shown. */
     private AppWindow handle;
 
-    /** This window.s Gui, so the app can bind its shortcuts here as well as on the main window. */
+    /** This window's Gui, so the app can bind its shortcuts here as well as on the main window. */
     Gui gui() {
         return gui;
     }
@@ -88,19 +88,17 @@ final class FolderWindow {
         // height grows, so the rows below are displaced by making room rather than by a transform, and the
         // tree's extent and its scrollbar go on describing the tree that is actually on screen.
         //
-        // 160ms, the same as the tab change -- one application, one tempo -- but OUT_CUBIC where that ramp is
-        // LINEAR, and the difference is not a preference. There the ramp drives opacity, which has no place
-        // to arrive at (Tabs eases its own travel separately); here it drives a distance being covered, and
-        // decelerating into the place it stops is what reads as weight.
+        // TRANSITION, the same as the tab change -- one application, one tempo -- but OUT_CUBIC where that
+        // ramp is LINEAR, and the difference is not a preference: there the ramp drives opacity, which has
+        // nowhere to arrive at, and here it drives a distance being covered.
         //
-        // One clock, two windows. Sound because nothing but a DoubleConsumer and a Runnable crosses this seam
-        // -- no node and no Gui, so the clock never learns which window it is timing -- and because both
-        // windows are presented by the one loop on the one thread: the tick in the main window's beforeFrame
-        // hook runs before either window's frame, so the rows this window presents are the ones that tick
-        // computed.
+        // One clock, two windows, which is sound on two counts. Nothing but a DoubleConsumer and a Runnable
+        // crosses this seam -- no node and no Gui -- so the clock never learns which window it is timing;
+        // and both windows are presented by the one loop on the one thread, the tick running in the main
+        // window's beforeFrame hook ahead of either window's frame.
         //
-        // Null under --capture-folder, which has no loop to tick it: the tree flips instantly, which is what
-        // every tree here did before there was motion and what a reduced-motion path would be.
+        // Null under --capture-folder, which has no loop to tick it: the tree flips instantly, which is also
+        // what a reduced-motion path would be.
         this.motion = krono == null ? null
                 : (progress, done) -> krono.ramp(TextEditorApp.TRANSITION, Ease.OUT_CUBIC, progress, done);
         this.cues = krono == null ? Cues.none()
@@ -165,24 +163,21 @@ final class FolderWindow {
      * Pulse the row for {@code item}, so a reveal can be seen to have happened.
      *
      * <p><b>The case this exists for is the one where nothing else changes.</b> Revealing a file in a folder
-     * the drawer is already showing is deliberately not a rebuild — see {@link #reveal} — so if the window
-     * was already forward and the row already selected, a correct reveal and a reveal that silently failed
-     * looked exactly alike: nothing moved, and the only difference was a line of text in the other window.
-     * This is the difference, and it is on the row rather than on the tree because which file was revealed
-     * is the entire content of the answer.
+     * the drawer is already showing is deliberately not a rebuild — see {@link #reveal} — so with the window
+     * already forward and the row already selected, a correct reveal and one that silently failed look
+     * alike. On the row rather than the tree, because which file was revealed is the whole answer.
      *
-     * <p>One pulse of the accent, which is the tab bar's mark for the same event — a thing you asked for
-     * turning up where it lives. The accent survives {@link Palettes#FILES}' hue shift untouched, so it is
-     * literally the same colour in both windows rather than merely the same idea.
+     * <p>One pulse of the accent, which is the tab bar's mark for the same event. The accent survives
+     * {@link Palettes#FILES}' hue shift untouched, so it is the same colour in both windows rather than
+     * merely the same idea.
      *
      * <p><b>A row that is not there is not an error.</b> A tree materialises rows as folders open, so an
-     * item under something collapsed has none; nor has a file the source no longer offers. Both are ordinary
-     * and both are simply not marked.
+     * item under something collapsed has none; nor has a file the source no longer offers. Both are simply
+     * not marked.
      *
-     * <p>The freshly-opened window is the weak case and knowingly so: the tree was built this frame and has
-     * not been laid out, so a cue on it paints nothing until it has been. {@code Cues} reads the box every
-     * sample rather than capturing it, so the mark appears as soon as there is somewhere to put it and is
-     * merely shortened — and that is the case where a whole window arriving has already said plenty.
+     * <p>A freshly-opened window is the weak case, knowingly: the tree was built this frame and not yet laid
+     * out, so the cue paints nothing until it has been. {@code Cues} reads the box every sample rather than
+     * capturing it, so the mark appears as soon as there is somewhere to put it, merely shortened.
      */
     private void mark(Path item) {
         Node row = tree.rowNode(item);

@@ -36,7 +36,7 @@ final class TextFile {
     }
 
     /**
-     * A file's editable content plus what {@link #save} must know to round-trip it.
+     * A file's editable content plus what {@link #encode} must know to round-trip it.
      *
      * @param text  normalized content ({@code \n} endings, no tabs, no BOM)
      * @param crlf  whether the file used {@code \r\n} line endings, restored on save

@@ -93,14 +93,10 @@ final class Workspace {
         // displacement is what makes the content agree with that order instead of the headers merely
         // asserting it. A dissolve alone has nothing in it that moves, which is what reads as mechanical.
         //
-        // LINEAR, and it has to be. Tabs eases the travel itself -- out-cubic on the displacement, which is
-        // what reads as weight in something arriving at a place -- and holds the fade underneath linear,
-        // because opacity has nowhere to arrive at and the eye reads it about as it is given. An out-cubic
-        // ramp here (which is what this line used to pass) is 87% through by the halfway point, so the whole
-        // visible part finished in the first third and the rest was a stall with nothing moving: a delay and
-        // then a jump, rather than a transition. Invisible to a test that checks only the endpoints, because
-        // the endpoints are perfect either way. 160ms: long enough to read as one document replacing
-        // another, short enough that Ctrl+Tab held down never has to wait for it.
+        // LINEAR, and it has to be: Tabs already eases the displacement out-cubic and holds the fade
+        // underneath it linear. Easing this ramp as well eases the fade twice, which spends most of the
+        // duration at an opacity indistinguishable from the end -- a delay and then a jump. A test checking
+        // only the endpoints cannot see the difference, because the endpoints are right either way.
         //
         // Harmless under --capture, which never ticks the clock: a panel with one tab has nothing to fade
         // from, and the first tab is selected before there is a second.
@@ -140,10 +136,9 @@ final class Workspace {
      *
      * <p><b>Why this is a method and not {@code status.text(...)}.</b> A line of text replaced in place is
      * the one kind of change a person looking somewhere else cannot notice: nothing moves, nothing appears,
-     * and the only evidence that anything happened is a sentence that was not there a moment ago in a strip
-     * that always has a sentence in it. Saving the same file twice, in particular, produced no observable
-     * difference whatever — the second save wrote the identical string over the first. So the change gets
-     * motion of its own, and every report in this application goes through here or through {@link #warn}.
+     * and the only evidence is a sentence that was not there a moment ago in a strip that always has a
+     * sentence in it. Saving the same file twice writes an identical string and shows nothing at all. So the
+     * change gets motion of its own, and every report here goes through this or {@link #warn}.
      */
     void say(String message) {
         arrive(message);
@@ -168,18 +163,16 @@ final class Workspace {
     /**
      * Acknowledge that {@code tab} has just been written to disk: a wash over the page that was saved.
      *
-     * <p>Ctrl+S is the action here that gets repeated most and read least. It already reported itself on the
-     * status line, but a line of text is the wrong shape for an answer to a keystroke — by the time it has
-     * been read, the question it answered has been forgotten. A tint over the document says <em>this
-     * one, now</em> without being read at all, which is what a save wants and what a sentence cannot do.
+     * <p>Ctrl+S is repeated most and read least. It already reported itself on the status line, but by the
+     * time a sentence has been read the keystroke it answered has been forgotten; a tint over the document
+     * says <em>this one, now</em> without being read at all.
      *
-     * <p>{@link Role#HIGHLIGHT} rather than a bare accent: it is the accent already at the alpha a wash
-     * wants, and a wash takes the colour's own alpha as its peak — handed an opaque one it would blank the
-     * document it is confirming, for a frame, in the middle of the confirmation.
+     * <p>{@link Role#HIGHLIGHT} rather than a bare accent, and this one matters: a wash takes the colour's
+     * own alpha as its peak, so an opaque colour would blank the document it is confirming, for a frame, in
+     * the middle of the confirmation. HIGHLIGHT is the accent already at the alpha a wash wants.
      *
-     * <p>Played on the tab's page rather than the window, and so a save-all flashes each document as it
-     * lands: the ones that are not on screen paint into an overlay nobody is looking at and clear it again,
-     * which costs nothing and keeps this a statement about a document rather than about the window.
+     * <p>Played on the tab's page rather than the window, so a save-all flashes each document as it lands.
+     * Pages that are not on screen paint into an overlay nobody is looking at and clear it again.
      */
     void saved(EditorTab tab) {
         cues.play(tab.body, Cue.wash(gui.theme().color(Role.HIGHLIGHT)));
@@ -188,17 +181,15 @@ final class Workspace {
     /**
      * Mark {@code tab}'s header as having just received a file: a single pulse of the accent around it.
      *
-     * <p><b>The header, not the page.</b> The page already animates — it slides in under {@code Tabs.slide}
-     * — so a mark there would be motion laid over motion saying the same thing. The header is the half of a
-     * tab that does <em>not</em> move when the selection lands on it, and it is the half that is still on
-     * screen for every document this did not select. That is the case worth having: {@code ls | where ext ==
-     * "java" | first 3 | edit} opens three tabs and can only select the last, and without this the other two
-     * arrive as headers that were silently not there a moment ago.
+     * <p><b>The header, not the page.</b> The page already slides in under {@code Tabs.slide}, so a mark
+     * there would be motion over motion saying the same thing. The header is the half of a tab that does
+     * <em>not</em> move, and the half still on screen for every document this did not select — which is the
+     * case worth having: {@code ls | where ext == "java" | first 3 | edit} opens three tabs and can select
+     * only the last.
      *
-     * <p><b>One pulse, where {@link #warn} takes two.</b> {@code Cue.ring}'s repeat is what the eye reads as
-     * insistence, which is the right shape for a refusal and the wrong one for a document turning up where
-     * it was asked to be. Same cue, same colour vocabulary, one difference — so the two never have to be
-     * told apart by reading the status line.
+     * <p><b>One pulse, where {@link #warn} takes two.</b> {@code Cue.ring}'s repeat reads as insistence,
+     * which is right for a refusal and wrong for a document turning up where it was asked to be. Same cue
+     * and same colour, one difference, so the two never have to be told apart by reading the status line.
      *
      * <p>Null is an ordinary answer here: the caller is often handing over {@link #active()}, which is null
      * when there is nothing open. So is a tab that has been closed between the request and this call, which
@@ -397,8 +388,7 @@ final class Workspace {
                 return;
             }
             // Removing from the bar is the whole action: `open` shrinks in tabRemoved, which the bar calls
-            // back into. Doing it here as well would drop two documents for one close -- and leaving it
-            // here instead is what let the bar's own Close item drop none.
+            // back into. Doing it here as well would drop two documents for one close.
             tabs.remove(tabs.selected());
         }
     }
