@@ -29,6 +29,14 @@ import java.util.List;
  * arrives at {@link #tabRemoved}, and it is why the list is guarded rather than merely thread-confined —
  * the lock is the bar's own monitor, because the invariant being protected spans both structures and a
  * second lock taken in the other order would be a deadlock waiting for a right click during a frame.
+ *
+ * <p><b>What may be called while holding that monitor.</b> Some of it reaches well past the two structures
+ * being guarded: {@link #closeActive} empties a document under the lock, which sets text on the field, marks
+ * its history, re-picks its grammar and writes the status line. That is safe on one property, which is worth
+ * stating because nothing about it is local — none of those blocks on another thread. {@code Gui.async} is a
+ * plain submit and the ramps only schedule, so the monitor is never held across a wait for work that might
+ * itself want it. A right-click builds its menu on a handler thread and asks {@link #at}, so anything that
+ * did block here would deadlock against exactly that.
  */
 final class Workspace {
     final Gui gui;

@@ -138,24 +138,6 @@ final class FileActions implements AutoCloseable {
         this.opened = listener == null ? file -> { } : listener;
     }
 
-    /**
-     * Run {@code line} in this editor's own shell, with the shell where it can be answered.
-     *
-     * <p>Opening the window first is the whole of it: a line submitted this way may well be a form, and a
-     * form asking questions into a window nobody can see is a shell that has silently stopped responding.
-     * Only usable in the arrangement where the terminal is ours — where MainFrame is the host, its window is
-     * already the main one and the line goes through {@code ConsoleContext.run} instead.
-     *
-     * <p>This is the other half of {@link EditorWindow#onOpened}: a host wires that, and this is what it calls.
-     */
-    void runInShell(String line) {
-        if (terminal == null) {
-            return;
-        }
-        openTerminal();
-        terminal.run(line);
-    }
-
     /** {@code launch "editor"}: bring the main window forward. Frame loop, via the console's own queue. */
     private void raiseEditor() {
         app.window().focus();
