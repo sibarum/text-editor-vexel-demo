@@ -155,7 +155,20 @@ public final class TextEditorApp {
             return;
         }
 
-        int maxFrames = args.length > 0 ? Integer.parseInt(args[0]) : 0;
+        // The only positional argument left is a frame cap, and it is a script's argument rather than a user's.
+        // Anything else here is a flag that was misspelled or is no longer understood, and parsing it as a
+        // number threw NumberFormatException out of main -- a stack trace, before any window, for a typo.
+        int maxFrames = 0;
+        if (args.length > 0) {
+            try {
+                maxFrames = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.err.println("unknown option: " + args[0]);
+                System.err.println("usage: TextEditorApp [--capture|--capture-terminal|--capture-folder [out.png]]"
+                        + " [--terminal] [--profile] [frames]");
+                return;
+            }
+        }
         // Placement is read before the window exists, so it is created where it was left rather than moved there
         // after appearing — and clamped on the way, because the desk may have changed shape since.
         // One Settings for the whole application, shared rather than opened twice: two instances over the same
@@ -367,9 +380,17 @@ public final class TextEditorApp {
         // read as though the two spellings both happened -- and FileActions.savedFolder, doing the same job
         // three hundred lines down, tests only isBlank(). One of the two had to be wrong about the contract.
         String shown = memory.shownPath(FolderWindow.KEY);
-        return shown.isBlank()
-                ? ProjectScope.none()
-                : ProjectScope.at(Path.of(shown), PROJECT_FILE);
+        if (shown.isBlank()) {
+            return ProjectScope.none();
+        }
+        try {
+            return ProjectScope.at(Path.of(shown), PROJECT_FILE);
+        } catch (java.nio.file.InvalidPathException e) {
+            // The settings file is hand-editable, so a string that is not a path is reachable. No project is
+            // the right answer to that, as it is to no folder at all -- FileActions.savedFolder does the same
+            // with the same value, and this asking the console to explode over it helped nobody.
+            return ProjectScope.none();
+        }
     }
 
     static void zoomShortcuts(Gui gui) {
