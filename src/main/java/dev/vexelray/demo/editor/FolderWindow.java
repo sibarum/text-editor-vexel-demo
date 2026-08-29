@@ -260,20 +260,12 @@ final class FolderWindow {
      * title bar commands, and where it should be.
      */
     private void onCreated(dev.vexelray.os.NativeWindow window) {
-        titleBar.controls(WindowControls.of(window));
-        if (memory.maximized(KEY)) {
-            window.maximize();
-        } else {
-            memory.restoreBounds(KEY, window, DEFAULT_W, DEFAULT_H);
-        }
-        memory.watch(KEY, window);
+        // No Gui handed over, so this window's zoom is not remembered where the editor's is. That is how it
+        // has always behaved rather than a decision made here, and it is now at least visible as one.
+        WindowChrome.created(memory, KEY, titleBar, window, DEFAULT_W, DEFAULT_H, null);
     }
 
     private void onClosed() {
-        // Stop reading placement off a window that is being destroyed; what was recorded last stands.
-        memory.forget(KEY);
-        // The window this bar commanded is gone; the tree outlives it and is shown again on the next
-        // Ctrl+Shift+O, so the buttons go back to commanding nothing until onCreated rebinds them.
-        titleBar.controls(WindowControls.NONE);
+        WindowChrome.closed(memory, KEY, titleBar);
     }
 }

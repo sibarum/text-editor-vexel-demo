@@ -1,7 +1,6 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.gui.core.Gui;
-import dev.vexelray.gui.core.WindowControls;
 import dev.vexelray.gui.core.app.AppWindow;
 import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.app.WindowMemory;
@@ -184,21 +183,14 @@ public final class EditorWindow {
      * commands, where it should be, and what it was zoomed to.
      */
     private void onCreated(dev.vexelray.os.NativeWindow created) {
-        ws.titleBar.controls(WindowControls.of(created));
-        if (memory.maximized(KEY)) {
-            created.maximize();
-        } else {
-            memory.restoreBounds(KEY, created, TextEditorApp.W, TextEditorApp.H);
-        }
         // Watched with its tree, so the UI zoom is remembered too: Ctrl+= is the same kind of decision as
         // dragging the window bigger, and losing it on quit is the same loss.
-        memory.watch(KEY, created, gui);
+        WindowChrome.created(memory, KEY, ws.titleBar, created, TextEditorApp.W, TextEditorApp.H, gui);
     }
 
     /** The window is gone; the editor is not. What was recorded last stands. */
     private void onClosed() {
-        memory.forget(KEY);
-        ws.titleBar.controls(WindowControls.NONE);
+        WindowChrome.closed(memory, KEY, ws.titleBar);
     }
 
     /** Stop the file tree and anything else this editor owns. The host's console is not ours to close. */
