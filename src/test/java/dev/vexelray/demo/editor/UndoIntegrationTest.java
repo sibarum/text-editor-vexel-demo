@@ -25,11 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class UndoIntegrationTest {
 
-    private record Harness(Gui gui, KronoGui krono, TextEditorApp.Workspace ws) implements AutoCloseable {
+    private record Harness(Gui gui, KronoGui krono, Workspace ws) implements AutoCloseable {
         static Harness open() {
             Gui gui = new Gui(Atchung.create(), Runnable::run);
             KronoGui krono = KronoGui.attach(gui);
-            return new Harness(gui, krono, new TextEditorApp.Workspace(gui, krono));
+            return new Harness(gui, krono, new Workspace(gui, krono));
         }
 
         @Override
@@ -43,7 +43,7 @@ class UndoIntegrationTest {
     @Test
     void anOpenedFileIsCleanAndCannotBeUndoneAway() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
+            EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
 
             assertFalse(tab.dirty(), "a file just opened has no edits");
             assertFalse(tab.editor.history().canUndo(), "and nothing to undo: loading is not an edit");
@@ -55,7 +55,7 @@ class UndoIntegrationTest {
     @Test
     void typingIsUndoableAndUndoingBackIsCleanAgain() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
+            EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
             tab.editor.insert("!");
 
             assertTrue(tab.dirty(), "an edit that is not on disk");
@@ -77,7 +77,7 @@ class UndoIntegrationTest {
     @Test
     void savingMovesTheSavedPositionAndUndoingPastItIsDirty() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.EditorTab tab = h.ws().newTab("first", Path.of("a.txt"), false);
+            EditorTab tab = h.ws().newTab("first", Path.of("a.txt"), false);
             tab.editor.insert(" second");
             tab.savedAs(tab.editor.text());   // what write() does once the bytes have landed
 
@@ -100,7 +100,7 @@ class UndoIntegrationTest {
     @Test
     void theUnsavedListFollowsUndo() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
+            EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
             tab.editor.insert("edited");
             assertEquals(1, h.ws().unsaved().size(), "one document has work that is not on disk");
 
@@ -119,13 +119,13 @@ class UndoIntegrationTest {
     @Test
     void closingTheLastTabLeavesNothingToUndo() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
+            EditorTab tab = h.ws().newTab("on disk", Path.of("a.txt"), false);
             tab.editor.insert(" edited");
             h.ws().tabs.remove(0);   // the welcome tab, so the edited one is the last
 
             h.ws().closeActive();
 
-            TextEditorApp.EditorTab left = h.ws().active();
+            EditorTab left = h.ws().active();
             assertEquals("", left.editor.text());
             assertFalse(left.editor.history().canUndo(), "a closed document is not undone back into view");
             assertFalse(left.dirty());

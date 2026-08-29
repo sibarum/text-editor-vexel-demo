@@ -31,7 +31,7 @@ import java.util.List;
  *
  * <p>{@link TextEditorApp#main} still exists and still works, and is still the editor as its own program with
  * its own terminal on Ctrl+`. The two arrangements are built out of exactly the same parts — see
- * {@link TextEditorApp.Window} — so neither one is a fork of the other.
+ * {@link EditorWindow} — so neither one is a fork of the other.
  *
  * <p>Settings are shared with the standalone editor on purpose: the same {@code text-editor} settings file, so
  * the file tree comes back pointed where it was left whichever way the editor was started. The editor's own

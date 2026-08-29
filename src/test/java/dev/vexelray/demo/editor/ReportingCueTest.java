@@ -34,11 +34,11 @@ class ReportingCueTest {
     /** Longer than the longest cue this application plays, so one of these settles anything in flight. */
     private static final Dur PAST_THE_END = Dur.ms(500);
 
-    private record Harness(Gui gui, KronoGui krono, TextEditorApp.Workspace ws) implements AutoCloseable {
+    private record Harness(Gui gui, KronoGui krono, Workspace ws) implements AutoCloseable {
         static Harness open() {
             Gui gui = new Gui(Atchung.create(), Runnable::run);
             KronoGui krono = KronoGui.attach(gui);
-            return new Harness(gui, krono, new TextEditorApp.Workspace(gui, krono));
+            return new Harness(gui, krono, new Workspace(gui, krono));
         }
 
         /**
@@ -58,16 +58,16 @@ class ReportingCueTest {
         }
     }
 
-    private static TextEditorApp.EditorTab openFile(TextEditorApp.Workspace ws, String name) {
+    private static EditorTab openFile(Workspace ws, String name) {
         return ws.newTab("contents of " + name, Path.of(name), false);
     }
 
     @Test
     void anArrivalMarksThatTabsOwnHeaderAndNoOther() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
-            TextEditorApp.EditorTab a = openFile(ws, "A.txt");
-            TextEditorApp.EditorTab b = openFile(ws, "B.txt");
+            Workspace ws = h.ws();
+            EditorTab a = openFile(ws, "A.txt");
+            EditorTab b = openFile(ws, "B.txt");
 
             ws.arrived(a);
 
@@ -86,9 +86,9 @@ class ReportingCueTest {
     @Test
     void arrivalOnATabThatHasSinceBeenClosedMarksNothing() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
-            TextEditorApp.EditorTab gone = openFile(ws, "B.txt");
+            EditorTab gone = openFile(ws, "B.txt");
             ws.tabs.remove(ws.open.indexOf(gone));
 
             ws.arrived(gone);
@@ -103,7 +103,7 @@ class ReportingCueTest {
     @Test
     void arrivalOnNothingIsQuiet() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             ws.arrived(null);
             assertEquals(0, ws.cues.active());
         }
@@ -113,9 +113,9 @@ class ReportingCueTest {
     @Test
     void aSaveMarksTheDocumentThatWasWrittenRatherThanTheSelectedOne() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
-            TextEditorApp.EditorTab background = openFile(ws, "A.txt");
-            TextEditorApp.EditorTab selected = openFile(ws, "B.txt");
+            Workspace ws = h.ws();
+            EditorTab background = openFile(ws, "A.txt");
+            EditorTab selected = openFile(ws, "B.txt");
 
             ws.saved(background);
 
@@ -132,8 +132,8 @@ class ReportingCueTest {
     @Test
     void everyMarkClearsItselfWhenItsRampRunsOut() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
-            TextEditorApp.EditorTab tab = openFile(ws, "A.txt");
+            Workspace ws = h.ws();
+            EditorTab tab = openFile(ws, "A.txt");
 
             ws.arrived(tab);
             ws.saved(tab);
@@ -154,7 +154,7 @@ class ReportingCueTest {
     @Test
     void aSecondReportDuringTheFirstSettlesCleanly() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
 
             ws.say("Saved one");
             h.krono().tick(Dur.ms(40));   // mid-fade, deliberately

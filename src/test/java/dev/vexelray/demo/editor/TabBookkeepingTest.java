@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The one invariant the whole {@link TextEditorApp.Workspace} rests on: {@code open.get(i)} is the document on
+ * The one invariant the whole {@link Workspace} rests on: {@code open.get(i)} is the document on
  * tab {@code i}. Every command the editor has resolves a tab index against that list — which file Ctrl+S writes,
  * which tab a click in the file tree brings forward, which document a title belongs to — so the moment the two
  * disagree by one the editor keeps drawing perfectly and acts on the wrong file, or on none.
@@ -33,11 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TabBookkeepingTest {
 
     /** The workspace plus the two things it is built from, closed together. */
-    private record Harness(Gui gui, KronoGui krono, TextEditorApp.Workspace ws) implements AutoCloseable {
+    private record Harness(Gui gui, KronoGui krono, Workspace ws) implements AutoCloseable {
         static Harness open() {
             Gui gui = new Gui(Atchung.create(), Runnable::run);
             KronoGui krono = KronoGui.attach(gui);
-            return new Harness(gui, krono, new TextEditorApp.Workspace(gui, krono));
+            return new Harness(gui, krono, new Workspace(gui, krono));
         }
 
         @Override
@@ -48,17 +48,17 @@ class TabBookkeepingTest {
     }
 
     /** Open {@code name} in a tab, the way loading a file does. */
-    private static void openFile(TextEditorApp.Workspace ws, String name) {
+    private static void openFile(Workspace ws, String name) {
         ws.newTab("contents of " + name, Path.of(name), false);
     }
 
     /** Close tab {@code index} the way the header's context menu does: straight at the bar. */
-    private static void closeFromHeaderMenu(TextEditorApp.Workspace ws, int index) {
+    private static void closeFromHeaderMenu(Workspace ws, int index) {
         ws.tabs.remove(index);
     }
 
     /** The list and the bar are the same length, and the visible tab is the one commands will act on. */
-    private static void assertConsistent(TextEditorApp.Workspace ws) {
+    private static void assertConsistent(Workspace ws) {
         assertEquals(ws.tabs.count(), ws.open.size(), "a document per tab, no more and no fewer");
         if (ws.tabs.count() > 0) {
             assertSame(ws.open.get(ws.tabs.selected()), ws.active(),
@@ -69,7 +69,7 @@ class TabBookkeepingTest {
     @Test
     void closingFromTheHeaderMenuDropsTheDocumentTooAndNoOther() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             openFile(ws, "B.txt");
             openFile(ws, "C.txt");
@@ -93,7 +93,7 @@ class TabBookkeepingTest {
     @Test
     void closingEveryTabFromTheMenuThenStartingAgainLeavesNothingBehind() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             openFile(ws, "B.txt");
             openFile(ws, "C.txt");
@@ -123,7 +123,7 @@ class TabBookkeepingTest {
     @Test
     void theTwoWaysToCloseAgreeWithEachOther() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             openFile(ws, "B.txt");
             openFile(ws, "C.txt");
@@ -146,7 +146,7 @@ class TabBookkeepingTest {
     @Test
     void ctrlWOnTheLastTabLeavesAnEmptyOne() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             ws.closeActive();   // A.txt goes
             ws.closeActive();   // the welcome tab is emptied, not removed
@@ -166,7 +166,7 @@ class TabBookkeepingTest {
     @Test
     void closeAllLeavesOneEmptyTabAndNoDocumentsBehind() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             openFile(ws, "B.txt");
             openFile(ws, "C.txt");
@@ -188,7 +188,7 @@ class TabBookkeepingTest {
     void closeAllFromAnyStartingSelectionEndsOnTheTabThatSurvives() {
         for (int start = 0; start < 4; start++) {
             try (Harness h = Harness.open()) {
-                TextEditorApp.Workspace ws = h.ws();
+                Workspace ws = h.ws();
                 openFile(ws, "A.txt");
                 openFile(ws, "B.txt");
                 openFile(ws, "C.txt");
@@ -207,7 +207,7 @@ class TabBookkeepingTest {
     @Test
     void closeAllOnASingleTabEmptiesItRatherThanRemovingIt() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             ws.active().editor.text("typed but never saved");
 
             ws.closeAll();
@@ -222,7 +222,7 @@ class TabBookkeepingTest {
     @Test
     void closeAllAgreesWithTheOtherTwoWaysToClose() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             openFile(ws, "B.txt");
             openFile(ws, "C.txt");
@@ -246,7 +246,7 @@ class TabBookkeepingTest {
     @Test
     void unsavedWorkIsStillAttributedToTheRightDocument() {
         try (Harness h = Harness.open()) {
-            TextEditorApp.Workspace ws = h.ws();
+            Workspace ws = h.ws();
             openFile(ws, "A.txt");
             openFile(ws, "B.txt");
             openFile(ws, "C.txt");

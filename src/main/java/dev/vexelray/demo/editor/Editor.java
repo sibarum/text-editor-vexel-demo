@@ -23,7 +23,7 @@ import java.util.List;
  *         (settings, memory) -> List.of(new Editor(memory)), args);
  * }</pre>
  *
- * <p>Both arrangements are built out of {@link TextEditorApp.Window}, so neither is a fork of the other and
+ * <p>Both arrangements are built out of {@link EditorWindow}, so neither is a fork of the other and
  * neither has to be kept in step with the other by hand. What differs is who owns the frame loop and who is
  * ticking; the tabs, the highlighter, the file dialogs and the file tree are the same code either way.
  *
@@ -42,7 +42,7 @@ import java.util.List;
  */
 public final class Editor implements ConsoleApp {
 
-    private final TextEditorApp.Window window;
+    private final EditorWindow window;
 
     /**
      * What the shell should be asked to run when a file has just been opened, or null for nothing.
@@ -67,7 +67,7 @@ public final class Editor implements ConsoleApp {
      * @param shellLineFor asked about every file that is opened; a line it answers with is run in the console
      */
     public Editor(WindowMemory memory, java.util.function.Function<Path, String> shellLineFor) {
-        this.window = new TextEditorApp.Window(memory);
+        this.window = new EditorWindow(memory);
         this.shellLineFor = shellLineFor == null ? file -> null : shellLineFor;
     }
 
@@ -128,7 +128,7 @@ public final class Editor implements ConsoleApp {
         console.host().ifPresent(window::show);
     }
 
-    /** The request queue and the frame clock are drained here. See {@link TextEditorApp.Window#tick}. */
+    /** The request queue and the frame clock are drained here. See {@link EditorWindow#tick}. */
     @Override
     public void tick() {
         window.tick();
