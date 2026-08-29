@@ -206,6 +206,15 @@ final class Highlighter {
         generation.incrementAndGet();
     }
 
+    /**
+     * Whether {@link #close} has been called. Package-private for the tests: a highlighter that outlives its
+     * document holds a pending tokenize against a field nobody can see, and nothing else about it is visible
+     * from outside.
+     */
+    boolean closed() {
+        return closed;
+    }
+
     /** Every extension that maps to a grammar; the save dialog offers these, so the two cannot drift. */
     static Set<String> knownExtensions() {
         return EXT_TO_SCOPE.keySet();

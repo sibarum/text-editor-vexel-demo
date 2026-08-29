@@ -442,6 +442,29 @@ final class Workspace {
         tab.editor.close();
     }
 
+    /**
+     * Release every open document. Closing a tab one at a time already does this in {@link #tabRemoved};
+     * this is the whole workspace going away at once.
+     *
+     * <p>It has to exist because the editor can be shut without its documents being closed first. Under
+     * MainFrame the editor is a window the shell opens and closes while the process carries on, so a
+     * workspace dropped with ten tabs in it dropped ten highlighters — each holding a generation counter and
+     * reachable from its field's {@code onChange} — and ten fields, every time.
+     *
+     * <p>Emptied rather than merely walked, so closing twice is not closing every document twice.
+     */
+    void close() {
+        List<EditorTab> closing;
+        synchronized (tabs) {
+            closing = new ArrayList<>(open);
+            open.clear();
+        }
+        for (EditorTab tab : closing) {
+            tab.highlighter.close();
+            tab.editor.close();
+        }
+    }
+
     /** Select the next ({@code +1}) or previous ({@code -1}) tab, wrapping around the ends. */
     void cycle(int direction) {
         int n = tabs.count();

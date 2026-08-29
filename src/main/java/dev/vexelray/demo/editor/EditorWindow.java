@@ -193,11 +193,14 @@ public final class EditorWindow {
         WindowChrome.closed(memory, KEY, ws.titleBar);
     }
 
-    /** Stop the file tree and anything else this editor owns. The host's console is not ours to close. */
+    /** Stop the file tree, the documents and the clock. The host's console is not ours to close. */
     public void close() {
         if (files != null) {
             files.close();
         }
+        // The documents too: this object can be closed while the process carries on, so the tabs are not
+        // released by the window going away the way they are when the standalone editor quits.
+        ws.close();
         krono.close();
     }
 }

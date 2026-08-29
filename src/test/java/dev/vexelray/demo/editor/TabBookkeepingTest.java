@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import sibarum.atchung.Atchung;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -239,6 +240,44 @@ class TabBookkeepingTest {
             assertConsistent(ws);
             assertTrue(ws.showFile(Path.of("D.txt")));
             assertSame(ws.open.get(ws.tabs.selected()), ws.active());
+        }
+    }
+
+    /**
+     * Closing the workspace releases every document, not just the tab in front.
+     *
+     * <p>The editor can be shut while the process carries on — under MainFrame it is a window the shell
+     * opens and closes — so documents that were never closed one at a time have to be released here. Each
+     * one that is not keeps a highlighter holding a pending tokenize against a field nobody can see.
+     */
+    @Test
+    void closingTheWorkspaceReleasesEveryDocument() {
+        try (Harness h = Harness.open()) {
+            Workspace ws = h.ws();
+            openFile(ws, "A.txt");
+            openFile(ws, "B.java");
+            openFile(ws, "C.py");
+            List<EditorTab> were = List.copyOf(ws.open);
+            assertEquals(4, were.size(), "the welcome tab plus the three opened");
+
+            ws.close();
+
+            assertTrue(ws.open.isEmpty(), "no documents left behind");
+            for (EditorTab tab : were) {
+                assertTrue(tab.highlighter.closed(), tab.title() + "'s highlighter should be closed");
+            }
+        }
+    }
+
+    /** Closing twice must not close every document twice — a workspace may be shut on more than one path. */
+    @Test
+    void closingTheWorkspaceTwiceIsHarmless() {
+        try (Harness h = Harness.open()) {
+            Workspace ws = h.ws();
+            openFile(ws, "A.txt");
+            ws.close();
+            ws.close();
+            assertTrue(ws.open.isEmpty());
         }
     }
 
