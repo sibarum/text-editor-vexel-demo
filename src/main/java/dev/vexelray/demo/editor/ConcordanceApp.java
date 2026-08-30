@@ -189,6 +189,8 @@ public final class ConcordanceApp implements ConsoleApp {
                 if (uses.isEmpty()) {
                     args.session().out().note("nothing uses " + name
                             + " -- names are matched exactly, and this index has no resolver");
+                } else {
+                    noteIfTheNameIsShared(args, current, name);
                 }
                 List<Value> rows = uses.stream().map(reference -> {
                     SequencedMap<String, Value> row = new LinkedHashMap<>();
@@ -202,6 +204,37 @@ public final class ConcordanceApp implements ConsoleApp {
                 return new Value.ListVal(rows);
             }
         };
+    }
+
+    /**
+     * Say so when a usage list is the union of several declarations that happen to share a simple name.
+     *
+     * <p>The index has no resolver, so {@code usages close} finds every {@code close} whatever the receiver.
+     * That over-approximation is the right choice — an index that silently drops a real usage is worse than one
+     * that offers an extra you can see and dismiss — but only if the reader is told which kind of answer they
+     * are holding. Until now only the <em>empty</em> result said anything, which is exactly backwards: an empty
+     * result from a deliberately generous search is the one answer here that is certain.
+     *
+     * <p>It fires only when more than one type declares the name, because that is the only case where the rows
+     * can mislead. With one declaration every row really is a use of it, and a caveat repeated where it cannot
+     * apply is a nag rather than a warning.
+     */
+    private static void noteIfTheNameIsShared(Args args, Index index, String name) {
+        List<String> owners = index.namesContaining(name).stream()
+                .filter(symbol -> symbol.name().equals(name))
+                .map(Symbol::owner)
+                .filter(owner -> owner != null && !owner.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
+        if (owners.size() < 2) {
+            return;
+        }
+        String shown = String.join(", ", owners.subList(0, Math.min(owners.size(), 4)));
+        String rest = owners.size() > 4 ? ", and " + (owners.size() - 4) + " more" : "";
+        args.session().out().note(owners.size() + " types declare " + name
+                + " -- these rows are every use of that name, not only the ones on one of them: "
+                + shown + rest);
     }
 
     // --- impls ---------------------------------------------------------------------------------
