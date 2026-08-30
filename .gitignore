@@ -2,3 +2,4 @@ target/
 *.png
 .idea/
 *.iml
+!docs/images/*.png

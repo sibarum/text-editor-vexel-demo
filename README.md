@@ -4,6 +4,11 @@ A deceptively simple text editor built on [vexelray-gui](../vexelray-gui): a tit
 `TextField` (word wrap, line numbers, selection, cut/copy/paste via the OS clipboard, caret-follow
 scrolling), and a status line — rendered as one batched SDF draw.
 
+![The editor showing pom.xml beside the Navigator window](docs/images/editor-navigator.png)
+
+*The editor and the file tree, each drawing its own title bar, each on its own rotation of the same
+nine-number dark palette.*
+
 ## Prerequisites
 
 The sibling stack installed to the local Maven repo, in order: `supirvast`, `vexelray`,
@@ -234,3 +239,14 @@ mvn compile exec:exec "-Dapp.args=600" "-Dapp.args2=--terminal"   # both windows
 
 (`app.args` and `app.args2` are one token each — a Maven property is not a command line. Blanks are dropped, so
 an unused slot costs nothing.)
+
+## Testing an interaction
+
+Headless `--capture` renders a settled tree to a PNG: it has no pointer and no frame loop, so it proves
+what the editor *looks* like and nothing about what it *does*. The complement is
+[`vexelray-gui-harness`](../vexelray-gui/vexelray-gui-harness), which runs this application's real loop
+with a synthetic pointer and asserts the question captures cannot ask — after a click, does a frame
+arrive on its own?
+
+That is the question Reveal in Navigator got wrong, invisibly, for weeks. See
+[docs/testing-interaction.md](docs/testing-interaction.md).
