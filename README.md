@@ -105,6 +105,11 @@ under `%TEMP%` and native-image's own probes are exactly that, and `/SUBSYSTEM:W
 `/ENTRY:mainCRTStartup` so no console window appears beside the editor. The last two are the Windows
 linker's; a native build elsewhere drops them.
 
+One more Windows-only step sits ahead of the link: `rc.exe` compiles `src/main/rc/editor.rc` into
+`target/editor.res`, and that `.res` goes to the linker as an input. It is what puts the icon on the file on
+disk — see [The icon](#the-icon) — and it expects the Windows SDK's resource compiler on `PATH`, which is
+what a Visual Studio developer prompt does, the same shell that puts `link.exe` there for native-image.
+
 `src/main/resources/META-INF/native-image` holds two files, kept apart on purpose. The first is this
 application's traced reflective surface — including the sixteen `grammars/*.tmLanguage.json`, joni's Unicode
 tables and TM4E's four `Raw*` grammar classes, which is the whole of the syntax highlighting, and the
@@ -124,6 +129,30 @@ Verified from the executable, not from the JVM arrangement: `--capture` draws th
 renders the MainFrame console with this app's own commands in it, and `--capture-folder` renders the file
 tree. Highlighting and the file dialogs are not reachable from this executable headlessly — it takes no path
 argument — so the proof for those is `mainframe.exe`, which carries the same code and the same metadata.
+
+## The icon
+
+The mark is `prompt` from [vexelray-icons](../vexelray-icons) — a coral pen nib on its writing rule, on the
+same 96px grid as the rest of the VexelRay marks. It is the one mark in that sheet that is about writing text
+rather than drawing, and it is not `mainframe`, which the terminal window already wears.
+
+It is worn in two places, and they are set two different ways:
+
+- **The window** — title bar, Alt-Tab, taskbar. `AppIcon` reads the six PNGs under
+  `src/main/resources/icons` at startup and hands them to `NativePlatform.setApplicationIcon`, which is the
+  icon of the *process*: the editor, the Navigator and the terminal are three windows of one program, none of
+  them names an icon of its own, so all three inherit it. Set before the first window exists, so nothing is
+  ever shown under the generic icon and then corrected. Six sizes rather than one because the window manager
+  asks for a size the application never sees, and answers out of what it was given.
+- **The executable** — Explorer, a pinned taskbar button, a shortcut. That is a linked resource, not a file
+  the program reads, so `src/main/rc/editor.rc` names `editor.ico` beside it and the `native` profile has
+  `rc.exe` compile the pair into `target/editor.res` for the linker.
+
+Both come from the same artwork. To change it, rasterise the SVG to the six PNGs, then repack the `.ico`:
+
+```bash
+java tools/MakeIco.java
+```
 
 ## The terminal window
 

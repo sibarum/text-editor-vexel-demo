@@ -3,3 +3,4 @@ target/
 .idea/
 *.iml
 !docs/images/*.png
+!src/main/resources/icons/*.png

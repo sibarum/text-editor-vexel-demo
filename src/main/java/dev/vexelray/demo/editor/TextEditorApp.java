@@ -188,6 +188,9 @@ public final class TextEditorApp {
         // file each hold their own copy of it, so the second one to save would drop whatever the first had added.
         Settings settings = Settings.open("text-editor");
         WindowMemory memory = new WindowMemory(settings);
+        // The mark goes on the process before the first window exists, so every window this application opens --
+        // the editor, the Navigator, the terminal -- is shown wearing it rather than corrected into it.
+        AppIcon.install();
         try (Tactroller input = openInput();
              GuiApp app = new GuiApp(memory.config(MAIN_KEY, "Text Editor", W, H)
                      .decorations(Decorations.CLIENT));

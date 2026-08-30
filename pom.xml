@@ -254,6 +254,32 @@
                                     </target>
                                 </configuration>
                             </execution>
+                            <!--
+                              The executable's icon. An icon on a Windows program is not a file it reads, it is a
+                              resource linked into it, so it has to exist as a compiled .res before link time:
+                              rc.exe turns src/main/rc/editor.rc (and the editor.ico beside it) into one, and the
+                              linker takes it as an input like any object file. The window's own icon is a
+                              separate matter and needs none of this: AppIcon reads the PNGs at startup.
+
+                              rc.exe is the Windows SDK's resource compiler, and this expects it on PATH, which is
+                              what a Visual Studio developer prompt does, the same shell that puts link.exe there
+                              for native-image.
+                            -->
+                            <execution>
+                                <id>compile-icon-resource</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target>
+                                        <exec executable="rc.exe" searchpath="true" failonerror="true">
+                                            <arg value="/nologo"/>
+                                            <arg value="/fo"/>
+                                            <arg file="${project.build.directory}/editor.res"/>
+                                            <arg file="${project.basedir}/src/main/rc/editor.rc"/>
+                                        </exec>
+                                    </target>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                     <plugin>
@@ -294,6 +320,8 @@
                                      main. Windows linker options; a native build elsewhere drops these two. -->
                                 <buildArg>-H:NativeLinkerOption=/SUBSYSTEM:WINDOWS</buildArg>
                                 <buildArg>-H:NativeLinkerOption=/ENTRY:mainCRTStartup</buildArg>
+                                <!-- The icon resource compiled just above: an input to the link, not a switch. -->
+                                <buildArg>-H:NativeLinkerOption=${project.build.directory}/editor.res</buildArg>
                             </buildArgs>
                         </configuration>
                     </plugin>
