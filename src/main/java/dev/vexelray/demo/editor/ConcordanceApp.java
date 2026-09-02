@@ -43,10 +43,24 @@ import java.util.SequencedMap;
  */
 public final class ConcordanceApp implements ConsoleApp {
 
-    /** The built index, and where it was built from. Null until {@code index} has been run. */
-    private Index index;
-    private Path indexedRoot;
-    private String builtSummary = "";
+    /**
+     * The built index, and where it was built from. Empty until {@code index} has been run.
+     *
+     * <p>Not this app's own field any more: Ctrl+click on a name in a document asks the same index the same
+     * questions, from a place with no shell in it, so the index is something both are handed. See
+     * {@link SourceIndex}.
+     */
+    private final SourceIndex shared;
+
+    /** Build on a shared index — the arrangement the editor uses, where documents navigate by it too. */
+    public ConcordanceApp(SourceIndex shared) {
+        this.shared = shared == null ? new SourceIndex() : shared;
+    }
+
+    /** Build on an index of its own, for a console with no editor beside it. */
+    public ConcordanceApp() {
+        this(new SourceIndex());
+    }
 
     @Override
     public String name() {
@@ -105,9 +119,7 @@ public final class ConcordanceApp implements ConsoleApp {
                 }
                 long millis = (System.nanoTime() - started) / 1_000_000;
 
-                index = built;
-                indexedRoot = root;
-                builtSummary = built.summary();
+                shared.built(built, root, built.summary());
 
                 int files;
                 try {
@@ -282,12 +294,13 @@ public final class ConcordanceApp implements ConsoleApp {
      * empty result that looks like a genuine answer.
      */
     private Index require(Args args) {
-        if (index == null) {
+        Index current = shared.index();
+        if (current == null) {
             throw args.fail("E902", "there is no index yet")
                     .hint("run: index .")
                     .hint("or point it somewhere: index ../vexelray-gui").build();
         }
-        return index;
+        return current;
     }
 
     private static Value rowsOfSymbols(List<Symbol> symbols) {
@@ -301,10 +314,5 @@ public final class ConcordanceApp implements ConsoleApp {
             return (Value) new Value.Rec(row);
         }).toList();
         return new Value.ListVal(rows);
-    }
-
-    /** What the status line can say about this app, when there is anything to say. */
-    public String indexStatus() {
-        return index == null ? "" : indexedRoot.getFileName() + ": " + builtSummary;
     }
 }

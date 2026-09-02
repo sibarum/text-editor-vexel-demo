@@ -75,12 +75,52 @@ final class FileActions implements AutoCloseable {
     private volatile java.util.function.Consumer<Path> opened = file -> { };
 
     /**
+     * How to reach a console this class does not own — MainFrame's, when the editor is a window it opened.
+     * Null standalone, where {@link #terminal} is the console and there is nobody else to ask.
+     */
+    private volatile java.util.function.Consumer<String> shellLine;
+
+    /** Say how to reach the host's console. Only meaningful when this editor has no terminal of its own. */
+    void onShellLine(java.util.function.Consumer<String> runner) {
+        this.shellLine = runner;
+    }
+
+    /**
+     * How to write a line into a console without running it — an offer, rather than a thing already done.
+     * Null standalone, where {@link #terminal} takes it directly.
+     */
+    private volatile java.util.function.Consumer<String> shellNote;
+
+    /** Say how to write into the host's console. The twin of {@link #onShellLine}, for things not yet done. */
+    void onShellNote(java.util.function.Consumer<String> writer) {
+        this.shellNote = writer;
+    }
+
+    /** The project index, for noticing that a folder just opened is one nothing has been indexed from. */
+    private final SourceIndex source;
+
+    /** Maven roots this session has already indexed, so a folder reopened does not index it again. */
+    private final java.util.Set<Path> indexed = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
      * @param ownConsole whether to open a terminal of this application's own — false when the editor is
      *                   hosted by a console it did not open and must not open a second one
      * @param owner      where a modal dialog parents; see {@link #owner}
      */
     FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, boolean ownConsole,
                 KronoGui krono, java.util.function.LongSupplier owner, FolderWindow folder) {
+        this(gui, ws, app, memory, ownConsole, krono, owner, folder, new SourceIndex());
+    }
+
+    /**
+     * @param source the project index this editor's documents link by. Only consulted when a console of this
+     *               editor's own is being built, which is the one case where Concordance has to be plugged in
+     *               here rather than by whoever already owns a shell.
+     */
+    FileActions(Gui gui, Workspace ws, GuiApp app, WindowMemory memory, boolean ownConsole,
+                KronoGui krono, java.util.function.LongSupplier owner, FolderWindow folder,
+                SourceIndex source) {
+        this.source = source == null ? new SourceIndex() : source;
         this.gui = gui;
         this.ws = ws;
         this.app = app;
@@ -104,9 +144,17 @@ final class FileActions implements AutoCloseable {
         // Skipped entirely when MainFrame is the host: there the same three commands are registered against
         // the console that is already running, by Editor, so building one here would be a second shell in a
         // second window answering to the same keys.
+        //
+        // Concordance goes in beside it, on the same index the documents link by. Without it the standalone
+        // editor would be the one arrangement where Ctrl+click could never work — there would be no `index`
+        // to run, and so nothing for a document's links to be built from.
         this.terminal = !ownConsole ? null
                 : new Console(TextEditorApp.consoleSpec(memory)
                         .app(new EditorApp(this::openPath, this::revealPath, this::raiseEditor))
+                        // this.source, not the parameter: the two differ when null was passed, and the
+                        // difference is invisible until nothing works -- `index` would fill one index while
+                        // every document read another, both of them empty as far as the other could tell.
+                        .app(new ConcordanceApp(this.source))
                         .build());
         // The header menu, past the Close the bar puts there itself. These two are the application's because
         // both are about what a tab *is* here that the bar cannot know: one document among others, and a file
@@ -150,6 +198,175 @@ final class FileActions implements AutoCloseable {
     }
 
     /**
+     * A Maven project has come into view: index it, and let the terminal show that happening.
+     *
+     * <p><b>Run, not offered.</b> An editor that can follow a name is expected to be able to follow it, not to
+     * explain the command that would make it able to — an index the reader has to ask for is a feature they
+     * have to already know about. So opening a project indexes it, the way an IDE does.
+     *
+     * <p><b>And the run is echoed rather than hidden</b>, which is the part worth keeping. The line goes
+     * through the console as if it had been typed, so the work this editor does on the reader's behalf is a
+     * line in the scrollback with its own output under it — how long it took, how many files, how many
+     * symbols. Nothing happens in a background nobody can see, and the same line can be typed again, pointed
+     * somewhere else, or piped. Transparency is what an automatic action costs, and this is how it is paid.
+     *
+     * <p><b>One root only.</b> Several — a directory of unrelated checkouts — is a choice rather than a
+     * conclusion, and the index holds one project at a time, so indexing them in turn would leave only the
+     * last and look like the others had failed. That case is still offered rather than taken.
+     *
+     * <p>Once per root per session, and never for the root already indexed.
+     */
+    private void indexProject(Path dir) {
+        Path already = source.root();
+        List<Path> roots = mavenRoots(dir);
+        if (roots.isEmpty()) {
+            return;
+        }
+        if (roots.size() > 1) {
+            note("Several Maven projects here - index the one you want:");
+            for (Path root : roots) {
+                note("    index " + root);
+            }
+            return;
+        }
+        Path root = roots.getFirst().toAbsolutePath().normalize();
+        if (already != null && root.equals(already.toAbsolutePath().normalize())) {
+            return;   // already the indexed project; re-running would cost seconds to learn nothing
+        }
+        if (!indexed.add(root)) {
+            return;   // tried once this session; a reopened folder is not a reason to index again
+        }
+        if (!runQuietly("index " + root)) {
+            // No console to run it in, so the reader is told what they would have to run themselves.
+            note("Ctrl+click needs an index. Run: index " + root);
+        }
+    }
+
+    /**
+     * Run {@code line} in whichever console there is, without putting its window in front.
+     *
+     * <p>The difference from {@link #navigation}'s {@code shell} is the window, and it matters: that one is
+     * answering a question the reader just asked by Ctrl+clicking, so the answer has to be visible. This one
+     * is work the editor started by itself, and a terminal that leaps in front of the document because a
+     * folder was restored at startup would be the automatic behaviour making itself the reader's problem.
+     * It still lands in the scrollback, where looking is a keystroke away.
+     */
+    private boolean runQuietly(String line) {
+        if (terminal != null) {
+            // Standalone, and only if the terminal has actually been up: a session that was never started has
+            // no job thread to submit to, and opening the window to start one is the very thing this must not
+            // do. Closed, the line is written instead, and it is there when the terminal is opened.
+            if (!terminal.isOpen()) {
+                return false;
+            }
+            terminal.submit(line);
+            return true;
+        }
+        java.util.function.Consumer<String> host = shellLine;
+        if (host == null) {
+            return false;
+        }
+        host.accept(line);
+        return true;
+    }
+
+    /**
+     * The Maven roots in {@code dir}: itself if it holds a {@code pom.xml}, otherwise whichever of its
+     * immediate children do.
+     *
+     * <p>Two levels and no further, deliberately. A root pom names its own modules and Concordance reads them
+     * from it, so walking into them here would offer to index the parts of a project separately from the
+     * project. Looking one level down is for the other shape — a directory of unrelated checkouts — where
+     * there is no root pom to find and each child is its own project.
+     */
+    static List<Path> mavenRoots(Path dir) {
+        if (dir == null || !java.nio.file.Files.isDirectory(dir)) {
+            return List.of();
+        }
+        if (java.nio.file.Files.isRegularFile(dir.resolve("pom.xml"))) {
+            return List.of(dir);
+        }
+        try (java.util.stream.Stream<Path> children = java.nio.file.Files.list(dir)) {
+            return children.filter(java.nio.file.Files::isDirectory)
+                    .filter(child -> java.nio.file.Files.isRegularFile(child.resolve("pom.xml")))
+                    .sorted()
+                    .toList();
+        } catch (java.io.IOException e) {
+            return List.of();   // unreadable directory: nothing to offer, not a failure worth reporting
+        }
+    }
+
+    /** Write a line into whichever console there is, without running it. Silent when there is none. */
+    private void note(String line) {
+        if (terminal != null) {
+            terminal.post(line);
+            return;
+        }
+        java.util.function.Consumer<String> writer = shellNote;
+        if (writer != null) {
+            writer.accept(line);
+        }
+    }
+
+    /**
+     * Where a Ctrl+click link goes, as {@link SymbolLinks} needs it.
+     *
+     * <p>Here because all three of them are here: opening a file into a tab, the status line, and the console
+     * — which is this class's own terminal standalone, and the host's under MainFrame, reached through
+     * {@code shellLine}. That is the only difference between the two arrangements, and it is one field.
+     */
+    SymbolLinks.Host navigation() {
+        return new SymbolLinks.Host() {
+            @Override
+            public void jump(Path file, String name, int line) {
+                openAt(file, name, line);
+            }
+
+            @Override
+            public void say(String message) {
+                ws.say(message);
+            }
+
+            @Override
+            public boolean shell(String line) {
+                if (terminal != null) {
+                    // Standalone: the editor owns a terminal, so open it and put the line in. Opening it is
+                    // part of answering -- an answer written into a window nobody can see is not one.
+                    openTerminal();
+                    terminal.submit(line);
+                    return true;
+                }
+                java.util.function.Consumer<String> host = shellLine;
+                if (host == null) {
+                    return false;
+                }
+                host.accept(line);
+                return true;
+            }
+
+            @Override
+            public void note(String line) {
+                FileActions.this.note(line);
+            }
+        };
+    }
+
+    /**
+     * Open {@code file} and put the caret on {@code name}, which the index recorded on {@code line} — what
+     * Ctrl+click on a name does once the declaration has been found.
+     *
+     * <p><b>One post, not two.</b> The load and the caret placement are the same request, and posting them
+     * separately would let anything already queued run between them — a second Ctrl+click, or an open from
+     * the tree — leaving the caret placed in whichever document arrived last instead of the one asked for.
+     */
+    void openAt(Path file, String name, int line) {
+        app.post(() -> {
+            loadInto(file);
+            ws.caretOn(file, name, line);
+        });
+    }
+
+    /**
      * Point the folder window at {@code dir} — MainFrame's {@code reveal}.
      *
      * <p>On {@link GuiApp#post} rather than this class's own queue, and the difference is a frame
@@ -168,6 +385,7 @@ final class FileActions implements AutoCloseable {
         app.post(() -> {
             folder.show(app, dir);
             ws.say("Folder: " + dir);
+            indexProject(dir);
         });
     }
 
@@ -399,6 +617,7 @@ final class FileActions implements AutoCloseable {
             }
             folder.show(app, dir);
             ws.say("Folder: " + dir);
+            indexProject(dir);
         } catch (RuntimeException e) {
             ws.warn("Open folder failed: " + e.getMessage());
         }
@@ -443,6 +662,10 @@ final class FileActions implements AutoCloseable {
             // The file is in a tab and the status line says so; only now is it true that it was opened, and
             // only the path is passed on -- what is interesting about a file is not this class's business.
             opened.accept(picked);
+            // And index the project this file belongs to, if it is one and nothing has indexed it yet. A file
+            // can be opened without any folder ever having been: `edit ../other/Thing.java` from the shell is
+            // the ordinary way into a project the file tree has never pointed at.
+            indexProject(SymbolLinks.projectRootOf(picked.toAbsolutePath().normalize()));
         } catch (RuntimeException | java.io.IOException e) {
             ws.warn("Open failed: " + e.getMessage());
         }

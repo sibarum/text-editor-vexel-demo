@@ -82,8 +82,73 @@ final class Workspace {
     private final java.util.concurrent.atomic.AtomicInteger saying =
             new java.util.concurrent.atomic.AtomicInteger();
 
+    /** The project index every document's Ctrl+click links are built from. Never null; may hold nothing. */
+    private final SourceIndex source;
+
+    /**
+     * Where following a link actually goes, once there is something to go through.
+     *
+     * <p>Mutable because of an ordering that is not negotiable: the welcome tab is made in this constructor,
+     * so a document — and its links — exists before {@link FileActions} does, and opening a file is the file
+     * actions' work. Set once, by whoever built them; until then, following a link does nothing.
+     */
+    private volatile SymbolLinks.Host destination = NOWHERE;
+
+    /**
+     * The host every document is handed, which never changes identity. It reads {@link #destination} at the
+     * moment a link is followed rather than closing over what it was at construction — which is the whole
+     * point, the welcome tab having been built before there was anywhere to go.
+     */
+    private final SymbolLinks.Host navigation = new SymbolLinks.Host() {
+        @Override
+        public void jump(Path file, String name, int line) {
+            destination.jump(file, name, line);
+        }
+
+        @Override
+        public void say(String message) {
+            destination.say(message);
+        }
+
+        @Override
+        public boolean shell(String line) {
+            return destination.shell(line);
+        }
+
+        @Override
+        public void note(String line) {
+            destination.note(line);
+        }
+    };
+
+    /** Before anything has been wired: a link that is followed leads nowhere, quietly. */
+    private static final SymbolLinks.Host NOWHERE = new SymbolLinks.Host() {
+        @Override
+        public void jump(Path file, String name, int line) {
+        }
+
+        @Override
+        public void say(String message) {
+        }
+
+        @Override
+        public boolean shell(String line) {
+            return false;
+        }
+
+        @Override
+        public void note(String line) {
+        }
+    };
+
+    /** A workspace with no project index behind it: no links, and Ctrl+click finds nothing to follow. */
     Workspace(Gui gui, KronoGui krono) {
+        this(gui, krono, new SourceIndex());
+    }
+
+    Workspace(Gui gui, KronoGui krono, SourceIndex source) {
         this.gui = gui;
+        this.source = source == null ? new SourceIndex() : source;
         this.tabs = new Tabs(gui);
         this.arrival = krono == null ? null
                 : (progress, done) -> krono.ramp(TextEditorApp.TRANSITION, Ease.LINEAR, progress, done);
@@ -253,6 +318,14 @@ final class Workspace {
                 });
     }
 
+    /**
+     * Say where following a link goes. Called once, by whoever built the {@link FileActions} it needs —
+     * {@link EditorWindow} under MainFrame, {@link TextEditorApp} standalone.
+     */
+    void navigation(SymbolLinks.Host to) {
+        this.destination = to == null ? NOWHERE : to;
+    }
+
     /** Open a new tab holding {@code content}, select it, and return it. */
     EditorTab newTab(String content, Path file, boolean crlf) {
         TextField editor = new TextField(gui, content).multiline(true).wordWrap(true).lineNumbers(true);
@@ -265,7 +338,8 @@ final class Workspace {
                 .lit(gui.theme().lit()).elevation(Length.rem(1))
                 .padding(Length.dp(12))
                 .children(editor.node());
-        EditorTab tab = new EditorTab(editor, new Highlighter(gui, editor), body, content);
+        EditorTab tab = new EditorTab(editor, new Highlighter(gui, editor),
+                new SymbolLinks(gui, editor, source, navigation), body, content);
         tab.file = file;
         tab.crlf = crlf;
         synchronized (tabs) {
@@ -274,6 +348,7 @@ final class Workspace {
             tabs.select(open.size() - 1);
         }
         tab.highlighter.language(tab.title());
+        tab.links.file(file);
         return tab;
     }
 
@@ -377,6 +452,10 @@ final class Workspace {
             tabs.title(i, tab.title());
         }
         tab.highlighter.language(tab.title());
+        // The same two facts the grammar needs, for the same reason: this is the one place a document's
+        // identity changes without a new tab being made — an open-into and a save-as both land here — and a
+        // document's links are about which file it is, not about what is in it.
+        tab.links.file(tab.file);
     }
 
     /** Close the active tab. The last tab is not removed but reset to an empty untitled document. */
@@ -447,6 +526,7 @@ final class Workspace {
         // The page left the tree with the tab, so these came back dead rather than dormant. Closing them
         // releases what the removal did not: the highlighter's pending tokenize and the field's own state.
         tab.highlighter.close();
+        tab.links.close();
         tab.editor.close();
     }
 
@@ -469,9 +549,63 @@ final class Workspace {
         }
         for (EditorTab tab : closing) {
             tab.highlighter.close();
+            tab.links.close();
             tab.editor.close();
         }
     }
+
+    /**
+     * Put the caret on {@code name} in the tab holding {@code file}, near {@code line}.
+     *
+     * <p><b>Near, not on.</b> The line came from an index that is a snapshot, and the document may have been
+     * typed in since it was taken. So the recorded line is tried first and then rings outward looking for the
+     * name, and the search gives up rather than landing somewhere arbitrary — a caret that did not move is a
+     * better answer than a caret in the wrong method.
+     *
+     * <p>The name is selected rather than merely pointed at, so that arriving somewhere shows what was
+     * arrived at.
+     */
+    void caretOn(Path file, String name, int line) {
+        EditorTab tab;
+        synchronized (tabs) {
+            tab = active();
+        }
+        if (tab == null || tab.file == null || !tab.file.equals(file)) {
+            return;
+        }
+        String text = tab.editor.text();
+        int[] starts = SymbolLinks.lineStarts(text);
+        int at = nearestOccurrence(text, starts, name, line - 1);
+        if (at >= 0) {
+            tab.editor.select(at, at + name.length());
+        }
+    }
+
+    /**
+     * The occurrence of {@code name} on the line closest to {@code wanted}, or -1 if it is on none of them.
+     * Searched outward from the recorded line so a file that has grown or shrunk by a few lines still lands.
+     */
+    private static int nearestOccurrence(String text, int[] starts, String name, int wanted) {
+        for (int radius = 0; radius <= SEARCH_LINES; radius++) {
+            for (int line : radius == 0 ? new int[]{wanted} : new int[]{wanted - radius, wanted + radius}) {
+                if (line < 0 || line >= starts.length) {
+                    continue;
+                }
+                int from = starts[line];
+                int to = line + 1 < starts.length ? starts[line + 1] : text.length();
+                // Whole words, and the same scan the links themselves were built with: a jump that landed on
+                // the "area" inside "areaOf" would go somewhere the underline never was.
+                int found = SymbolLinks.wholeWordIn(text, name, from, to);
+                if (found >= 0) {
+                    return found;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** How far either side of the recorded line {@link #caretOn} will look. Beyond this, the index is stale. */
+    private static final int SEARCH_LINES = 40;
 
     /** Select the next ({@code +1}) or previous ({@code -1}) tab, wrapping around the ends. */
     void cycle(int direction) {

@@ -65,6 +65,10 @@ public final class TextEditorDesktop {
      *                 own state lives in the window memory and Concordance's index lives for the session
      */
     private static List<ConsoleApp> apps(Settings settings, WindowMemory memory) {
-        return List.of(new Editor(memory), new ConcordanceApp());
+        // One index, held by neither of them. Concordance's `index` fills it in and the editor's documents
+        // read it, which is what makes Ctrl+click on a name in a tab and `usages` on the command line two
+        // ways of asking the same index rather than two indexes that happen to agree.
+        SourceIndex source = new SourceIndex();
+        return List.of(new Editor(memory, file -> null, source), new ConcordanceApp(source));
     }
 }

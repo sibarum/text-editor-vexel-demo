@@ -149,7 +149,11 @@ public final class TextEditorApp {
         // The frame clock. Attached before the UI is built, because a widget that animates is handed its timing
         // at construction, and ticked from the run loop's beforeFrame hook below -- one tick per presented frame.
         KronoGui krono = KronoGui.attach(gui);
-        Workspace ws = new Workspace(gui, krono);
+        // The project index, shared between this editor's documents and the Concordance commands in its own
+        // terminal. Built empty: `index .` in the terminal is what fills it, and until then a document has no
+        // links and Ctrl+click finds nothing under the pointer.
+        SourceIndex source = new SourceIndex();
+        Workspace ws = new Workspace(gui, krono, source);
         zoomShortcuts(gui);
 
         if (args.length >= 1 && args[0].equals("--capture")) {
@@ -209,7 +213,10 @@ public final class TextEditorApp {
             // The editor is this application's main window, so that is what a dialog parents to, and it already
             // exists by the time anything can ask.
             FileActions files =
-                    new FileActions(gui, ws, app, memory, true, krono, app::windowHandle, null);
+                    new FileActions(gui, ws, app, memory, true, krono, app::windowHandle, null, source);
+            // The documents have existed since the workspace was built; only now is there anywhere for a
+            // Ctrl+click to go, so this is where their links are told about it.
+            ws.navigation(files.navigation());
             files.shortcuts();
             // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
             // gate that can still ask about unsaved work while the window stays open.

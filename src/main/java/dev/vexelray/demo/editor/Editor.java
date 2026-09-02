@@ -67,7 +67,18 @@ public final class Editor implements ConsoleApp {
      * @param shellLineFor asked about every file that is opened; a line it answers with is run in the console
      */
     public Editor(WindowMemory memory, java.util.function.Function<Path, String> shellLineFor) {
-        this.window = new EditorWindow(memory);
+        this(memory, shellLineFor, new SourceIndex());
+    }
+
+    /**
+     * @param memory       as above
+     * @param shellLineFor as above
+     * @param source       the project index shared with {@link ConcordanceApp} in the same console, so that
+     *                     {@code index .} lights up Ctrl+click in every open document
+     */
+    public Editor(WindowMemory memory, java.util.function.Function<Path, String> shellLineFor,
+                  SourceIndex source) {
+        this.window = new EditorWindow(memory, source);
         this.shellLineFor = shellLineFor == null ? file -> null : shellLineFor;
     }
 
@@ -107,6 +118,13 @@ public final class Editor implements ConsoleApp {
                 console.run(line);
             }
         });
+        // The same seam, the other way round: a document that has been Ctrl+clicked asks a question the editor
+        // cannot answer by itself, and it is asked here as a typed line for the same reason -- the answer
+        // arrives as rows in the scrollback, which pipe into `edit` like every other query in this shell.
+        window.onShellLine(console::run);
+        // And the offer, which is written rather than run: opening a folder that holds a Maven project says
+        // so and says what would index it, leaving the decision where it belongs.
+        window.onShellNote(console::post);
     }
 
     /** The editor window always exists while MainFrame is running, so it can always be opened. */

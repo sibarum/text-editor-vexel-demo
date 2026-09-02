@@ -64,6 +64,22 @@ public final class EditorWindow {
      */
     private volatile java.util.function.Consumer<Path> opened = file -> { };
 
+    /** The project index this editor's documents link by, shared with the shell that builds it. */
+    private final SourceIndex source;
+
+    /**
+     * How to ask the host's shell to run a line, or null when there is no shell — the standalone editor
+     * before its terminal has been opened, and any host that is not MainFrame.
+     *
+     * <p>The twin of {@link #opened}: that one lets the host say something about a file that was opened, and
+     * this one lets the editor ask the host to run a query it cannot answer alone. Both keep the console the
+     * place where answers appear, rather than growing a second one in here.
+     */
+    private volatile java.util.function.Consumer<String> shell;
+
+    /** How to write into the host's console without running anything — see {@link #onShellNote}. */
+    private volatile java.util.function.Consumer<String> note;
+
     /**
      * Build the editor, without opening anything.
      *
@@ -71,11 +87,22 @@ public final class EditorWindow {
      *               this desk, because a window memory is one file with one key per window
      */
     public EditorWindow(WindowMemory memory) {
+        this(memory, new SourceIndex());
+    }
+
+    /**
+     * Build the editor over a shared project index, so Ctrl+click on a name in a document can follow it.
+     *
+     * @param source the index the shell builds with {@code index} — see {@link SourceIndex}. An editor handed
+     *               one that stays empty behaves exactly as one built without: no links, nothing to follow.
+     */
+    public EditorWindow(WindowMemory memory, SourceIndex source) {
         this.memory = memory;
+        this.source = source == null ? new SourceIndex() : source;
         gui.theme(Palettes.EDITOR);
         gui.minSize(Length.em(30), Length.em(22));
         this.krono = KronoGui.attach(gui);
-        this.ws = new Workspace(gui, krono);
+        this.ws = new Workspace(gui, krono, this.source);
         // Method references on this, so the tree can be wired before the thing it reaches is built: both
         // of these queue onto FileActions once there is one, and drop the request until then.
         this.folder = new FolderWindow(this::openPath, this::revealPath, memory, krono);
@@ -103,6 +130,40 @@ public final class EditorWindow {
         }
     }
 
+    /**
+     * Be told what line to run when a document asks a question the editor cannot answer on its own — which
+     * usages a declaration has, which of several declarations a name means.
+     *
+     * <p>Set by whoever owns a console. Left unset, following such a link says so on the status line instead
+     * of quietly doing nothing.
+     */
+    public void onShellLine(java.util.function.Consumer<String> runner) {
+        this.shell = runner;
+        if (files != null) {
+            files.onShellLine(runner);
+        }
+    }
+
+    /**
+     * Be told what to write into the console without running it — how opening a folder that holds a Maven
+     * project offers to index it.
+     *
+     * <p>Separate from {@link #onShellLine} because the two are different speech acts: that one reports
+     * something the editor has already decided to do, and this one puts a line in front of the reader and
+     * leaves the decision with them.
+     */
+    public void onShellNote(java.util.function.Consumer<String> writer) {
+        this.note = writer;
+        if (files != null) {
+            files.onShellNote(writer);
+        }
+    }
+
+    /** The project index this editor links by — what {@code index} in the shell fills in. */
+    public SourceIndex sourceIndex() {
+        return source;
+    }
+
     /** Every tree this editor presents in a window of its own: the documents, and the file tree. */
     public List<Gui> windows() {
         return List.of(gui, folder.gui());
@@ -126,6 +187,11 @@ public final class EditorWindow {
             // The dialog owner is read late — this window may not exist yet on the frame this runs on.
             files = new FileActions(gui, ws, app, memory, false, krono, this::ownerHandle, folder);
             files.onOpened(opened);
+            // Both wired now that there is something to wire: the workspace has been holding documents since
+            // the constructor, and its links have had nowhere to go until this moment.
+            files.onShellLine(shell);
+            files.onShellNote(note);
+            ws.navigation(files.navigation());
             files.shortcuts();
             files.restore();
         }

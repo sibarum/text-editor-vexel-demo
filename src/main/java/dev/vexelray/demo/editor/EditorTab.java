@@ -9,6 +9,13 @@ import java.nio.file.Path;
 final class EditorTab {
     final TextField editor;
     final Highlighter highlighter;
+    /**
+     * The Concordance links on this document — what Ctrl+click follows. Beside the highlighter because it is
+     * the same kind of thing: a second opinion about the text, computed off the GUI thread and attached to the
+     * field. It differs in what it is derived from — the highlighter reads the characters, this reads an index
+     * of the project they are part of — and so in when it is recomputed: see {@link SymbolLinks}.
+     */
+    final SymbolLinks links;
     final Node body;
     Path file;
     /** Line-ending convention of the file, restored on save. New files save with {@code \n}. */
@@ -23,9 +30,10 @@ final class EditorTab {
      */
     String savedText;
 
-    EditorTab(TextField editor, Highlighter highlighter, Node body, String savedText) {
+    EditorTab(TextField editor, Highlighter highlighter, SymbolLinks links, Node body, String savedText) {
         this.editor = editor;
         this.highlighter = highlighter;
+        this.links = links;
         this.body = body;
         this.savedText = savedText;
     }
