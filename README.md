@@ -192,6 +192,35 @@ a command after every app that has a window, so typing a program's name runs it.
 design, and what the framework cannot do for it yet, is in [docs/mainframe-window.md](docs/mainframe-window.md);
 the original from-scratch scope it replaced is in [docs/terminal.md](docs/terminal.md).
 
+### The index, and names as links
+
+[Concordance](../concordance-indexer) is plugged in as a console app: `index` builds an index of a Maven
+project, and `names`, `usages` and `impls` ask it where things are. The reason they live in the shell rather
+than in a CLI of their own is that all three emit rows carrying a `path` column, and `edit` opens rows with a
+`path` column — so the queries compose with the editor instead of printing at it:
+
+```
+~/Documents/GitHub/text-editor-vexel-demo > index .
+~/Documents/GitHub/text-editor-vexel-demo > names "Window" | first 5 | edit
+~/Documents/GitHub/text-editor-vexel-demo > usages load | where kind == "CALL" | edit
+```
+
+**The same index makes names clickable in the editor.** Hold Ctrl and every name the index knows underlines
+itself; Ctrl+click follows it. Two things can be under the pointer and they are asked different questions: a
+*use* of a name has a declaration to go to, and the *declaration* has nowhere to go, so following it runs
+`usages` in the console instead — because a menu cannot hold the answer. `usages close` returns hundreds of
+rows, and Concordance matches names without a resolver, so that is the ordinary case rather than the
+pathological one. The console already filters with `where`, cuts with `first` and opens with `edit`; typing the
+query beats inventing a second, worse list beside the one that works.
+
+The index is a **snapshot** of what was on disk when `index` last ran, and everything that reads it says so.
+`SourceIndex` is a class both the shell and the editor are handed rather than a field on the console app,
+because Ctrl+click asks its question from a document with no shell in it. `SymbolLinks` re-finds a name near the
+line it was recorded on rather than trusting the number, which is what keeps an index a few edits old useful
+instead of merely wrong — and links are rebuilt when a document gets a file and when an index lands, *not* per
+keystroke: the framework remaps spans through edits itself, so they stay on their words as you type, and the
+index behind them is not improved by typing.
+
 ### Data entry, and .vtext
 
 **A form, and nobody drew it.** MainFrame's `Form` takes a name plus lists of repeated details, states the

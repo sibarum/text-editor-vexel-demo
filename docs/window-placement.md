@@ -142,8 +142,12 @@ process — the platform raises and flashes rather than pretending it worked.
 
 ## Where the code is
 
-- [WindowMemory.java](../src/main/java/dev/vexelray/demo/editor/WindowMemory.java) — the whole policy: read into
-  a `WindowConfig`, watch, debounce, write.
+- [WindowMemory.java](../../vexelray-gui/vexelray-gui-core/src/main/java/dev/vexelray/gui/core/app/WindowMemory.java)
+  — the whole policy: read into a `WindowConfig`, watch, debounce, write. It **has since moved into the
+  framework**: it was written here, and every application that keeps windows needs the same four things (the
+  work-area clamp, maximized kept apart from the bounds it would destroy, the debounce, and open-ness polled
+  rather than written on close), so it is `dev.vexelray.gui.core.app.WindowMemory` now. Nothing about the policy
+  below changed in the move; this demo is the caller rather than the owner.
 - [TextEditorApp.java](../src/main/java/dev/vexelray/demo/editor/TextEditorApp.java) — `memory.config("main", …)`
   into the `GuiApp` constructor, `memory.watch` after each window exists, `memory.poll()` per frame,
   `memory.save()` at shutdown. `FolderWindow.onCreated` and the console's own `onCreated` do the popup half.
