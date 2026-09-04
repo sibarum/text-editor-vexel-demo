@@ -2,6 +2,7 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
+import dev.vexelray.gui.core.style.Relief;
 import dev.vexelray.gui.core.style.Shading;
 import dev.vexelray.gui.core.style.Theme;
 
@@ -44,7 +45,7 @@ public final class Palettes {
 
     /** The file tree, warmed. Same relationships, same accent, 163&deg; round the wheel. */
     public static final Theme FILES =
-            Theme.of(tinted(Palette.DARK, MANILA, 1.0), Shading.ON_DARK, true, true);
+            Theme.of(tinted(Palette.DARK, MANILA, 1.0), Shading.ON_DARK, Relief.STANDARD, true, true);
 
     // ------------------------------------------------------------------ derivation
 
