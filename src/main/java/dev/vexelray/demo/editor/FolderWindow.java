@@ -194,7 +194,7 @@ final class FolderWindow {
         if (handle == null) {
             handle = app.window(KEY, () -> WindowSpec
                     .of(memory.config(KEY, "Files", DEFAULT_W, DEFAULT_H)
-                            .decorations(Decorations.CLIENT), gui)
+                            .decorations(Decorations.CLIENT).icon(AppIcon.load()), gui)
                     .onCreated(this::onCreated)
                     .onClosed(this::onClosed));
         }

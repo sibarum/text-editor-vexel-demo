@@ -197,7 +197,8 @@ public final class EditorWindow {
         }
         if (handle == null) {
             handle = app.window(KEY, () -> WindowSpec
-                    .of(memory.config(KEY, "Text Editor", TextEditorApp.W, TextEditorApp.H).decorations(Decorations.CLIENT), gui)
+                    .of(memory.config(KEY, "Text Editor", TextEditorApp.W, TextEditorApp.H)
+                            .decorations(Decorations.CLIENT).icon(AppIcon.load()), gui)
                     .onCreated(this::onCreated)
                     .onClosed(this::onClosed)
                     // Closing the editor is not quitting here, but it can still lose work, so the same gate

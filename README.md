@@ -140,10 +140,19 @@ It is worn in two places, and they are set two different ways:
 
 - **The window** — title bar, Alt-Tab, taskbar. `AppIcon` reads the six PNGs under
   `src/main/resources/icons` at startup and hands them to `NativePlatform.setApplicationIcon`, which is the
-  icon of the *process*: the editor, the Navigator and the terminal are three windows of one program, none of
-  them names an icon of its own, so all three inherit it. Set before the first window exists, so nothing is
-  ever shown under the generic icon and then corrected. Six sizes rather than one because the window manager
-  asks for a size the application never sees, and answers out of what it was given.
+  icon of the *process*: the editor, the Navigator and the terminal are three windows of one program, and a
+  window that names none falls back to it. Set before the first window exists, so nothing is ever shown under
+  the generic icon and then corrected. Six sizes rather than one because the window manager asks for a size the
+  application never sees, and answers out of what it was given.
+
+  The editor and the Navigator then name the same mark on their own `WindowConfig` as well —
+  `.icon(AppIcon.load())` beside the `Decorations.CLIENT` they already declare. That is redundant for exactly as
+  long as this application *is* the process. Run inside MainFrame it is not: the process is MainFrame, so the
+  fallback is MainFrame's mark, and a window relying on it would be indistinguishable from the shell wherever
+  windows are listed. Saying it in both places is the only thing that makes the standalone and embedded hosts
+  agree; `AppIcon.load()` decodes once and hands the same `Icon` out, so the extra calls cost nothing. The
+  terminal window is the exception and correctly so — it is MainFrame's window, built from a `ConsoleSpec` this
+  application hands over, so it wears the `mainframe` mark rather than this one.
 - **The executable** — Explorer, a pinned taskbar button, a shortcut. That is a linked resource, not a file
   the program reads, so `src/main/rc/editor.rc` names `editor.ico` beside it and the `native` profile has
   `rc.exe` compile the pair into `target/editor.res` for the linker.
