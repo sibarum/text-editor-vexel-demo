@@ -390,8 +390,11 @@ final class FileActions implements AutoCloseable {
     }
 
     /**
-     * <b>Reveal in Navigator</b> on a tab: point the file tree at the folder holding {@code file} and select
-     * its row. Marshalled onto the frame loop because the menu body runs on the handler executor, and
+     * <b>Reveal in Navigator</b> on a tab: open the file tree down to {@code file} and select its row — inside
+     * the folder the drawer is already rooted at where it can be, which is the usual case for a document opened
+     * out of the project being read, and only re-rooting for a file from somewhere else entirely. Which of the
+     * two it is belongs to {@link FolderWindow#reveal}, since the drawer is the thing that knows where it is
+     * pointed. Marshalled onto the frame loop because the menu body runs on the handler executor, and
      * opening a window belongs to that loop — on {@link GuiApp#post}, which is the queue window
      * operations actually use, so the whole reveal lands in one frame. See {@link #revealPath}.
      *

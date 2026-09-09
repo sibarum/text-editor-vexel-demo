@@ -1,36 +1,25 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.framework.shell.Shell;
+import dev.vexelray.framework.shell.VexelApplication;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
-import dev.vexelray.gui.core.TextClipboard;
 import dev.vexelray.gui.core.app.GuiApp;
-import dev.vexelray.gui.core.app.WindowInput;
 import dev.vexelray.gui.core.app.WindowMemory;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
-import dev.vexelray.gui.krono.KronoGui;
 import dev.mainframe.gui.app.ProjectScope;
 import dev.mainframe.gui.console.Console;
 import dev.mainframe.gui.console.ConsoleSpec;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.Cues;
-import dev.vexelray.gui.widget.Modals;
 import dev.vexelray.gui.widget.Ramp;
-import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.gui.widget.TextField;
-import dev.vexelray.os.Decorations;
 import sibarum.kronometer.Dur;
-import sibarum.tactroller.api.BackendException;
-import sibarum.tactroller.api.CoordinateSpace;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
-import sibarum.tactroller.api.NativeWindow;
-import sibarum.tactroller.api.Tactroller;
-import sibarum.tactroller.atchung.TactrollerInputBridge;
-import sibarum.tactroller.clipboard.Clipboard;
-import sibarum.tactroller.clipboard.ClipboardException;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -40,8 +29,16 @@ import java.util.List;
  * per tab (word wrap, line numbers, syntax highlighting, cut/copy/paste), and a status line. Files open and
  * save through the native OS dialogs in vexelray-gui-nfd.
  *
- * <p>Run: {@code TextEditorApp} (windowed), {@code TextEditorApp --capture [out.png]} (headless).
- * Needs {@code --enable-native-access=ALL-UNNAMED}.
+ * <p><b>This class used to be the application edge</b> — five hundred lines of input backend, clipboard
+ * binding, window memory, chrome, frame loop, pacing, wakes and argument parsing, near-identical to the copy in
+ * three other applications. That is {@code vexelray-framework}'s now, and what is left here is the entry point,
+ * the constants the rest of this package reads, and the three headless captures. What this application builds
+ * is in {@link TextEditorWiring}.
+ *
+ * <p>Run: {@code TextEditorApp} (a session), {@code TextEditorApp --terminal} (with the shell window up),
+ * {@code TextEditorApp --profile} (with the frame probe), {@code TextEditorApp 600} (six hundred frames and
+ * out), {@code TextEditorApp --capture [out.png]} (headless). Needs
+ * {@code --enable-native-access=ALL-UNNAMED}.
  */
 public final class TextEditorApp {
 
@@ -54,6 +51,16 @@ public final class TextEditorApp {
     /** The title bar's own height, in dp — {@code TitleBar}'s, which is the Windows caption metric. */
     static final int BAR_H = 32;
     static final int H = 560 + BAR_H;
+
+    /**
+     * What every window of this application is called.
+     *
+     * <p>Named because it is read from four places now — the framework is handed it as this application's
+     * identity, and the two windows the framework did not open name it for themselves — and a literal that has
+     * to agree across call sites is one rename away from disagreeing.
+     */
+    static final String TITLE = "Text Editor";
+
     /**
      * The margin the page leaves around itself — and, because it is declared as such, the window's resize grip.
      *
@@ -106,16 +113,14 @@ public final class TextEditorApp {
     static final float STATUS_RISE_EM = 0.35f;
 
     /**
-     * The settings keys the windows opened from here are remembered under. Named rather than spelled out at
-     * each use, for the reason {@link FolderWindow#KEY} gives: each is read from more than one place, and a
-     * literal that has to agree across call sites is a rename waiting to orphan somebody's window.
+     * The settings key the terminal window is remembered under. Named rather than spelled out at each use, for
+     * the reason {@link FolderWindow#KEY} gives: each is read from more than one place, and a literal that has
+     * to agree across call sites is a rename waiting to orphan somebody's window.
      *
-     * <p>MAIN_KEY is the standalone editor's own window. The MainFrame-hosted arrangement remembers its
-     * editor under EditorWindow's key instead, because there the main window is the shell.
+     * <p>There is no constant here for the main window any more. Its key is the framework's — one name for the
+     * main window of every application on the desk — which is exactly the kind of literal that should not have
+     * been in four applications at once.
      */
-    static final String MAIN_KEY = "main";
-
-    /** @see #MAIN_KEY */
     static final String TERMINAL_KEY = "terminal";
 
     static final String UNTITLED = "untitled.txt";
@@ -124,170 +129,83 @@ public final class TextEditorApp {
                     + "Word wrap, line numbers, selection, cut/copy/paste, and caret-follow scrolling "
                     + "all come from the multiline TextField widget. Start typing.";
 
+    /** Printed for a flag in this application's own namespace that it does not know. */
+    private static final String USAGE =
+            "usage: text-editor [--capture|--capture-terminal|--capture-folder [out.png]]"
+                    + " [--terminal] [--profile] [frames]";
+
+    /** A usage error, the same code the framework uses: distinct from 1 so a script can tell the two apart. */
+    private static final int EXIT_USAGE = 2;
+
+    /**
+     * The captures are this application's own and are taken before the framework sees {@code argv}; everything
+     * else is the framework's.
+     *
+     * <p>That split is the seam {@code Launch} documents rather than a special case: an application with its
+     * own richer capture tooling <i>"intercepts its own flag before handing the rest here, and gets a clear
+     * 'unknown option' if it forgets to"</i>. And none of the three is a run mode — two of them build a window
+     * that is not this application's main one, and the third wants the tree with no window at all.
+     *
+     * <p>What the framework does with the rest is more than this method used to: {@code --terminal} and
+     * {@code --profile} are settings, a bare number is a frame cap, and anything unrecognised is refused by
+     * name with the alternatives listed. The old hand-rolled parse threw {@code NumberFormatException} out of
+     * {@code main} for a misspelled flag — a stack trace, before any window, for a typo.
+     */
     public static void main(String[] args) throws Exception {
+        // A shell or an IDE run configuration that expands an empty variable produces a blank argument, and it
+        // has never meant anything. Dropped here as well as in Launch, because the capture branch below reads
+        // args[0] directly.
         args = java.util.Arrays.stream(args).filter(s -> !s.isBlank()).toArray(String[]::new);
-        // --terminal opens the shell window at startup instead of on Ctrl+`, so the second window can be looked
-        // at (and its shutdown exercised) without a hand on the keyboard.
-        boolean withTerminal = java.util.Arrays.asList(args).contains("--terminal");
-        args = java.util.Arrays.stream(args).filter(s -> !s.equals("--terminal")).toArray(String[]::new);
-        // --profile turns on FpsProbe. Off by default, because it is not a passive instrument: besides
-        // printing a line every three seconds it deliberately pokes the loop -- a timeline post, a node
-        // mutated from a worker, a handler that does nothing -- to prove each wake path is still alive.
-        // Those are exactly the things worth checking, and exactly the things a shipped run should not be
-        // doing to itself on a timer.
-        boolean profile = java.util.Arrays.asList(args).contains("--profile");
-        args = java.util.Arrays.stream(args).filter(s -> !s.equals("--profile")).toArray(String[]::new);
-
-        Gui gui = new Gui();
-        // The editor keeps the framework's own look, unshifted — it is the reference the other two windows are
-        // departures from (see Palettes). Stated rather than left to the default, because the choice is now one
-        // of three and a default is not a choice anyone can read.
-        gui.theme(Palettes.EDITOR);
-        // Two em more height than the page needs on its own: the title bar sits inside the canvas now, so the
-        // smallest layout has to hold it as well as the tabs and the status line.
-        gui.minSize(Length.em(30), Length.em(22));
-        // The frame clock. Attached before the UI is built, because a widget that animates is handed its timing
-        // at construction, and ticked from the run loop's beforeFrame hook below -- one tick per presented frame.
-        KronoGui krono = KronoGui.attach(gui);
-        // The project index, shared between this editor's documents and the Concordance commands in its own
-        // terminal. Built empty: `index .` in the terminal is what fills it, and until then a document has no
-        // links and Ctrl+click finds nothing under the pointer.
-        SourceIndex source = new SourceIndex();
-        Workspace ws = new Workspace(gui, krono, source);
-        zoomShortcuts(gui);
-
-        if (args.length >= 1 && args[0].equals("--capture")) {
-            GuiApp.capture(gui, W, H, 0.06f, 0.07f, 0.09f, args.length >= 2 ? args[1] : "text-editor.png");
-            System.out.println("captured");
+        if (args.length >= 1 && args[0].startsWith("--capture")) {
+            capture(args);
             return;
         }
+        VexelApplication.run(new TextEditorWiring(), args);
+    }
 
-        if (args.length >= 1 && args[0].equals("--capture-terminal")) {
-            captureTerminal(args.length >= 2 ? args[1] : "terminal.png");
-            return;
+    /** One of the three headless captures, named by {@code args[0]}, into {@code args[1]} or a default. */
+    private static void capture(String[] args) throws Exception {
+        String out = args.length >= 2 ? args[1] : null;
+        if (args[0].equals("--capture")) {
+            capturePage(out == null ? "text-editor.png" : out);
+        } else if (args[0].equals("--capture-terminal")) {
+            captureTerminal(out == null ? "terminal.png" : out);
+        } else if (args[0].equals("--capture-folder")) {
+            captureFolder(out == null ? "folder.png" : out);
+        } else {
+            System.err.println("unknown option: " + args[0]);
+            System.err.println(USAGE);
+            System.exit(EXIT_USAGE);
         }
+    }
 
-        if (args.length >= 1 && args[0].equals("--capture-folder")) {
-            captureFolder(args.length >= 2 ? args[1] : "folder.png");
-            return;
+    /**
+     * Render the editor's page headlessly: build this application's real tree and photograph it.
+     *
+     * <p><b>The real tree, through the real wiring.</b> {@code VexelApplication.tree} runs {@code CONFIG}
+     * through {@code TREE} and stops — no window, no input backend and no window memory, so nothing reached
+     * from here can write a placement. That matters more than it looks: a capture that built its tree by a
+     * second route would be a capture of a different application, which is what this method used to be. It
+     * cleared to a literal {@code 0.06f, 0.07f, 0.09f} while {@link #captureFolder} twenty lines below read
+     * {@code Role.PAGE} off the theme — two spellings of one colour, and only one of them could stay right.
+     *
+     * <p>{@code GuiApp.capture} is static and builds its own device, which is why the framework has no capture
+     * mode of its own: a tree carrying a marched viewport comes out correct about the chrome and silently wrong
+     * about the content. This tree is a tab bar, a text field and a status line, so there is nothing
+     * device-backed in it to be wrong about — which is the condition {@code tree} asks a caller to know about
+     * its own content before reaching for this.
+     */
+    private static void capturePage(String out) throws java.io.IOException {
+        // No arguments passed through: a still frame has nothing a setting override could change, and the
+        // one setting this application declares opens a window.
+        Shell shell = VexelApplication.tree(new TextEditorWiring(), new String[0]);
+        try {
+            Color page = shell.gui().theme().color(Role.PAGE);
+            GuiApp.capture(shell.gui(), W, H, page.r(), page.g(), page.b(), out);
+        } finally {
+            shell.disposer().close();
         }
-
-        // The only positional argument left is a frame cap, and it is a script's argument rather than a user's.
-        // Anything else here is a flag that was misspelled or is no longer understood, and parsing it as a
-        // number threw NumberFormatException out of main -- a stack trace, before any window, for a typo.
-        int maxFrames = 0;
-        if (args.length > 0) {
-            try {
-                maxFrames = Integer.parseInt(args[0]);
-            } catch (NumberFormatException e) {
-                System.err.println("unknown option: " + args[0]);
-                System.err.println("usage: TextEditorApp [--capture|--capture-terminal|--capture-folder [out.png]]"
-                        + " [--terminal] [--profile] [frames]");
-                return;
-            }
-        }
-        // Placement is read before the window exists, so it is created where it was left rather than moved there
-        // after appearing — and clamped on the way, because the desk may have changed shape since.
-        // One Settings for the whole application, shared rather than opened twice: two instances over the same
-        // file each hold their own copy of it, so the second one to save would drop whatever the first had added.
-        Settings settings = Settings.open("text-editor");
-        WindowMemory memory = new WindowMemory(settings);
-        // The mark goes on the process before the first window exists, so every window this application opens --
-        // the editor, the Navigator, the terminal -- is shown wearing it rather than corrected into it.
-        AppIcon.install();
-        try (Tactroller input = openInput();
-             GuiApp app = new GuiApp(memory.config(MAIN_KEY, "Text Editor", W, H)
-                     .decorations(Decorations.CLIENT));
-             Clipboard clipboard = openClipboard()) {
-            // The window exists at last, so the chrome can be pointed at it. Until now the bar has been a
-            // working bar against WindowControls.NONE — which is also what --capture renders.
-            ws.titleBar.controls(app.controls());
-            if (memory.maximized(MAIN_KEY)) {
-                app.window().maximize();
-            }
-            memory.watch(MAIN_KEY, app.window());
-            // The main window is created before this class exists, so it still wires its own input; every other
-            // window the framework opens gets one from here.
-            attachInput(input, app);
-            app.input(TextEditorApp::windowInput);
-            // The editor is this application's main window, so that is what a dialog parents to, and it already
-            // exists by the time anything can ask.
-            FileActions files =
-                    new FileActions(gui, ws, app, memory, true, krono, app::windowHandle, null, source);
-            // The documents have existed since the workspace was built; only now is there anywhere for a
-            // Ctrl+click to go, so this is where their links are told about it.
-            ws.navigation(files.navigation());
-            files.shortcuts();
-            // Dialogs, and the one that matters most: closing the main window is quitting, so it goes through a
-            // gate that can still ask about unsaved work while the window stays open.
-            Modals dialogs = Modals.install(app);
-            app.onCloseRequest(files::guardClose);
-            // Every window gets the OS clipboard, not just the main one: copy out of the terminal's prompt has to
-            // reach the same place copy out of a tab does.
-            if (clipboard != null) {
-                for (Gui window : files.windows()) {
-                    bindClipboard(window, clipboard);
-                }
-            }
-            // Whatever was up last time comes back up. --terminal on top of that is harmless: opening a window
-            // that is already open focuses it.
-            files.restore();
-            if (withTerminal) {
-                files.openTerminal();
-            }
-            TactrollerInputBridge bridge = input == null ? null : new TactrollerInputBridge(input, gui.bus());
-            // Kernel to host: something arrived while you were asleep. Wired here, unconditionally, because it
-            // is what makes render-on-demand safe -- a parked loop has no next frame on which to notice a
-            // timeline post, so without this a click that starts an animation reaches an inbox nobody looks at
-            // and the window stays frozen. It is a single-slot listener, so there is exactly one call to it.
-            //
-            // It used to be FpsProbe's, taken as a constructor argument and installed there. That was fine
-            // while the probe was unconditional and fatal the moment it was not: making the instrument
-            // optional would have made the wake path optional with it.
-            krono.kron().onWork(app::postWake);
-            FpsProbe probe = profile
-                    ? new FpsProbe(krono.kron(), () -> gui.root().opacity(1f), gui.handlers())
-                    : null;
-            if (maxFrames <= 0) {
-                // Render on demand: block until the kernel says a frame is due. Only on an uncapped run --
-                // a frame cap is a script, and blocking would make N frames of a still window take forever.
-                // Every deadline this application holds, in one place - which is what the supplier is for.
-                // The clock knows about animations; it does not know the window placement is 700ms from
-                // being written, and a loop that parks has no next frame to discover that on.
-                app.pacing(() -> Math.min(
-                        krono.kron().sleepTimeout().nanos(), memory.nanosUntilSettle()));
-                app.idleRefresh(200_000_000L)   // 5 Hz floor while focused: a missed wake is late, never lost
-                   .maxFrameRate(16_666_666L);  // 60 Hz ceiling while animating
-            }
-            try {
-                app.run(gui, maxFrames, () -> {
-                    pump(bridge);
-                    files.perFrame();
-                    // The clock after the queue, so a tab change serviced this frame starts its crossfade on the
-                    // same frame that selected it rather than a frame later. The tick returns with its batch
-                    // complete, so the opacities this frame's motion produced are on the bus before Gui.frame
-                    // reconciles them -- the frame that presents a value is the frame that computed it.
-                    krono.tick();
-                    memory.poll();
-                    if (probe != null) {
-                        probe.sample();
-                    }
-                });
-            } finally {
-                if (probe != null) {
-                    probe.report("text editor, idle");
-                    probe.close();
-                }
-                // Drop any dialog still queued: an application on its way out must not be held up by a question
-                // there is nobody left to answer.
-                dialogs.close();
-                files.close();
-                memory.save();
-            }
-        }
-        krono.close();   // the clock outlives the window but not the process: closed with the GUI it drove
-        gui.close();
-        System.out.println("clean shutdown");
+        System.out.println("captured " + out);
     }
 
     /**
@@ -416,125 +334,26 @@ public final class TextEditorApp {
         }
     }
 
+    /**
+     * Ctrl+= / Ctrl+- / Ctrl+0, on every window this application owns.
+     *
+     * <p>Still the application's rather than the framework's, on the grounds {@code CalculatorWiring} states:
+     * which chord zooms, or whether zooming exists at all, is not something a framework should be choosing.
+     * What the framework does own is that the zoom is <em>remembered</em> — it watches the main window with its
+     * tree, so Ctrl+= survives a quit the way dragging the window bigger does.
+     *
+     * <p><b>And how far it goes.</b> This method used to open with {@code gui.zoomRange(0.5f, 3f, 1.25f)},
+     * one of five copies of those numbers on the stack; it is {@code Appearance.ZoomRange} now, applied to the
+     * main window by the framework before the first widget. The two windows the framework did not build apply
+     * it themselves as they are constructed — see {@link FolderWindow} and {@link EditorWindow} — because a
+     * range set here would be set after their trees already exist, and because only one of them is ever
+     * running under this framework at all.
+     */
     static void zoomShortcuts(Gui gui) {
-        gui.zoomRange(0.5f, 3f, 1.25f);
         gui.shortcut(Key.EQUAL, gui::zoomIn, Modifier.CONTROL);
         gui.shortcut(Key.MINUS, gui::zoomOut, Modifier.CONTROL);
         gui.shortcut(Key.DIGIT_0, gui::resetZoom, Modifier.CONTROL);
     }
-
-    private static Tactroller openInput() {
-        try {
-            Tactroller t = Tactroller.open();
-            System.out.println("input: " + t.backendName());
-            return t;
-        } catch (BackendException e) {
-            System.out.println("input unavailable (" + e.getMessage() + "); running without pointer input");
-            return null;
-        }
-    }
-
-    /**
-     * How input reaches every window the framework opens for us — the file tree, the terminal, any dialog. One
-     * backend per window, attached at creation, pumped by the frame loop, released with the window.
-     *
-     * <p>Said once for every window rather than per window. The framework cannot do it alone: it speaks
-     * {@code tactroller-api} and Atchung topics, but the bridge between them is chosen here, at the
-     * application edge.
-     */
-    private static WindowInput windowInput(dev.vexelray.os.NativeWindow window, Gui gui) {
-        try {
-            Tactroller backend = Tactroller.open();
-            backend.attach(NativeWindow.ofHwnd(window.osHandle()));
-            backend.setCoordinateSpace(CoordinateSpace.CLIENT);
-            TactrollerInputBridge bridge = new TactrollerInputBridge(backend, gui.bus());
-            return new WindowInput() {
-                @Override
-                public void pump() {
-                    try {
-                        bridge.pump();
-                    } catch (BackendException e) {
-                        // Transient poll failure — drop this frame's input rather than tear down the loop.
-                    }
-                }
-
-                @Override
-                public void close() {
-                    try {
-                        backend.close();
-                    } catch (Exception e) {
-                        // best effort — the backend is going away regardless
-                    }
-                }
-            };
-        } catch (BackendException e) {
-            System.out.println("window input unavailable (" + e.getMessage() + "); that window takes no input");
-            return WindowInput.NONE;
-        }
-    }
-
-    /** CLIENT space, density left at 1.0 — the engine's canvas is logical; see vexelray-gui-demo's attachInput. */
-    private static void attachInput(Tactroller input, GuiApp app) {
-        if (input == null) {
-            return;
-        }
-        try {
-            input.attach(NativeWindow.ofHwnd(app.windowHandle()));
-            input.setCoordinateSpace(CoordinateSpace.CLIENT);
-        } catch (BackendException e) {
-            System.out.println("input attach failed (" + e.getMessage() + "); pointer input disabled");
-        }
-    }
-
-    /** OS clipboard for cut/copy/paste; falls back to the in-memory default when no backend is present. */
-    private static Clipboard openClipboard() {
-        try {
-            return Clipboard.open();
-        } catch (ClipboardException e) {
-            System.out.println("clipboard unavailable (" + e.getMessage() + "); cut/copy/paste use in-memory buffer");
-            return null;
-        }
-    }
-
-    /** Point one window's clipboard at the OS one. Each Gui carries its own, so each window is bound. */
-    private static void bindClipboard(Gui gui, Clipboard clip) {
-        gui.clipboard(new TextClipboard() {
-            @Override
-            public String get() {
-                try {
-                    return clip.getText().orElse("");
-                } catch (ClipboardException e) {
-                    return "";
-                }
-            }
-
-            @Override
-            public void set(String text) {
-                try {
-                    clip.setText(text);
-                } catch (ClipboardException e) {
-                    // best effort — a transient clipboard failure just drops the copy
-                }
-            }
-        });
-    }
-
-    private static void pump(TactrollerInputBridge bridge) {
-        if (bridge == null) {
-            return;
-        }
-        try {
-            bridge.pump();
-        } catch (BackendException e) {
-            // Transient poll failure — drop this frame's input rather than tear down the loop.
-        }
-    }
-
-
-
-
-
-
 
     private TextEditorApp() {
     }

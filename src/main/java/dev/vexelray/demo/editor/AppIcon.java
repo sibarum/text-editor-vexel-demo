@@ -1,7 +1,6 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.os.Icon;
-import dev.vexelray.os.NativePlatform;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,7 +10,7 @@ import java.io.UncheckedIOException;
  * The mark this application wears: the VexelRay {@code prompt} nib, in coral on its writing rule.
  *
  * <p><b>One mark for every window, and it has to be said twice.</b> The editor, the Navigator and the terminal
- * are three windows of one program, so the mark goes on the process: {@link NativePlatform#setApplicationIcon}
+ * are three windows of one program, so the mark goes on the process: {@code NativePlatform.setApplicationIcon}
  * is what a window falls back to when it names none. Set before the first window exists, so nothing is ever
  * shown under the generic icon and then corrected.
  *
@@ -20,6 +19,11 @@ import java.io.UncheckedIOException;
  * fallback is MainFrame's mark and a window naming none would be indistinguishable from the shell wherever
  * windows are listed. Saying it in both places is what makes the two hosts agree, and costs one call per window.
  * The terminal is not among them on purpose — it is MainFrame's own window and wears the {@code mainframe} mark.
+ *
+ * <p><b>Both of those calls are the framework's now</b>, standalone: the mark travels as part of this
+ * application's identity on {@code AppInfo}, and {@code VexelApplication} makes them in the one order that
+ * works. So the whole of that paragraph, which every application on this stack that wears a mark had a copy
+ * of, is one method call at {@link #optional()}. What is left here is reading the artwork.
  *
  * <p><b>Six sizes, each drawn at its own size.</b> The window manager asks for a size at moments the application
  * never sees — 16 for the caption, more for Alt-Tab, more again on a scaled display — and answers it out of what
@@ -43,12 +47,20 @@ final class AppIcon {
     private AppIcon() {
     }
 
-    /** Put the mark on this process, for every window it opens. */
-    static void install() {
+    /**
+     * The mark for the framework to wear this application in, or {@code null} if it could not be read.
+     *
+     * <p>Reports and carries on, which is the same answer {@code install} gave before the framework took over
+     * the installing: a missing or unreadable resource costs the application its mark and nothing else, and a
+     * window under the OS default icon is still a window. {@link #load()} stays strict, because the test that
+     * notices a renamed resource has to have something to fail on.
+     */
+    static Icon optional() {
         try {
-            NativePlatform.current().setApplicationIcon(load());
+            return load();
         } catch (RuntimeException e) {
-            System.err.println("icon not set: " + e);
+            System.err.println("icon not read: " + e);
+            return null;
         }
     }
 

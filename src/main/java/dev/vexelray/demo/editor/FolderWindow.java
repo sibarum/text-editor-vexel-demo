@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.WindowControls;
@@ -20,6 +21,9 @@ import dev.vexelray.os.Decorations;
 import sibarum.kronometer.anim.Ease;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The folder explorer as its own OS window on the shared frame loop: a second {@link Gui} holding a
@@ -105,7 +109,15 @@ final class FolderWindow {
                 : new Cues((progress, done) -> krono.ramp(TextEditorApp.CUE, Ease.LINEAR, progress, done));
         // Before the first node: the drawer is the editor's own look swung round to the warm side of
         // neutral, so a glance at the taskbar tells the two windows apart before any text is read.
+        //
+        // Its own theme, and so deliberately NOT Appearance.applyTo, which would put the editor's back. What
+        // this window should still share with every other window on the desk is how far the zoom goes -- a
+        // drawer that disagreed about that is not making a point -- so it takes the narrow half. The constant
+        // rather than a Shell's: this class also runs under MainFrame, where there is no framework to ask,
+        // and DEFAULT is the one place the three numbers are written down. A host wanting a different range
+        // would have to hand one in, and none does.
         gui.theme(Palettes.FILES);
+        Appearance.ZoomRange.DEFAULT.applyTo(gui);
         this.column = gui.column().width(Length.FILL).height(Length.grow(1))
                 .padding(GUTTER).gap(Length.dp(6));
         gui.resizeBorder(GUTTER);
@@ -131,12 +143,19 @@ final class FolderWindow {
     }
 
     /**
-     * Show {@code file} in the drawer — <b>Reveal in Navigator</b> on a tab: the folder holding it, with the
-     * file's own row selected.
+     * Show {@code file} in the drawer — <b>Reveal in Navigator</b> on a tab: the tree opened down to it, with
+     * the file's own row selected.
      *
-     * <p>Re-rooted only when the drawer is somewhere else. A tree already showing this folder keeps whatever
-     * the user has opened in it: rebuilding one to land on a row that is already there would shut every
-     * other row on the way, which is the opposite of what asking to be shown where something is means.
+     * <p><b>A file inside the folder the drawer is rooted at does not move the root.</b> However deep it is,
+     * the drawer stays where it is and unfolds to it — a reveal answers "where is this?", and a root that
+     * jumped to the file's own directory would answer it by throwing away the question's context: the project
+     * the user was looking at, and every other row they had opened in it. Only a file somewhere else re-roots,
+     * because for that one there is no way down from here and nothing to unfold.
+     *
+     * <p>Unfolding is {@link TreeView#revealPath}'s to do, and the chain is ours: the tree is told the way down
+     * because it knows about children and not parents, and a filesystem path is exactly that way down spelled
+     * out. It walks off the frame loop, opening each folder as its listing lands, so a reveal into a deep tree
+     * on a slow disk arrives level by level instead of stopping the window until it is done.
      *
      * <p>Selecting the row is a selection like any other, so this drawer's own rule runs on it and the file
      * is brought forward in a tab. That is wanted rather than tolerated — a reveal is asked for <em>about</em>
@@ -150,13 +169,39 @@ final class FolderWindow {
         if (dir == null) {
             return;
         }
-        if (tree != null && dir.equals(shown)) {
-            raise(app, dir);
+        if (tree != null && target.startsWith(shown) && !target.equals(shown)) {
+            raise(app, shown);   // already the right root: bring the window forward and leave the tree alone
         } else {
             show(app, dir);
         }
-        tree.select(target);
-        mark(target);
+        // Captured, because the walk ends on the handler executor and by then the drawer may have been pointed
+        // somewhere else: the mark belongs to the tree that was revealed into, and to no tree that replaced it.
+        TreeView<Path> revealing = tree;
+        tree.revealPath(chainFrom(shown, target), () -> app.post(() -> {
+            if (revealing == tree) {
+                mark(target);
+            }
+        }));
+    }
+
+    /**
+     * The way down from {@code root} to {@code target}: every path between them, {@code root} itself excluded
+     * and {@code target} included, outermost first.
+     *
+     * <p>{@code root} is excluded because it has no row to open — {@link FolderSource} roots the tree at the
+     * folder's <em>contents</em>, so the first item here is a top-level row and the tree can start walking at
+     * it. Called only for a {@code target} known to be under {@code root}, which is what stops the loop.
+     *
+     * <p>Package-private for the tests, as {@link SymbolLinks#closed} is: it is the whole of what this window
+     * decides about a reveal that can be decided without a window to decide it in.
+     */
+    static List<Path> chainFrom(Path root, Path target) {
+        List<Path> chain = new ArrayList<>();
+        for (Path step = target; step != null && !step.equals(root); step = step.getParent()) {
+            chain.add(step);
+        }
+        Collections.reverse(chain);
+        return chain;
     }
 
     /**
@@ -171,13 +216,14 @@ final class FolderWindow {
      * {@link Palettes#FILES}' hue shift untouched, so it is the same colour in both windows rather than
      * merely the same idea.
      *
-     * <p><b>A row that is not there is not an error.</b> A tree materialises rows as folders open, so an
-     * item under something collapsed has none; nor has a file the source no longer offers. Both are simply
-     * not marked.
+     * <p><b>A row that is not there is not an error.</b> A tree materialises rows as folders open, so a file
+     * the source no longer offers has none, and neither has one under a level the walk could not reach. Both
+     * are simply not marked.
      *
-     * <p>A freshly-opened window is the weak case, knowingly: the tree was built this frame and not yet laid
-     * out, so the cue paints nothing until it has been. {@code Cues} reads the box every sample rather than
-     * capturing it, so the mark appears as soon as there is somewhere to put it, merely shortened.
+     * <p>Run after the unfolding rather than beside it, which is what makes the row exist to be marked at all:
+     * this is posted from the end of {@link TreeView#revealPath}'s walk, so by the time it runs every folder on
+     * the way down has been opened and the deepest row built. {@code Cues} reads the box every sample rather
+     * than capturing it, so a row not yet laid out costs the mark some of its length and none of its meaning.
      */
     private void mark(Path item) {
         Node row = tree.rowNode(item);

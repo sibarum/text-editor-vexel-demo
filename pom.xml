@@ -19,6 +19,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
+        <vexelray-framework.version>0.1.0-SNAPSHOT</vexelray-framework.version>
         <vexelray-gui.version>0.1.0-SNAPSHOT</vexelray-gui.version>
         <vexelray.version>0.1.0-SNAPSHOT</vexelray.version>
         <tactroller.version>1.0-SNAPSHOT</tactroller.version>
@@ -37,6 +38,14 @@
     </properties>
 
     <dependencies>
+        <!-- The application framework: the phase model, the frame stages, argv, and the absorbed application
+             edge. What used to be five hundred lines of TextEditorApp is TextEditorWiring plus this. -api
+             comes in transitively and is what FrameStage is read from. -->
+        <dependency>
+            <groupId>dev.vexelray.framework</groupId>
+            <artifactId>vexelray-framework-shell</artifactId>
+            <version>${vexelray-framework.version}</version>
+        </dependency>
         <dependency>
             <groupId>dev.vexelray.gui</groupId>
             <artifactId>vexelray-gui-widget</artifactId>

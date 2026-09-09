@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.app.AppWindow;
 import dev.vexelray.gui.core.app.GuiApp;
@@ -99,8 +100,14 @@ public final class EditorWindow {
     public EditorWindow(WindowMemory memory, SourceIndex source) {
         this.memory = memory;
         this.source = source == null ? new SourceIndex() : source;
+        // This window's look, stated here rather than taken from an Appearance, because this class is the
+        // editor as somebody else's window: MainFrame is the program, and under that host there is no Shell
+        // to ask. The theme and the floor are the two values TextEditorWiring.config hands the framework, and
+        // the range is the framework's constant -- so each number still lives in one place even where the
+        // container does not run.
         gui.theme(Palettes.EDITOR);
         gui.minSize(Length.em(30), Length.em(22));
+        Appearance.ZoomRange.DEFAULT.applyTo(gui);
         this.krono = KronoGui.attach(gui);
         this.ws = new Workspace(gui, krono, this.source);
         // Method references on this, so the tree can be wired before the thing it reaches is built: both
@@ -197,7 +204,7 @@ public final class EditorWindow {
         }
         if (handle == null) {
             handle = app.window(KEY, () -> WindowSpec
-                    .of(memory.config(KEY, "Text Editor", TextEditorApp.W, TextEditorApp.H)
+                    .of(memory.config(KEY, TextEditorApp.TITLE, TextEditorApp.W, TextEditorApp.H)
                             .decorations(Decorations.CLIENT).icon(AppIcon.load()), gui)
                     .onCreated(this::onCreated)
                     .onClosed(this::onClosed)

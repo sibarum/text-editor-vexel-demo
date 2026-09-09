@@ -48,7 +48,7 @@ pass, including against the bug it was written for.
 | Interaction | The assertion | What it caught |
 |---|---|---|
 | A file in the project tree | the tab opens, in one frame | the navigator is its own `Gui`; only the main tree was wired |
-| **Reveal in Navigator** | the drawer points at the folder and selects the row, in **one** frame | a three-queue chain, each step waiting for the next frame |
+| **Reveal in Navigator** | the drawer opens down to the file and selects the row, with no **frame per hop** | a three-queue chain, each step waiting for the next frame |
 | Close all, on a tab's menu | the tabs go | the same chain, milder because its mutations kept nudging the loop |
 | Ctrl+S with no pointer near the window | the save happens | commands ran through a queue drained mid-frame |
 
@@ -65,6 +65,12 @@ assertTrue(harness.frames() - before < 5,
 
 That upper bound is the regression guard. The bug was never "it does not work" — it was "it takes a
 frame per hop", and only a count catches that coming back.
+
+The bound counts hops, not work, and the difference started to matter once reveal learned to *unfold*:
+a file deep inside the folder the drawer is already rooted at no longer moves the root, so the tree
+opens down to it one level at a time, off the frame loop, taking as many frames as its listings take
+to land. Point the test at a file whose folder is already open — nothing left to fetch — and the count
+means exactly what it always meant. Point it at a shut subtree and it is measuring the disk.
 
 `window().budgets()` records what the loop parked on each iteration, so a test can assert the editor
 **parked** rather than merely looked idle. Note that a focused editor never goes fully quiet: the caret

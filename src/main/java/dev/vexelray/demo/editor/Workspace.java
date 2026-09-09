@@ -146,7 +146,23 @@ final class Workspace {
         this(gui, krono, new SourceIndex());
     }
 
+    /**
+     * A workspace that builds its own title bar, for the two arrangements where no framework has built one:
+     * the editor hosted inside MainFrame ({@link EditorWindow}), and a harness test with no window at all.
+     */
     Workspace(Gui gui, KronoGui krono, SourceIndex source) {
+        this(gui, krono, source, new TitleBar(gui, WindowControls.NONE, TextEditorApp.TITLE));
+    }
+
+    /**
+     * @param titleBar the window's caption strip, placed at the top of the root below. Taken as a parameter
+     *                 rather than built, because standalone it is the framework's now: chrome placement
+     *                 belongs to whoever owns the window, so that the instrument strip in it means the same
+     *                 thing in every window on the desk. This class still decides where it goes, and it still
+     *                 draws in this application's theme — what it no longer does is construct it or hand it
+     *                 controls
+     */
+    Workspace(Gui gui, KronoGui krono, SourceIndex source, TitleBar titleBar) {
         this.gui = gui;
         this.source = source == null ? new SourceIndex() : source;
         this.tabs = new Tabs(gui);
@@ -196,9 +212,10 @@ final class Workspace {
         // thin band, so this buys the three dead edges without costing the fourth its drag.
         gui.resizeBorder(TextEditorApp.GUTTER);
         // The window's own title bar: ordinary widgets, plus the declarations that tell the window manager
-        // which pixels are caption. Bound to the real window in main(); here it commands
-        // WindowControls.NONE, which is what --capture draws.
-        this.titleBar = new TitleBar(gui, WindowControls.NONE, "Text Editor");
+        // which pixels are caption. Handed in rather than built -- standalone that is the framework's, and it
+        // points the bar at the real window at ATTACH; until then, and under --capture, it commands
+        // WindowControls.NONE.
+        this.titleBar = titleBar;
         gui.root().background(gui.theme().color(Role.PAGE)).children(titleBar.node(), root);
 
         newTab(TextEditorApp.WELCOME, null, false);

@@ -9,10 +9,54 @@ scrolling), and a status line — rendered as one batched SDF draw.
 *The editor and the file tree, each drawing its own title bar, each on its own rotation of the same
 nine-number dark palette.*
 
+## It runs on the framework
+
+The 541-line `main` this application used to have is gone. Opening the input backend and settling its
+coordinate space, opening the OS clipboard, opening one `Settings` and no more, remembering where the
+window was and what it was zoomed to, attaching the clock before the first widget, building the title
+bar and pointing it at real window controls, putting the mark on the process, installing the dialogs,
+wiring the frame loop with its stages and its pacing and its wakes, parsing the command line and
+closing all of it in reverse order — all of that is [`vexelray-framework`](../vexelray-framework)'s
+now. What is left is [`TextEditorWiring`](src/main/java/dev/vexelray/demo/editor/TextEditorWiring.java),
+which is 67 lines of code and says only what this application builds and when:
+
+```java
+public static void main(String[] args) throws Exception {
+    if (args.length >= 1 && args[0].startsWith("--capture")) {
+        capture(args);           // the three headless entry points are still ours
+        return;
+    }
+    VexelApplication.run(new TextEditorWiring(), args);
+}
+```
+
+Three things are worth knowing about what changed, because each is visible from outside:
+
+- **The command line is stricter and better.** `--terminal` is a declared setting and `--profile` is
+  the framework's, so both parse as flags; a bare number is still a frame cap; and a misspelling is
+  refused by name with the alternatives listed rather than thrown out of `main` as a
+  `NumberFormatException`. `text-editor --verbse` prints
+  `unknown option: --verbse (known: automation, profile, terminal)` and exits 2.
+- **The main window's title bar is the framework's.** It is still an ordinary row of ordinary widgets
+  drawn in this application's palette, and `Workspace` still decides where it goes — what it no
+  longer does is construct it or hand it controls. Chrome *placement* belongs to whoever owns the
+  window, so that a screenshot instrument means the same thing in every window on the desk. The
+  Navigator's and the terminal's are still their own: neither window is the framework's.
+- **`--capture` photographs the real tree.** `VexelApplication.tree` runs the wiring as far as
+  `Phase.TREE` and stops — no window, no input backend, no window memory — so the capture is this
+  application's actual widget tree rather than a second one built alongside it. That fixed a small
+  drift on the way: `--capture` used to clear to a literal `0.06f, 0.07f, 0.09f` while
+  `--capture-folder` twenty lines below read `Role.PAGE` off the theme. Both read the theme now.
+
+The [architecture doc](../vexelray-framework/docs/architecture.md#what-porting-the-text-editor-found)
+records what this port found missing in the framework, which was four things and all of them the same
+shape: a decision the framework had already written down and not yet given a seam.
+
 ## Prerequisites
 
 The sibling stack installed to the local Maven repo, in order: `supirvast`, `vexelray`,
-`tactroller` (+ `atchung`), `vexelray-gui`, and [`mainframe`](../mainframe) (the terminal window's shell).
+`tactroller` (+ `atchung`), `vexelray-gui`, [`vexelray-framework`](../vexelray-framework) (the
+application edge this runs on), and [`mainframe`](../mainframe) (the terminal window's shell).
 Java 25, and a Vulkan-capable GPU to run windowed.
 
 ## Run
@@ -50,8 +94,12 @@ that route from `Tabs.onRemove` rather than by being asked. The other two are th
 about what a tab *is* here that a tab bar cannot know. Close all leaves one empty tab behind, exactly as `Ctrl+W`
 on a last tab does, and goes through the same unsaved-work dialog quitting does: one click that can discard
 documents you last looked at an hour ago is not the risk closing the tab in front of you is. Reveal in Navigator
-points the file tree at the folder holding that document and selects its row — re-rooting the tree only if the
-drawer is somewhere else, so a reveal into a folder you have already opened up does not shut it again. It is
+opens the file tree down to that document and selects its row. A file inside the folder the drawer is already
+rooted at does not move the root, however deep it is: the tree unfolds to it, and everything else you had opened
+in it stays open. Only a file from somewhere else re-roots the drawer, because for that one there is no way down
+from where it is. The unfolding is `TreeView.revealPath` in `vexelray-gui-widget`, which walks the way down off
+the frame loop since every level of it may hit a disk; the chain it walks is this application's to supply, a tree
+knowing about children and never parents. It is
 greyed on a document that has never been saved, which is a reason it cannot be taken rather than a different menu.
 
 All three windows draw their own title bar, in the app's palette rather than the system's: `TitleBar` from
