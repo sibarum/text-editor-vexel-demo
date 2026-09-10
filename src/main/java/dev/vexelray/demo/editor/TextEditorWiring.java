@@ -26,7 +26,7 @@ import java.util.Set;
  * method is one {@code Phase}, and the phase a component belongs to is decided by what it needs — which is
  * exactly the inference the processor will do from constructor parameters.
  */
-final class TextEditorWiring implements Wiring {
+final class TextEditorWiring extends Wiring {
 
     /**
      * The one setting this application declares, and so the one {@code --flag} beyond the framework's own that
