@@ -622,36 +622,6 @@ final class FileActions implements AutoCloseable {
         }
     }
 
-    /**
-     * Do {@code work} on the offload lane and hand what it produced back on the GUI thread.
-     *
-     * <p><b>Which lane matters more than the fact that it is off-thread.</b> {@code gui.offload()} is the
-     * application's lane for work that is genuinely unbounded — file I/O, network, a decode — and it is a
-     * different lane from the one input handlers run on for the reason this method exists: a read from a
-     * wedged network mount must not be waited on by anything that has to answer a click.
-     *
-     * <p><b>A result never lands in place.</b> What comes back goes through {@link GuiApp#post}, which is the
-     * GUI thread and the same queue every other structural request in this class already uses — so a document
-     * arriving is ordered with the opens, closes and dialogs around it rather than racing them. Nothing
-     * running on the lane touches a tab, the workspace or the tree.
-     *
-     * @param failed what to say when the work threw — also on the GUI thread, because a warning is a tree
-     *               mutation like any other
-     */
-    private <T> void offThread(java.util.concurrent.Callable<T> work, java.util.function.Consumer<T> landed,
-                               java.util.function.Consumer<Exception> failed) {
-        gui.offload().execute(() -> {
-            T value;
-            try {
-                value = work.call();
-            } catch (Exception e) {
-                app.post(() -> failed.accept(e));
-                return;
-            }
-            app.post(() -> landed.accept(value));
-        });
-    }
-
     /** Load {@code picked} into a tab, with nothing to do afterwards. */
     private void loadInto(Path picked) {
         loadInto(picked, () -> { });
@@ -684,7 +654,7 @@ final class FileActions implements AutoCloseable {
                 return;
             }
             ws.say("Opening " + picked.getFileName() + "...");
-            offThread(() -> TextFile.load(picked),
+            app.offload(() -> TextFile.load(picked),
                     loaded -> landLoaded(picked, loaded, then),
                     e -> {
                         if (e instanceof TextFile.Unsupported) {
@@ -878,7 +848,7 @@ final class FileActions implements AutoCloseable {
     private void write(EditorTab tab, Path target, java.util.function.Consumer<Boolean> done) {
         String text = tab.editor.text();
         byte[] bytes = TextFile.encode(text, tab.crlf);
-        offThread(() -> java.nio.file.Files.write(target, bytes),
+        app.offload(() -> java.nio.file.Files.write(target, bytes),
                 written -> {
                     tab.file = target;
                     tab.savedAs(text);
