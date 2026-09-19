@@ -360,10 +360,11 @@ final class FileActions implements AutoCloseable {
      * the tree — leaving the caret placed in whichever document arrived last instead of the one asked for.
      */
     void openAt(Path file, String name, int line) {
-        app.post(() -> {
-            loadInto(file);
-            ws.caretOn(file, name, line);
-        });
+        // Still one request, and now it has to be: the load hands its caret placement in as a continuation
+        // rather than being followed by one, because the read happens off this thread and the document is not
+        // in a tab when loadInto returns. The original reason for keeping them together survives unchanged --
+        // anything queued between them could leave the caret in whichever document arrived last.
+        app.post(() -> loadInto(file, () -> ws.caretOn(file, name, line)));
     }
 
     /**
@@ -456,13 +457,8 @@ final class FileActions implements AutoCloseable {
      * was asked for and closing anyway is exactly the loss the question was put to prevent.
      */
     private void saveAllThenCloseAll() {
-        for (EditorTab tab : ws.unsaved()) {
-            if (!saveTab(tab)) {
-                ws.warn("Still open: " + tab.describe() + " was not saved");
-                return;
-            }
-        }
-        closeAll();
+        saveEach(ws.unsaved(), 0, this::closeAll,
+                tab -> ws.warn("Still open: " + tab.describe() + " was not saved"));
     }
 
     /** Every Gui this application presents, main window first. */
@@ -626,8 +622,57 @@ final class FileActions implements AutoCloseable {
         }
     }
 
-    /** Load {@code picked} into a tab: switch to it if already open, else reuse an empty untitled or add. */
+    /**
+     * Do {@code work} on the offload lane and hand what it produced back on the GUI thread.
+     *
+     * <p><b>Which lane matters more than the fact that it is off-thread.</b> {@code gui.offload()} is the
+     * application's lane for work that is genuinely unbounded — file I/O, network, a decode — and it is a
+     * different lane from the one input handlers run on for the reason this method exists: a read from a
+     * wedged network mount must not be waited on by anything that has to answer a click.
+     *
+     * <p><b>A result never lands in place.</b> What comes back goes through {@link GuiApp#post}, which is the
+     * GUI thread and the same queue every other structural request in this class already uses — so a document
+     * arriving is ordered with the opens, closes and dialogs around it rather than racing them. Nothing
+     * running on the lane touches a tab, the workspace or the tree.
+     *
+     * @param failed what to say when the work threw — also on the GUI thread, because a warning is a tree
+     *               mutation like any other
+     */
+    private <T> void offThread(java.util.concurrent.Callable<T> work, java.util.function.Consumer<T> landed,
+                               java.util.function.Consumer<Exception> failed) {
+        gui.offload().execute(() -> {
+            T value;
+            try {
+                value = work.call();
+            } catch (Exception e) {
+                app.post(() -> failed.accept(e));
+                return;
+            }
+            app.post(() -> landed.accept(value));
+        });
+    }
+
+    /** Load {@code picked} into a tab, with nothing to do afterwards. */
     private void loadInto(Path picked) {
+        loadInto(picked, () -> { });
+    }
+
+    /**
+     * Load {@code picked} into a tab — switch to it if already open, else reuse an empty untitled or add —
+     * and run {@code then} once the document is there.
+     *
+     * <p><b>The read happens on the offload lane</b>, because a file on a network mount that has gone away
+     * takes as long to fail as the mount takes to time out, and doing that here would stop the frame loop
+     * rather than one document from arriving. Everything that touches a tab stays on the GUI thread, which is
+     * where building a document's widgets belongs.
+     *
+     * <p><b>{@code then} is a continuation rather than a following statement</b>, and that is the cost of the
+     * move. A caller that wants to act on the loaded document — putting a caret on a symbol, say — cannot
+     * write its line after this call any more, because the document is not there yet when it returns. Handing
+     * the work in keeps the two one request, which is what the caller that needed it was already arranging for
+     * a different reason: anything queued between them could change which document is in front.
+     */
+    private void loadInto(Path picked, Runnable then) {
         try {
             if (ws.showFile(picked)) {
                 ws.say("Already open: " + picked.getFileName());
@@ -635,16 +680,28 @@ final class FileActions implements AutoCloseable {
                 // where the request produced no new document and the least happened, so it is the one that
                 // most needs pointing at.
                 ws.arrived(ws.active());
+                then.run();
                 return;
             }
-            TextFile.Loaded loaded;
-            try {
-                loaded = TextFile.load(picked);
-            } catch (TextFile.Unsupported e) {
-                // Refused, not failed: no tab is touched and the reason is shown.
-                ws.warn("Can't open " + picked.getFileName() + ": " + e.getMessage());
-                return;
-            }
+            ws.say("Opening " + picked.getFileName() + "...");
+            offThread(() -> TextFile.load(picked),
+                    loaded -> landLoaded(picked, loaded, then),
+                    e -> {
+                        if (e instanceof TextFile.Unsupported) {
+                            // Refused, not failed: no tab is touched and the reason is shown.
+                            ws.warn("Can't open " + picked.getFileName() + ": " + e.getMessage());
+                        } else {
+                            ws.warn("Open failed: " + e.getMessage());
+                        }
+                    });
+        } catch (RuntimeException e) {
+            ws.warn("Open failed: " + e.getMessage());
+        }
+    }
+
+    /** GUI thread: put a document that has just been read into a tab, and say so. */
+    private void landLoaded(Path picked, TextFile.Loaded loaded, Runnable then) {
+        try {
             EditorTab tab = ws.active();
             if (tab != null && tab.file == null && tab.editor.text().isEmpty()) {
                 // An empty untitled tab is a placeholder, not content — load into it instead of beside it.
@@ -669,7 +726,9 @@ final class FileActions implements AutoCloseable {
             // can be opened without any folder ever having been: `edit ../other/Thing.java` from the shell is
             // the ordinary way into a project the file tree has never pointed at.
             indexProject(SymbolLinks.projectRootOf(picked.toAbsolutePath().normalize()));
-        } catch (RuntimeException | java.io.IOException e) {
+            // Last, and on this thread: whatever asked for this document is entitled to find it in place.
+            then.run();
+        } catch (RuntimeException e) {
             ws.warn("Open failed: " + e.getMessage());
         }
     }
@@ -683,7 +742,7 @@ final class FileActions implements AutoCloseable {
             saveAs();
             return;
         }
-        write(tab, tab.file);
+        write(tab, tab.file, landed -> { });
     }
 
     private void saveAs() {
@@ -692,7 +751,8 @@ final class FileActions implements AutoCloseable {
             return;
         }
         try {
-            FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title()).ifPresent(target -> write(tab, target));
+            FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title())
+                    .ifPresent(target -> write(tab, target, landed -> { }));
         } catch (RuntimeException e) {
             ws.warn("Save failed: " + e.getMessage());
         }
@@ -737,56 +797,107 @@ final class FileActions implements AutoCloseable {
      * loss the question existed to prevent.
      */
     private void saveAllThenClose(CloseRequest request) {
-        for (EditorTab tab : ws.unsaved()) {
-            if (!saveTab(tab)) {
-                request.cancel();
-                ws.warn("Still open: " + tab.describe() + " was not saved");
-                return;
-            }
-        }
-        request.proceed();
+        saveEach(ws.unsaved(), 0, request::proceed, tab -> {
+            request.cancel();
+            ws.warn("Still open: " + tab.describe() + " was not saved");
+        });
     }
 
-    /** Save one tab wherever it belongs, asking for a path if it has never had one. */
-    private boolean saveTab(EditorTab tab) {
+    /**
+     * GUI thread: save {@code tabs} from {@code i} onwards, one at a time, then run {@code allLanded} — or
+     * stop at the first that did not, handing it to {@code stopped}.
+     *
+     * <p><b>A chain rather than a loop, and that is the shape a write off the frame thread forces.</b> Each
+     * step continues when the previous one has actually reached the disk, so the sweep still stops at the
+     * first document that did not land — which is the whole of the rule it enforces: the user asked to save
+     * everything, so quitting anyway would be exactly the loss the question existed to prevent.
+     *
+     * <p>Not stack recursion. Every continuation arrives through {@link GuiApp#post}, so the depth here is one
+     * however many documents there are.
+     */
+    private void saveEach(List<EditorTab> tabs, int i, Runnable allLanded,
+                          java.util.function.Consumer<EditorTab> stopped) {
+        if (i >= tabs.size()) {
+            allLanded.run();
+            return;
+        }
+        EditorTab tab = tabs.get(i);
+        saveTab(tab, landed -> {
+            if (!landed) {
+                stopped.accept(tab);
+                return;
+            }
+            saveEach(tabs, i + 1, allLanded, stopped);
+        });
+    }
+
+    /**
+     * Save one tab wherever it belongs, asking for a path if it has never had one, and report whether it
+     * landed.
+     *
+     * <p>The dialog stays on this thread — it is native and modal, and {@code FileDialog} requires the GUI
+     * thread by contract. Only the write leaves.
+     */
+    private void saveTab(EditorTab tab, java.util.function.Consumer<Boolean> done) {
         if (tab.file != null) {
-            return write(tab, tab.file);
+            write(tab, tab.file, done);
+            return;
         }
         // Selecting it first is not cosmetic: the save dialog's start directory and suggested name come from
         // the active tab, so a Save As for a tab the user cannot see would be labelled from another one.
         ws.show(tab);
         try {
             Path target = FileDialog.save(owner.getAsLong(), FILTERS, startDir(), tab.title()).orElse(null);
-            return target != null && write(tab, target);
+            if (target == null) {
+                done.accept(false);
+                return;
+            }
+            write(tab, target, done);
         } catch (RuntimeException e) {
             ws.warn("Save failed: " + e.getMessage());
-            return false;
+            done.accept(false);
         }
     }
 
-    /** Write {@code tab} to {@code target}. Returns false if it did not land, so a caller can stop. */
-    private boolean write(EditorTab tab, Path target) {
-        try {
-            // The exact text that goes to disk is the text this tab is now clean against — read once, so an
-            // edit arriving between the write and the snapshot cannot be mistaken for saved.
-            String text = tab.editor.text();
-            java.nio.file.Files.write(target, TextFile.encode(text, tab.crlf));
-            tab.file = target;
-            tab.savedAs(text);
-            // This tab, not the selected one. Save all writes documents that are not in front, and a
-            // never-saved one has just been given its first name here -- so the header that has to change
-            // is the one belonging to the tab that was written.
-            ws.retitle(tab);
-            ws.say("Saved " + target);
-            // After the line, not before it: both are reports of the same event, and the wash is the one
-            // that will be seen first — a cue starts painting on the frame it is played, so playing it
-            // ahead of the text would put the flash on a status line still holding the previous message.
-            ws.saved(tab);
-            return true;
-        } catch (java.io.IOException e) {
-            ws.warn("Save failed: " + e.getMessage());
-            return false;
-        }
+    /**
+     * Write {@code tab} to {@code target}, and tell {@code done} whether it landed so a caller can stop.
+     *
+     * <p><b>The bytes go out on the offload lane and everything else stays on the GUI thread</b>, which is
+     * what makes the split legible: a save to a mount that has gone away used to hold the frame loop for as
+     * long as the OS took to give up, so the window stopped drawing rather than one document failing to save.
+     *
+     * <p><b>The snapshot is taken here, before the work is handed over</b>, and that ordering is the same one
+     * this method always kept for the same reason. The exact text that goes to disk is the text this tab will
+     * be clean against, read once on the thread that owns it — an edit arriving while the write is in flight
+     * is then an edit made after the save, which is what it is, rather than something mistaken for saved.
+     *
+     * <p>{@code tab.file} and {@code savedAs} are set when the write has actually landed and not before: a
+     * document that failed to reach an unwritable path has not been saved there, and marking it clean on
+     * optimism is how the editor would tell the user it had saved something it had not.
+     */
+    private void write(EditorTab tab, Path target, java.util.function.Consumer<Boolean> done) {
+        String text = tab.editor.text();
+        byte[] bytes = TextFile.encode(text, tab.crlf);
+        offThread(() -> java.nio.file.Files.write(target, bytes),
+                written -> {
+                    tab.file = target;
+                    tab.savedAs(text);
+                    // This tab, not the selected one. Save all writes documents that are not in front, and a
+                    // never-saved one has just been given its first name here -- so the header that has to
+                    // change is the one belonging to the tab that was written.
+                    ws.retitle(tab);
+                    ws.say("Saved " + target);
+                    // After the line, not before it: both are reports of the same event, and the wash is the
+                    // one that will be seen first — a cue starts painting on the frame it is played, so
+                    // playing it ahead of the text would put the flash on a status line still holding the
+                    // previous message.
+                    ws.saved(tab);
+                    done.accept(true);
+                },
+                e -> {
+                    ws.warn("Save failed: " + e.getMessage());
+                    done.accept(false);
+                });
     }
 
     private Path startDir() {

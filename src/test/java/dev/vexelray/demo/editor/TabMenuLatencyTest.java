@@ -53,7 +53,7 @@ class TabMenuLatencyTest {
             long frames = harness.frames();
             long t0 = System.nanoTime();
             harness.click(x, y, MouseButton.RIGHT);
-            boolean shown = harness.await(menu::shown, 5_000);
+            boolean shown = harness.await(menu::isOpen, 5_000);
             long visible = System.nanoTime() - t0;
             // shown is set on the handler thread; the frame that draws it is the second half of the wait.
             harness.awaitFrame(frames, 5_000);
