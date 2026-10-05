@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>dev.vexelray.demo</groupId>
+    <artifactId>text-editor-vexel-demo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+
+    <name>text-editor-vexel-demo</name>
+    <description>
+        A tabbed text editor with a file navigator, on the VexelRay stack.
+    </description>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <vexelray-framework.version>0.1.0-SNAPSHOT</vexelray-framework.version>
+        <vexelray-gui.version>0.1.0-SNAPSHOT</vexelray-gui.version>
+        <vexelray.version>0.1.0-SNAPSHOT</vexelray.version>
+        <tactroller.version>1.0-SNAPSHOT</tactroller.version>
+        <junit.version>5.11.4</junit.version>
+
+        <app.mainClass>dev.vexelray.demo.editor.TextEditor</app.mainClass>
+
+        <!--
+          Program args for exec:exec, split on whitespace by the commandlineArgs form below. Empty is the
+          interactive run; a multi-word value is several arguments rather than one.
+        -->
+        <app.args></app.args>
+
+        <!-- The automation driver: "off", "on" for the default port, or a port number. -->
+        <automation>off</automation>
+
+        <!--
+          Extra JVM flags for exec:exec, split on whitespace. Needed because a -D on the mvn command line sets a
+          MAVEN property, which reaches the forked JVM only if the command line below names it: without this,
+          "mvn exec:exec -Dmy.setting=48" runs the app with the default and reports a measurement of nothing.
+        -->
+        <app.jvmArgs></app.jvmArgs>
+    </properties>
+
+    <dependencies>
+        <!-- The application framework: the edge this project would otherwise write for itself. Its -shell
+             module brings vexelray-gui-core, -krono, -widget and tactroller with it, and owns the input
+             backend, the clipboard, the window memory, the clock, the frame loop and the shutdown. -->
+        <dependency>
+            <groupId>dev.vexelray.framework</groupId>
+            <artifactId>vexelray-framework-shell</artifactId>
+            <version>${vexelray-framework.version}</version>
+        </dependency>
+        <!-- The driving socket, as a framework component. Its own module, so a binary that never wants to be
+             driven does not link a listening socket. -->
+        <dependency>
+            <groupId>dev.vexelray.framework</groupId>
+            <artifactId>vexelray-framework-automation</artifactId>
+            <version>${vexelray-framework.version}</version>
+        </dependency>
+        <!-- The widget shelf, and the framework core and draw modules behind it. Reached through -shell as
+             well; named here because this project's own Ui builds against it directly. -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-widget</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
+        <!-- The clock. Motion enters at the application edge and nowhere else: -widget declares seams shaped
+             out of JDK types and this module satisfies them, so a widget animates without naming Kronometer. -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-krono</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
+        <!-- Driving the running app the way a person does: real window, real Vulkan, real frame loop.
+             A troubleshooting instrument, not a shipped feature - see vexelray-gui/docs/automation.md. -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-automation</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
+        <!-- Input at the application edge: the tactroller->atchung bridge (brings tactroller-api and
+             atchung-core transitively, which is where State and Committer come from). -->
+        <dependency>
+            <groupId>sibarum.tactroller</groupId>
+            <artifactId>tactroller-atchung</artifactId>
+            <version>${tactroller.version}</version>
+        </dependency>
+        <!-- Standalone OS clipboard; no input-subsystem coupling. -->
+        <dependency>
+            <groupId>sibarum.tactroller</groupId>
+            <artifactId>tactroller-clipboard</artifactId>
+            <version>${tactroller.version}</version>
+        </dependency>
+        <!-- The OS's own open, save and pick-folder dialogs (NFDe over Panama). -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-nfd</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
+        <!-- Syntax highlighting: TM4E's TextMate tokenizer (the NetBeans repack of org.eclipse.tm4e.core, which
+             is the only current release on Maven Central) and the three runtime dependencies it does not declare. -->
+        <dependency>
+            <groupId>org.netbeans.external</groupId>
+            <artifactId>org.eclipse.tm4e.core-0.14.0</artifactId>
+            <version>RELEASE260</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jruby.joni</groupId>
+            <artifactId>joni</artifactId>
+            <version>2.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.snakeyaml</groupId>
+            <artifactId>snakeyaml-engine</artifactId>
+            <version>2.7</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                    <!-- The framework's annotation processor: what its vocabulary calls a compile error is
+                         one. Named rather than found, because since JDK 23 javac runs no processor it merely
+                         finds on the class path. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>dev.vexelray.framework</groupId>
+                            <artifactId>vexelray-framework-processor</artifactId>
+                            <version>${vexelray-framework.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                </configuration>
+            </plugin>
+            <!--
+              LWJGL is not part of this stack, and an application that pulls it in is incompatible with the
+              framework: the stack owns its windowing and Vulkan through Panama, and LWJGL brings a second
+              copy of both. The only module that still uses it, supirvast's vastir-preview, is a dev tool that
+              is never installed. So nothing here should reach it, and if something does, this fails the build.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>no-lwjgl</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>org.lwjgl</exclude>
+                                    </excludes>
+                                    <message>LWJGL is not part of the VexelRay stack: find which dependency brings it with mvn dependency:tree and remove that edge.</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+              Run in a fresh JVM: mvn compile exec:exec
+              exec:exec rather than exec:java so native access can be enabled for Panama FFM.
+
+              One command line split on whitespace, rather than a list of argument elements. An argument
+              element is exactly one token and a property cannot expand into several, so a multi-word
+              app.args would arrive as a single argument. %classpath is substituted after the split, so it
+              stays one argument even where a path contains a space.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <executable>${java.home}/bin/java</executable>
+                    <classpathScope>runtime</classpathScope>
+                    <commandlineArgs>--enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dautomation=${automation} ${app.jvmArgs} -classpath %classpath ${app.mainClass} ${app.args}</commandlineArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Build-time platform selection: exactly one activates from the host OS, adding VexelRay's
+             matching provider module and tactroller's input backend (both found by ServiceLoader). -->
+        <profile>
+            <id>platform-windows</id>
+            <activation><os><family>windows</family></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.vexelray</groupId>
+                    <artifactId>vexelray-os-windows</artifactId>
+                    <version>${vexelray.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>sibarum.tactroller</groupId>
+                    <artifactId>tactroller-windows</artifactId>
+                    <version>${tactroller.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>platform-linux</id>
+            <activation><os><family>unix</family><name>linux</name></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.vexelray</groupId>
+                    <artifactId>vexelray-os-linux</artifactId>
+                    <version>${vexelray.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>sibarum.tactroller</groupId>
+                    <artifactId>tactroller-linux</artifactId>
+                    <version>${tactroller.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>platform-macos</id>
+            <activation><os><family>mac</family></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.vexelray</groupId>
+                    <artifactId>vexelray-os-macos</artifactId>
+                    <version>${vexelray.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+                <dependency>
+                    <groupId>sibarum.tactroller</groupId>
+                    <artifactId>tactroller-macos</artifactId>
+                    <version>${tactroller.version}</version>
+                    <scope>runtime</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>
