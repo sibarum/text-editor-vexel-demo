@@ -7,7 +7,7 @@ package dev.vexelray.demo.editor;
  * renaming one breaks a script somebody else wrote, and the compiler should be the thing that notices.
  *
  * <p>Where it can, a landmark carries state in its accessible name: {@link #FOLDER}'s text is the folder's name,
- * so {@code await folder SRC} is a real wait for the navigator to have been pointed somewhere.
+ * so {@code await folder src} is a real wait for the navigator to have been pointed somewhere.
  */
 final class Landmarks {
 

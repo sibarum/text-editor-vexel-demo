@@ -35,44 +35,49 @@ final class Highlighter {
 
     private static final Log LOG = Log.of("editor.highlight");
 
-    /** Token scope prefix -> colour; first match in order wins. Palette matches the app's dark theme. */
+    /**
+     * Token scope prefix -> colour; first match in order wins. The design's code colours, measured where it shows
+     * them -- keywords (#8aa9f0), types (#7dd3e6), numbers (#e5a477), comments (#7f8994), plain names and
+     * punctuation -- and the rest moved to sit with those. Comments are italic in the design; a span carries no
+     * style, so they are not (framework-notes FN-15, FN-16).
+     */
     private static final List<Map.Entry<String, Color>> SCOPE_COLORS = List.of(
-            Map.entry("comment",            Color.rgb(0x6b7689)),
-            Map.entry("string",             Color.rgb(0x9ece6a)),
-            Map.entry("constant.numeric",   Color.rgb(0xff9e64)),
-            Map.entry("constant.language",  Color.rgb(0xff9e64)),
+            Map.entry("comment",            Color.rgb(0x7f8994)),
+            Map.entry("string",             Color.rgb(0xa6d189)),
+            Map.entry("constant.numeric",   Color.rgb(0xe5a477)),
+            Map.entry("constant.language",  Color.rgb(0xe5a477)),
             // CSS keeps its interesting values here: #fff, auto, print, and the rest of the keyword values.
-            Map.entry("constant.other",     Color.rgb(0xff9e64)),
-            Map.entry("support.constant",   Color.rgb(0xff9e64)),
-            Map.entry("keyword",            Color.rgb(0xbb9af7)),
-            Map.entry("storage",            Color.rgb(0xbb9af7)),
-            Map.entry("entity.name.function", Color.rgb(0xe0af68)),
-            Map.entry("entity.name.type",   Color.rgb(0x2ac3de)),
-            Map.entry("support.type",       Color.rgb(0x2ac3de)),
-            Map.entry("support.class",      Color.rgb(0x2ac3de)),
+            Map.entry("constant.other",     Color.rgb(0xe5a477)),
+            Map.entry("support.constant",   Color.rgb(0xe5a477)),
+            Map.entry("keyword",            Color.rgb(0x8aa9f0)),
+            Map.entry("storage",            Color.rgb(0x8aa9f0)),
+            Map.entry("entity.name.function", Color.rgb(0xe3c08d)),
+            Map.entry("entity.name.type",   Color.rgb(0x7dd3e6)),
+            Map.entry("support.type",       Color.rgb(0x7dd3e6)),
+            Map.entry("support.class",      Color.rgb(0x7dd3e6)),
             Map.entry("variable.parameter", Color.rgb(0xe8d4b0)),
             // Shell and PowerShell are mostly variables, and an uncoloured $name reads as prose. This sits a
             // step off the default ink rather than shouting, and it tints plain identifiers in JS and Java too.
-            Map.entry("variable.other",     Color.rgb(0xc0caf5)),
-            Map.entry("entity.name.section", Color.rgb(0x7aa2f7)),
+            Map.entry("variable.other",     Color.rgb(0xc8d3e2)),
+            Map.entry("entity.name.section", Color.rgb(0x8aa9f0)),
             Map.entry("entity.name.tag",    Color.rgb(0xf7768e)),
             Map.entry("entity.other.attribute-name", Color.rgb(0x7dcfff)),
-            Map.entry("support.function",   Color.rgb(0x2ac3de)),
-            Map.entry("markup.heading",     Color.rgb(0x7aa2f7)),
-            Map.entry("markup.bold",        Color.rgb(0xe0af68)),
-            Map.entry("markup.italic",      Color.rgb(0xbb9af7)),
-            Map.entry("markup.inline.raw",  Color.rgb(0x2ac3de)),
-            Map.entry("markup.fenced_code", Color.rgb(0x2ac3de)),
+            Map.entry("support.function",   Color.rgb(0x7dd3e6)),
+            Map.entry("markup.heading",     Color.rgb(0x8aa9f0)),
+            Map.entry("markup.bold",        Color.rgb(0xe3c08d)),
+            Map.entry("markup.italic",      Color.rgb(0x8aa9f0)),
+            Map.entry("markup.inline.raw",  Color.rgb(0x7dd3e6)),
+            Map.entry("markup.fenced_code", Color.rgb(0x7dd3e6)),
             Map.entry("markup.underline.link", Color.rgb(0x73daca)),
-            Map.entry("markup.quote",       Color.rgb(0x6b7689)),
+            Map.entry("markup.quote",       Color.rgb(0x7f8994)),
             // A diff without red and green is not a diff. These three carry .diff files, and markdown's
             // ```diff fences with them.
-            Map.entry("markup.inserted",    Color.rgb(0x9ece6a)),
+            Map.entry("markup.inserted",    Color.rgb(0xa6d189)),
             Map.entry("markup.deleted",     Color.rgb(0xf7768e)),
-            Map.entry("markup.changed",     Color.rgb(0xe0af68)),
+            Map.entry("markup.changed",     Color.rgb(0xe3c08d)),
             // The ---/+++/@@ furniture around the hunks, which the grammar scopes as meta, not markup.
-            Map.entry("meta.diff",          Color.rgb(0x7aa2f7)),
-            Map.entry("punctuation",        Color.rgb(0x93a0b4)));
+            Map.entry("meta.diff",          Color.rgb(0x8aa9f0)),
+            Map.entry("punctuation",        Color.rgb(0x8b95a1)));
 
     /** Extension -> TextMate scope name, for the bundled grammars. */
     private static final Map<String, String> EXT_TO_SCOPE = Map.ofEntries(

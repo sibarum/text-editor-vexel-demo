@@ -154,6 +154,21 @@ and/or a worker-safe root for the frame loop's queue (`Shell.post`, or an `Execu
 main-thread). **v1:** a new `Shell` accessor is additive; the colour of a thread-safe wrapper is a T2.2 semantics
 question, and those freeze.
 
+**Update, October 2026: the stall is gone on Windows.** `vexelray-gui-nfd` now asks `Os.dialogLane` where a
+dialog runs. On Windows that is one daemon dialog thread, which does `NFD_Init` and quits NFD for itself on the
+way out; `FileDialog.openAsync`/`saveAsync`/`pickFolderAsync` answer a `CompletableFuture` off the GUI thread, and
+the window keeps drawing (disabled, as a modal's owner) while the dialog is up — measured with a posted task every
+250 ms running in 0–2 ms through six seconds of open dialog, against "not run within 200 ms" for the synchronous
+call. `NativeDialogs` and the title bar's screenshot button both use it. On macOS AppKit requires the main thread,
+so the lane is the frame loop and the stall remains; no Linux build of NFD ships. `Nfd.quit()` now releases only
+the calling thread's own initialisation, so the main thread's call at shutdown is a no-op on Windows and still
+needed on macOS. Unverified: macOS itself, and `NFD_Quit` actually running at a real JVM exit. Two things learned:
+the synchronous calls cannot be routed through the dialog thread with the caller waiting — disabling the owner
+window sends the GUI thread a message, and a GUI thread parked in `join()` deadlocks with the dialog — and
+`WindowControls.of(window)` (what a popup gets) posts with `Runnable::run` and captures nothing, so on a popup the
+macOS lane would run a dialog on whatever thread clicked, and a screenshot would do nothing. The `@MainThread`
+colouring of the recipe stands: `NativeDialogs` still takes the `GuiApp` for `post` and the window handle.
+
 ### FN-8 · `TextField.onChange` is one slot, and fires when only the spans changed 🔬
 
 A second `onChange` call silently replaces the first, so whoever owns a field has to own its one listener and fan
@@ -217,3 +232,166 @@ default "it moves" rather than "it cuts", with reduced motion as the one place t
   and `GrammarBundleTest.differentGrammarsFromOneRegistryTokenizeTogether` reproduces the
   `ConcurrentModificationException` it threw when a session restored a Java file and a README together.
   `Highlighter` now takes one lock for all tokenizing.
+- 🔬 **A late publication into a closed `Gui` throws.** A highlighting result finishing after a test has torn its
+  window down calls `setSpans`, whose change notification goes to a handler pool that has terminated, and
+  `RejectedExecutionException` reaches the uncaught handler. Harmless, and a race that was always there; the
+  retheme's slightly heavier tree made it show once a run in `EditorTreeTest`. A closed `Gui` could drop it.
+- 🔬 **A tab change was once left undrawn until the pointer moved** (FN-5's family). Seen once in four
+  `click`→`settle`→`shot` runs, only in the run that did a `find` first; six plain runs, three on each look, all
+  drew it.
+
+## The retheme
+
+In October 2026 the editor was rethemed to a design mockup: near-black page, two rounded cards (the navigator, and
+the tabs with their document), flat text tabs with an accent mark under the selected one, a breadcrumb over the
+document, a quiet status line, a teal accent, and italic comments in a different pair of typefaces. It was done
+as a test of whether a look is something an application can bring, before v1 freezes what a look is made of.
+
+**What took the design without modification.** Colour, all of it. Sampling the mockup and converting to Oklab
+gave six decisions — page, step, ink, fade, accent, and a derived action/danger — and the ladder lands on the
+card, edge, selected-row and thumb colours within the tolerances `LookTest.theConstructionLandsOnTheDesign` now
+pins. Three roles are overridden by identity in `Look.THEME` (SELECTION tinted with the accent, a quiet GRIP, a
+quiet LINE), which is what `Theme`'s Javadoc says to do. The cards are layout. `Tabs.skin` took the flat tabs, and
+the accent mark is a floating child of each header — a text node may carry floats, as a field carries its find
+bar — so the bar never learns about it. `Breadcrumb` existed, and `TitleBar.addLeading` took the project name.
+
+**What did not** is below, as FN-14 to FN-17. The pattern is that the framework has a theme for *colour* and
+nothing else: shape, density and type are written into each widget, and a widget's look is reachable from outside
+in proportion to whether its author happened to add a hook.
+
+### FN-14 · A theme is colour and depth; shape and density are each widget's 🔬
+
+`Theme` is a palette, a shading, a relief and two booleans. Everything else a design changes is a literal in a
+widget: corner radii (tab 0.5 rem, tree row 0.4 rem, tree frame 0.5 rem), border widths (0.1 rem everywhere),
+padding, row heights, and text sizes (tree rows 1 rem, breadcrumb 0.875 rem, status 0.75 rem, title 0.85 rem).
+Some widgets can be restyled after construction because they paint once; others repaint on every state change
+and so cannot:
+
+| Widget | What the design wanted | What happened |
+| --- | --- | --- |
+| `TextField` | no ring round the document | the border is repainted ACCENT/LINE on every focus change (`TextField.java:1153`), so the accent ring stays |
+| `TreeView` | tinted row, ink label, smaller text | no skin; selection paints SELECTION + ACCENT label (`TreeView.java:2068`); border repainted on focus; text 1 rem |
+| `SplitPane` | a quiet line in the gap between cards | **since fixed upstream:** `gutter(Length)` makes the gap the drag target, `line(Length)` paints a centred line in it, `motion(Ramp)` fades it, and it stays lit for the whole drag |
+| `TitleBar` | the application's name bright and bold | the caption is DIM at 0.85 rem with no accessor; the name is the caption |
+| `Breadcrumb` | small dim crumbs, `/` separators, the file in the accent | size, separator and the last segment's INK are fixed |
+| `StatusBar` | a status dot, a key-cap chip | a slot is a text node; nothing else can go in |
+| `Tabs` | a × on the selected tab | the header is one text node; a float could carry it, but the bar's padding is symmetric, so it would overlap the label |
+
+The workaround that covers most of it is a role override, and that has its own cost: a role is global. Making
+LINE quiet for the cards' edges makes every line quiet, including the dialogs'; tinting SELECTION also tints the
+find bar's match washes. There is no way to say "this widget's selection".
+
+*Costs:* a design is matched only as far as each widget's hooks go, and the gaps are invisible until a screenshot
+is laid beside the mockup. *Could:* shape and density tokens on `Theme` (a corner scale, a hairline, a control
+height, a type scale) read by every widget the way roles are; and a skin on each widget that paints state, as
+`Tabs` has. **v1:** `Theme` is an interface, so new methods with defaults are additive, and `Theme.of` gains an
+overload. Changing a widget's literal into a token read is not API-breaking but it does move every application's
+pixels, so it is better done before v1 than after.
+
+### FN-15 · An application cannot bring its own typefaces, or a weight, or a slant 🔬
+
+The text atlas is baked into `vexelray-text` at the framework's build, from `NotoSans-Regular` and
+`NotoSansMono-Regular`, and `Node.font(int)` picks between those two. The design is set in a different sans and a
+different mono, uses bold for the folder and the application's name, italic for comments, and letter-spacing for
+the section label. None of that is reachable: there is no third face, no weight, no slant and no tracking, and
+shadowing the atlas means re-running the `msdf` plugin over a copy of `vexelray-text`. Of every difference between
+the mockup and the screenshot, type is the one you notice first.
+
+*Could:* an application declares its faces (files, and the styles it wants of each) in its build, the starter
+bakes them, and a node picks a face *and* a style. **v1:** how an application declares fonts is part of the build
+shape, which v1 freezes; and `Node.font(int)` is the one text-styling call, so whether a style is a second
+argument or part of a face handle is a decision to make before the freeze.
+
+### FN-16 · A span carries a colour but no style 🔬
+
+`record Span(int start, int end, Color fg, Color bg, boolean underline)`. The design's comments are italic, and
+TextMate grammars carry bold and italic as well as colour; a highlighter has nowhere to put either. It depends on
+FN-15 — there is no italic face to select — but it is its own decision, because `Span` is a record: adding a
+component later changes its canonical constructor and its deconstruction pattern, which breaks every caller.
+**v1:** `Span` is reached through `TextField`, which is how every editor-shaped application on this stack colours
+text. Widening it now — a style component, or a builder in front of the constructor — is the cheap version.
+
+### FN-17 · The editor's own chrome is not themeable 🔬
+
+The design highlights the caret's line, brightens that line's number, and draws a thin quiet scrollbar. The field
+has no current-line highlight at all; the gutter draws every number in one ink, FAINT, read once when the renderer
+is built (`TreeRenderer.gutterInk`); the gutter's padding is fixed, so numbers sit tight against the text; and the
+scrollbar's width is the renderer's. The thumb's colour could be reached only by overriding GRIP for the whole
+application. *Could:* a current-line role and an active-gutter role on the field, read per frame, and the gutter's
+padding as a prop. **v1:** additive; not a frozen surface.
+
+### FN-18 · A label cannot be told to stay on one line, and nothing clips its own glyphs 🔬
+
+Seen as the navigator's long file names wrapping to two or three lines inside a fixed-height `TreeView` row and
+drawing over the rows below. Three things combined, all in gui-core:
+
+- **`Node.wordWrap(false)` is ignored on a label.** `RetainedNode.wrapsText()` is
+  `!editable() || (multiline() && wordWrap())`, so every non-editable text node wraps at its own width whatever the
+  prop says. `StatusBar`, `Select`, `Rail`, `Inspector`, `Button`, `Breadcrumb` and `Segment` all call it as if it
+  worked, and so does this application (the navigator's folder name, the title bar's project name) — harmless only
+  because those happen to fit.
+- **`clip(true)` masks a node's children, not its own text.** `TreeRenderer` draws a node's self before pushing
+  its clip. So a one-line label cut at its own edge always takes a wrapper box: an AUTO-width label (one line,
+  since flex never shrinks) inside a `grow(1)` row with `clip(true)` — `Table`'s body cells already do this, and
+  `TreeView` now does it too, with a tooltip carrying the full name when the row is cut.
+- **There is no ellipsis anywhere** in vexelray-text or gui-core, so a cut name ends mid-glyph.
+
+The same wrap-in-a-fixed-box bug remains in `ListView` rows (and so in `Select`'s dropdown, whose
+`wordWrap(false)` does nothing) and in `Table`'s column titles. *Could:* make `wordWrap(false)` mean one line on
+any text node, let a text node clip its own glyphs, and add an ellipsis mode to the text layout. **v1:** a prop that
+silently does nothing is a contract; deciding what `wordWrap` means on a label is cheaper before the freeze.
+
+### FN-19 · `TreeView.Source` has one item per row, so a merged row is a workaround 🔬
+
+The navigator now merges a chain of single-child folders into one row (`test/java/dev/vexelray/demo/editor`),
+because at 1.2 em of indent per level a Java source tree leaves file names no room. `FolderSource` does it by
+keying the row on the deepest folder and labelling it with the chain, and the tree never learns the folders in
+between exist. What that costs:
+
+- `revealPath` stops silently at the first step it cannot find, so a reveal chain that still named a merged-away
+  folder just stopped at the top of the tree; `chainTo` has to know to leave them out.
+- `refresh()` matches rows by item, so when a chain splits (a merged folder gains an entry) the row is rebuilt and
+  forgets whether it was expanded.
+- There is no per-segment menu: "Make this the root" on a merged row can only mean the deepest folder.
+- `label(T)` runs under the tree's lock on whatever thread builds the row, so a label that depends on listing the
+  disk has to be worked out in `children()` and cached in the source.
+
+Merging costs one short listing (at most two visible entries) per folder row, plus one per further merged level,
+inside `children()` on the tree's own executor; `Navigator.reveal` now walks on the offload lane for the same
+reason. *Could:* rows that stand for a chain of items, or a compact-folders mode in `TreeView` itself, and a
+`revealPath` that says where it stopped. **v1:** `TreeView` is not a frozen surface; additive.
+
+### FN-20 · A sliding tab indicator is sixty lines every application with tabs will write 🔬
+
+The selected tab's accent mark slides to the newly selected tab, eased (`Workspace.slideMarkTo`). The framework
+supplied the parts — an eased `Ramp` from the clock, `translate` for draw-only displacement, floating children on
+the header — but not the effect, and assembling it took four things no application should have to rediscover:
+
+- **The distance is the application's to compute.** There is no "move from header A to header B": each header
+  owns a mark, and the arriving one is drawn displaced back to where the last one was, then eased home, with the
+  displacement read from the two headers' layout rects in pixels.
+- **A header added this instant has no layout** until the next frame, so every step re-reads the target's rect
+  and the old mark stays where it is until there is one.
+- **A slide can be overtaken before it draws.** A restored session opens tabs back to back; the first version
+  hid only the mark it was leaving, and left two marks on show. The mark actually drawn has to be tracked apart
+  from the tab it is heading for, and an overtaken slide restarts from what is on screen.
+- **Its own lock.** The skin runs under the bar's monitor and the steps on the clock, so the mark's state needs a
+  lock that takes nothing else, to keep `Workspace`'s deadlock rule (FN-4).
+
+And one conversion: `Node.translate` takes multiples of the node's em, while layout rects are pixels, so the
+offset is divided by `rootEmPx × zoom × dpi` by hand — a product the application has to know is the em basis
+(`FlexLayout.emBasis`), which `Gui` does not expose as one number.
+
+The conversion is a symptom of the public geometry API speaking three units: an application *writes* `Length`s
+(em, rem, dp), but *reads* `NodeLayout` and `DragEvent` in px, animates with `translate` in em, and gets
+`SplitPane.sizeDp`/`onResize` in dp (which `SplitPane` itself makes by dividing pointer px by dpi). Px is right
+underneath — `NodeLayout` is a transport-serializable read model shared with hit-testing, overlays and devtools,
+and input arrives in px — but an application should read in the units it writes.
+
+*Could:* `Tabs.indicator(Ramp)` — one indicator node the bar owns, positioned from its own headers, sliding on
+selection, with the skin deciding only its look. And for the units: an em view of the read side (em accessors on
+`NodeLayout` and `DragEvent`, or at least one `Gui.emPx()` answering the basis), so a position read back can be
+handed to `translate` unconverted and still means the same thing after a zoom. **v1:** the indicator is additive.
+The units are not a `Tabs` question: `Node.layout()` is reachable from what `Shell` hands out, so it is inside the
+gui surface that bounds v1. Adding an em view later is additive, but deciding what an application reads geometry
+in — and whether `rect()` stays px for applications at all — is cheap only before the freeze.

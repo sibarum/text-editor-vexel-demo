@@ -42,9 +42,9 @@ final class GrammarBundleTest {
 
     private static final Registry REGISTRY = Highlighter.loadGrammars();
 
-    private static final Color STRING = Color.rgb(0x9ece6a);
-    private static final Color KEYWORD = Color.rgb(0xbb9af7);
-    private static final Color INSERTED = Color.rgb(0x9ece6a);
+    private static final Color STRING = Color.rgb(0xa6d189);
+    private static final Color KEYWORD = Color.rgb(0x8aa9f0);
+    private static final Color INSERTED = Color.rgb(0xa6d189);
     private static final Color DELETED = Color.rgb(0xf7768e);
 
     private static IGrammar grammarFor(String fileName) {

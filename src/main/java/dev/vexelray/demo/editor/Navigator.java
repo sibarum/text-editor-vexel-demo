@@ -32,6 +32,7 @@ final class Navigator {
     private final FolderSource source = new FolderSource(null);
     private final TreeView<Path> tree;
     private final Node heading;
+    private final Node label;
     private final Node empty;
     private final Node root;
 
@@ -43,10 +44,19 @@ final class Navigator {
         this.motion = motion;
         this.io = gui.offload();
 
-        heading = gui.text("NO FOLDER")
+        // A section label over the folder's name, as the design has it. The design sets the label letter-spaced and
+        // the name bold; neither is something a node can ask for (framework-notes FN-15).
+        label = gui.text("EXPLORER")
                 .font(Type.UI)
                 .textSize(Type.SMALL)
-                .textColor(gui.theme().color(Role.DIM));
+                .textColor(gui.theme().color(Role.FAINT))
+                .padding(Length.ZERO, Type.TIGHT);
+        heading = gui.text("No folder")
+                .font(Type.UI)
+                .textSize(Type.LABEL)
+                .textColor(gui.theme().color(Role.INK))
+                .padding(Length.ZERO, Type.TIGHT)
+                .wordWrap(false);
         gui.landmark(Landmarks.FOLDER, heading);
 
         empty = gui.text("Open a folder with Ctrl+Shift+O")
@@ -55,7 +65,10 @@ final class Navigator {
                 .textColor(gui.theme().color(Role.FAINT));
 
         tree = new TreeView<>(gui, source).motion(motion.arrival);
-        tree.node().width(Length.FILL).height(Length.grow(1)).visible(false);
+        // The tree sits in the card rather than in a well of its own. Its border is the tree's to repaint on every
+        // change of focus, so that stays (framework-notes FN-14).
+        tree.node().width(Length.FILL).height(Length.grow(1)).visible(false)
+                .background(gui.theme().color(Role.NONE));
         gui.landmark(Landmarks.TREE, tree.node());
         tree.onSelect(p -> {
             if (Files.isRegularFile(p)) {
@@ -78,10 +91,13 @@ final class Navigator {
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .gap(Type.TIGHT)
-                .padding(Type.TIGHT, Type.TIGHT)
-                .background(gui.theme().color(Role.PANEL))
+                // Narrow at the sides: the gap beside the card is the divider's now, and the tree keeps its own inset.
+                .padding(Type.WIDE, Length.dp(3))
+                .background(gui.theme().color(Look.CARD))
+                .corner(Type.CORNER)
+                .border(Type.RULE, gui.theme().color(Look.RIM))
                 .alignItems(AlignItems.STRETCH)
-                .children(heading, empty, tree.node());
+                .children(label, heading, empty, tree.node());
     }
 
     Node node() {
@@ -110,7 +126,7 @@ final class Navigator {
             tree.refresh();
             Path shown = source.base();
             Path name = shown == null ? null : shown.getFileName();
-            heading.text(shown == null ? "NO FOLDER" : String.valueOf(name == null ? shown : name).toUpperCase());
+            heading.text(shown == null ? "No folder" : String.valueOf(name == null ? shown : name));
             empty.visible(shown == null);
             tree.node().visible(shown != null);
             if (then != null) {
@@ -124,17 +140,23 @@ final class Navigator {
      * no way down to it from here, and moving the root under the user is not what a reveal asks for.
      */
     boolean reveal(Path file) {
-        var chain = source.chainTo(file);
-        if (chain.isEmpty()) {
+        if (!source.holds(file)) {
             return false;
         }
-        // Ringed once it is there, since a row the walk scrolled to is a row the eye has not found yet.
-        Path last = chain.getLast();
-        tree.revealPath(chain, () -> {
-            Node row = tree.rowNode(last);
-            if (row != null) {
-                motion.cues.play(row, Cue.ring(gui.theme().color(Role.ACCENT), 1));
+        // The way down depends on which folders are merged into one row, which is a listing per level: offloaded.
+        io.execute(() -> {
+            var chain = source.chainTo(file);
+            if (chain.isEmpty()) {
+                return;   // the folder changed under the request
             }
+            // Ringed once it is there, since a row the walk scrolled to is a row the eye has not found yet.
+            Path last = chain.getLast();
+            tree.revealPath(chain, () -> {
+                Node row = tree.rowNode(last);
+                if (row != null) {
+                    motion.cues.play(row, Cue.ring(gui.theme().color(Role.ACCENT), 1));
+                }
+            });
         });
         return true;
     }

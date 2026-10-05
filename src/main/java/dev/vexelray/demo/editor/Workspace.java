@@ -3,10 +3,13 @@ package dev.vexelray.demo.editor;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.layout.NodeLayout;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.Tabs;
+import dev.vexelray.text.TextLayout;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -42,6 +45,8 @@ final class Workspace {
     private final Motion motion;
     private final Color accent;
     private final Tabs tabs;
+    private final Node card;
+    private final Consumer<Path> reveal;
     private final AtomicLong ids = new AtomicLong();
     private final Consumer<Buffer.Position> caret;
 
@@ -51,17 +56,49 @@ final class Workspace {
     /** By id, for the paths that must not take {@link #lock}. */
     private final Map<Long, Buffer> byId = new ConcurrentHashMap<>();
     private final Map<Long, Node> headers = new ConcurrentHashMap<>();
+    /** Each header's accent mark, which the skin shows under the selected one. */
+    private final Map<Node, Node> marks = new ConcurrentHashMap<>();
+    /**
+     * Guards the mark's slide, and nothing else: the skin runs under the bar's lock and the slide's steps on the
+     * clock, so this is taken inside both and takes nothing itself.
+     */
+    private final Object markLock = new Object();
+    /** Guarded by {@link #markLock}: the header the mark is going to, and the slide taking it there. */
+    private Node markTarget;
+    private long slide;
+    /**
+     * Guarded by {@link #markLock}: the header whose mark is actually drawn, how far from home, and where that was
+     * on screen — kept apart from the target because a slide can be overtaken before it has drawn anything, and
+     * the next one has to start from what is on screen, not from where the last one meant to go.
+     */
+    private Node shownOn;
+    private float shownOffsetPx;
+    private float shownX = Float.NaN;
 
     private volatile boolean wrap = true;
 
-    Workspace(Gui gui, Motion motion, Model model, Consumer<Buffer.Position> caret) {
+    /**
+     * @param caret  told where the caret is in the document in front
+     * @param reveal asked to show a folder a breadcrumb was clicked on
+     */
+    Workspace(Gui gui, Motion motion, Model model, Consumer<Buffer.Position> caret, Consumer<Path> reveal) {
         this.gui = gui;
         this.motion = motion;
         this.accent = gui.theme().color(Role.ACCENT);
         this.model = model;
         this.caret = caret;
-        this.tabs = new Tabs(gui).closable(false).transition(Tabs.slide(motion.change));
+        this.reveal = reveal;
+        this.tabs = new Tabs(gui).closable(false).transition(Tabs.slide(motion.change)).skin(this::paintHeader);
         tabs.node().width(Length.FILL).height(Length.FILL);
+        // The bar and the pages are both CHROME already, which is this design's card; the card itself is the
+        // rounded edge round the two.
+        this.card = gui.column()
+                .width(Length.FILL).height(Length.FILL)
+                .background(gui.theme().color(Look.CARD))
+                .corner(Type.CORNER)
+                .border(Type.RULE, gui.theme().color(Look.RIM))
+                .clip(true)
+                .children(tabs.node());
         gui.landmark(Landmarks.TABS, tabs.node());
         // Delivered on a worker, after the fact: resolve what is in front now rather than trusting the index,
         // which a close between the click and this may have moved.
@@ -75,7 +112,7 @@ final class Workspace {
     }
 
     Node node() {
-        return tabs.node();
+        return card;
     }
 
     Tabs tabs() {
@@ -102,19 +139,28 @@ final class Workspace {
                     if (model.doc().active() == id) {
                         caret.accept(position);
                     }
-                });
+                },
+                reveal);
+        buffer.place(model.doc().folder());
         Buffer replaced = null;
         synchronized (lock) {
             Buffer in = frontLocked();
             if (in != null && in.pristine() && buffers.size() == 1) {
                 replaced = in;
             }
-            tabs.add(new Doc.Entry(id, path, false, buffer.language()).title(), buffer.field.node());
+            tabs.add(new Doc.Entry(id, path, false, buffer.language()).title(), buffer.page);
             int index = buffers.size();
+            // The bar painted the header before the mark existed, and selecting a tab that is already selected
+            // repaints nothing, so the mark is moved here as well as by the skin.
+            Node header = tabs.header(index);
+            marks.put(header, mark(header));
             buffers.add(buffer);
             byId.put(id, buffer);
-            headers.put(id, tabs.header(index));
+            headers.put(id, header);
             tabs.select(index);
+            if (tabs.selected() == index) {
+                slideMarkTo(header);
+            }
         }
         model.opened(new Doc.Entry(id, path, false, buffer.language()));
         if (replaced != null) {
@@ -152,7 +198,10 @@ final class Workspace {
             return;
         }
         byId.remove(id);
-        headers.remove(id);
+        Node header = headers.remove(id);
+        if (header != null) {
+            marks.remove(header);
+        }
         gone.close();
         model.closed(id);
         if (empty) {
@@ -252,6 +301,110 @@ final class Workspace {
             if (header != null) {
                 header.text(e.title());
             }
+            Buffer b = byId.get(e.id());
+            if (b != null) {
+                b.place(doc.folder());
+            }
         }
+    }
+
+    /**
+     * A tab as the design draws it: a label on the card, with no silhouette of its own. Idle labels are dim and
+     * the selected one is ink, with the accent mark under it.
+     */
+    private void paintHeader(Node header, boolean selected, InteractionState state) {
+        header.padding(Length.dp(6), Length.dp(14))
+                .textSize(Type.LABEL)
+                .align(TextLayout.HAlign.CENTER, TextLayout.VAlign.MIDDLE)
+                .corner(Type.CORNER)
+                .background(gui.theme().color(selected || state == InteractionState.NORMAL ? Role.NONE : Role.PANEL))
+                .textColor(gui.theme().color(selected ? Role.INK : Role.DIM))
+                .lit(false)
+                .elevation(Length.ZERO);
+        if (selected) {
+            slideMarkTo(header);
+        }
+    }
+
+    /**
+     * Move the accent mark to {@code header}, sliding it there from wherever it is now.
+     *
+     * <p>There is one mark on show at a time, but it is drawn by whichever header is selected: each header owns
+     * a mark as a floating child, and the slide is the arriving header's mark drawn displaced back to where the
+     * last one was, then eased home. So the mark is always laid out by the header it belongs to and nothing has
+     * to follow the bar's geometry when tabs open, close or resize — only the displacement is computed, and only
+     * while it is moving. It is read from the arriving header's layout on every step rather than once, because a
+     * header that was added this instant has no layout until the next frame; until it has, the old mark stays
+     * where it was.
+     *
+     * <p>Interrupted, a slide starts again from where the mark is drawn now, not from where it was going.
+     */
+    private void slideMarkTo(Node header) {
+        float fromX;
+        long mine;
+        synchronized (markLock) {
+            if (header == markTarget || !marks.containsKey(header)) {
+                return;
+            }
+            markTarget = header;
+            mine = ++slide;
+            NodeLayout was = shownOn == null ? NodeLayout.ABSENT : shownOn.layout();
+            fromX = was.present() ? was.rect().x() + shownOffsetPx : shownX;
+            if (Float.isNaN(fromX)) {
+                // Nowhere to come from — the first tab of the session. The mark arrives with its tab.
+                drawMark(header, 0f);
+                return;
+            }
+        }
+        motion.arrival.run(p -> {
+            synchronized (markLock) {
+                if (slide != mine) {
+                    return;   // a later selection owns the mark now, and starts from wherever this one drew it
+                }
+                NodeLayout to = header.layout();
+                if (!to.present()) {
+                    return;
+                }
+                float t = (float) Math.max(0d, Math.min(1d, p));
+                drawMark(header, (fromX - to.rect().x()) * (1f - t));
+            }
+        }, () -> { });
+    }
+
+    /** Draw {@code header}'s mark {@code offsetPx} from home, and take down whichever mark was drawn before it. */
+    private void drawMark(Node header, float offsetPx) {
+        Node mark = marks.get(header);
+        if (mark == null) {
+            return;
+        }
+        Node before = shownOn == null || shownOn == header ? null : marks.get(shownOn);
+        if (before != null) {
+            before.visible(false);
+        }
+        float emPx = gui.rootEmPx() * gui.zoom().value() * gui.dpi().value();
+        mark.translate(offsetPx / emPx, 0f).visible(true);
+        shownOn = header;
+        shownOffsetPx = offsetPx;
+        NodeLayout at = header.layout();
+        if (at.present()) {
+            shownX = at.rect().x() + offsetPx;
+        }
+    }
+
+    /**
+     * The accent mark under a header: a short bar, floated to the header's foot. A header is the bar's text node,
+     * and a text node may carry floating children (as a field carries its find bar), so the mark is the header's
+     * own child rather than something the bar has to know about. Asking for a y past the bottom puts it on the
+     * bottom edge, because a float is clamped inside its parent.
+     */
+    private Node mark(Node header) {
+        Node mark = gui.box()
+                .width(Length.rem(1.25f)).height(Length.dp(2))
+                .corner(Length.dp(1))
+                .background(accent)
+                .floatAt(Length.dp(14), Length.rem(4))
+                .visible(false);
+        header.append(mark);
+        return mark;
     }
 }

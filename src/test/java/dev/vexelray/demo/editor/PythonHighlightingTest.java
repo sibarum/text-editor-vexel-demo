@@ -22,12 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 final class PythonHighlightingTest {
 
-    private static final Color COMMENT = Color.rgb(0x6b7689);
-    private static final Color STRING = Color.rgb(0x9ece6a);
-    private static final Color NUMBER = Color.rgb(0xff9e64);
-    private static final Color KEYWORD = Color.rgb(0xbb9af7);
-    private static final Color FUNCTION = Color.rgb(0xe0af68);
-    private static final Color TYPE = Color.rgb(0x2ac3de);
+    private static final Color COMMENT = Color.rgb(0x7f8994);
+    private static final Color STRING = Color.rgb(0xa6d189);
+    private static final Color NUMBER = Color.rgb(0xe5a477);
+    private static final Color KEYWORD = Color.rgb(0x8aa9f0);
+    private static final Color FUNCTION = Color.rgb(0xe3c08d);
+    private static final Color TYPE = Color.rgb(0x7dd3e6);
 
     private static final IGrammar PYTHON = Highlighter.loadGrammars().grammarForScopeName("source.python");
 
