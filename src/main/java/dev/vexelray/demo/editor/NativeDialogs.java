@@ -8,20 +8,21 @@ import sibarum.probe.Log;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * {@link Dialogs} over NFDe, parented to the main window.
  *
- * <p>NFDe's dialogs are synchronous, modal, and must be called on the thread that owns the window, so a request
- * from a worker is posted to the frame loop ({@link GuiApp#post}), runs there, and hands the answer back to a
- * worker. <b>The frame loop is blocked for as long as the dialog is up.</b> That is NFDe's shape rather than a
- * choice made here, and the window does not paint behind the dialog while it is open; the OS dialog itself stays
- * responsive.
+ * <p>Where a dialog runs is {@code FileDialog}'s decision, not this class's: on Windows it is the framework's
+ * dialog thread, so the window keeps drawing behind the dialog (disabled, as a modal's owner should be); on macOS
+ * AppKit insists on the main thread, so the request is posted to the frame loop ({@link GuiApp#post}) and the
+ * frame loop is blocked for as long as the dialog is up. Either way the answer comes back to a worker.
  *
- * <p>Closed by the framework at shutdown, on the main thread, which is where {@link Nfd#quit} must run.
+ * <p>Closed by the framework at shutdown, on the main thread. {@link Nfd#quit} releases only that thread's own
+ * initialisation, so it matters on macOS, where the dialogs ran there, and is a no-op on Windows, where the
+ * dialog thread quits for itself.
  */
 final class NativeDialogs implements Dialogs, AutoCloseable {
 
@@ -40,31 +41,30 @@ final class NativeDialogs implements Dialogs, AutoCloseable {
 
     @Override
     public void openFile(Path start, Consumer<Path> picked) {
-        ask(() -> FileDialog.open(app.windowHandle(), null, start), picked, () -> { });
+        ask(FileDialog.openAsync(app::post, app.windowHandle(), null, start), picked, () -> { });
     }
 
     @Override
     public void openFolder(Path start, Consumer<Path> picked) {
-        ask(() -> FileDialog.pickFolder(app.windowHandle(), start), picked, () -> { });
+        ask(FileDialog.pickFolderAsync(app::post, app.windowHandle(), start), picked, () -> { });
     }
 
     @Override
     public void saveFile(Path start, String name, Consumer<Path> picked, Runnable cancelled) {
-        ask(() -> FileDialog.save(app.windowHandle(), filters, start, name), picked, cancelled);
+        ask(FileDialog.saveAsync(app::post, app.windowHandle(), filters, start, name), picked, cancelled);
     }
 
-    private void ask(Supplier<Optional<Path>> dialog, Consumer<Path> picked, Runnable cancelled) {
-        app.post(() -> {
-            Optional<Path> answer;
-            try {
-                answer = dialog.get();
-            } catch (RuntimeException | LinkageError e) {
-                LOG.warn("the file dialog could not be shown", e);
-                answers.execute(cancelled);
-                return;
+    private void ask(CompletableFuture<Optional<Path>> dialog, Consumer<Path> picked, Runnable cancelled) {
+        dialog.whenCompleteAsync((answer, failure) -> {
+            if (failure != null) {
+                LOG.warn("the file dialog could not be shown", failure);
+                cancelled.run();
+            } else if (answer.isPresent()) {
+                picked.accept(answer.get());
+            } else {
+                cancelled.run();
             }
-            answers.execute(answer.isPresent() ? () -> picked.accept(answer.get()) : cancelled);
-        });
+        }, answers);
     }
 
     @Override
