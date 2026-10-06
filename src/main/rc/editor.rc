@@ -1,0 +1,7 @@
+// The executable's icon, linked into editor.exe by the `native` profile.
+//
+// Ordinal 1, and it is the only icon here, because Windows shows a program's *lowest-numbered* icon resource
+// wherever it shows the program itself -- Explorer, the taskbar's pinned button, a shortcut. This is the icon of
+// the file on disk; the icon of the running window is set from the same artwork by AppIcon, out of the PNGs
+// under src/main/resources/icons. editor.ico is packed from those same PNGs by tools/MakeIco.java.
+1 ICON "editor.ico"

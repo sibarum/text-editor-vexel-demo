@@ -26,11 +26,11 @@ class EditorTreeTest {
     Path dir;
 
     private Shell shell;
-    private TextEditorWiring wiring;
+    private TextEditorAppWiring wiring;
 
     @BeforeEach
     void build() {
-        wiring = new TextEditorWiring();
+        wiring = new TextEditorAppWiring();
         shell = VexelApplication.tree(wiring, new String[0]);
     }
 

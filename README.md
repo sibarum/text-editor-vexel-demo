@@ -128,3 +128,10 @@ chords yet, so Ctrl-commands cannot be scripted (framework-notes FN-3); clicks, 
 The framework configures it: info to the console and debug to `target/logs/text-editor.log` from a checkout,
 more under automation. This application logs as `editor.files`, `editor.dialogs` and `editor.highlight`;
 `-Dlog.level.editor.files=debug` raises one of them.
+
+## Native build and installer
+
+`mvn -Pnative-release package` builds `target/text-editor.exe` (GUI subsystem, no automation; what ships) and `mvn -Pnative package` builds `target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
+prompt); see [docs/native-build.md](docs/native-build.md). `installer.json` describes the per-user installer
+for it (`vexelray-installer`), with `text-editor` added to `PATH`: `text-editor <folder or files...>` opens a new
+window, a folder as the navigator's root and files as tabs.

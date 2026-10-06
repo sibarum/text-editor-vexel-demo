@@ -21,7 +21,7 @@ import java.util.List;
 /**
  * What this application builds — one recipe per part — and nothing about when.
  *
- * <p>{@code TextEditorWiring} is generated from this while the project compiles. A part's phase is the latest
+ * <p>{@code TextEditorAppWiring} is generated from this while the project compiles. A part's phase is the latest
  * phase of anything it takes, so the look and the model exist first, the window's contents wait for the
  * {@code Gui}, the file dialogs wait for the window, and the session — which needs the close gate, and so the
  * {@code Shell} — comes last.

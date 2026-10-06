@@ -1,0 +1,24 @@
+{
+  "id": "text-editor",
+  "name": "Text Editor",
+  "publisher": "sibarum",
+  "description": "A tabbed text editor with a file navigator, on the VexelRay stack.",
+  "version": "0.1.0",
+
+  "repo": "sibarum/text-editor-vexel-demo",
+  "branch": "main",
+  "releasesRepo": "sibarum/text-editor-vexel-demo",
+  "tagFormat": "v{version}",
+
+  "windows": {
+    "binaries": [
+      {
+        "name": "text-editor",
+        "source": "target/text-editor.exe",
+        "icon": "src/main/rc/editor.ico",
+        "addToPath": true,
+        "shortcuts": { "desktop": true, "startMenu": true, "label": "Text Editor" }
+      }
+    ]
+  }
+}
