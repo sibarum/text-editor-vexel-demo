@@ -21,6 +21,7 @@
         <vexelray-gui.version>0.1.0-SNAPSHOT</vexelray-gui.version>
         <vexelray.version>0.1.0-SNAPSHOT</vexelray.version>
         <tactroller.version>1.0-SNAPSHOT</tactroller.version>
+        <concordance.version>0.1.0-SNAPSHOT</concordance.version>
         <junit.version>5.11.4</junit.version>
 
         <app.mainClass>dev.vexelray.demo.editor.TextEditor</app.mainClass>
@@ -130,6 +131,16 @@
             <groupId>org.snakeyaml</groupId>
             <artifactId>snakeyaml-engine</artifactId>
             <version>2.7</version>
+        </dependency>
+
+        <!-- Java code intelligence: Concordance's structural index (declarations and the places names are used),
+             built from a Maven project by reading its poms. Brings concordance-project and javaparser-core, which
+             it drives at LanguageLevel.RAW so nothing reflects and native-image needs no metadata for it.
+             Installed to the local .m2 by `mvn install` in the sibling concordance-indexer repo. -->
+        <dependency>
+            <groupId>sibarum.concordance</groupId>
+            <artifactId>concordance-index</artifactId>
+            <version>${concordance.version}</version>
         </dependency>
 
         <dependency>

@@ -41,6 +41,12 @@ final class Recipes {
         return new Model();
     }
 
+    /** Concordance's index of the open folder, built in the background whenever that folder is a Maven project. */
+    @Provides
+    ProjectIndex projectIndex(Model model) {
+        return new ProjectIndex(model);
+    }
+
     /** What is remembered between runs, over the one settings store. */
     @Provides
     Session session(Settings settings, Model model) {
@@ -67,8 +73,8 @@ final class Recipes {
      * the session or a dialog brings something else.
      */
     @Provides
-    Actions actions(Gui gui, Model model, Ui ui) {
-        Actions actions = new Actions(gui, model, ui);
+    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index) {
+        Actions actions = new Actions(gui, model, ui, index);
         actions.shortcuts();
         ui.workspace().untitled();
         return actions;

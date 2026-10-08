@@ -22,8 +22,15 @@ import java.util.function.Consumer;
  */
 final class Buffer implements AutoCloseable {
 
-    /** Where the caret is, 1-based, for the status line. */
-    record Position(int line, int column) {
+    /**
+     * Where the caret is, for the status line: line and column, 1-based, and the declaration it is in
+     * ({@link Outline#scopeAt}), empty when there is none.
+     */
+    record Position(int line, int column, String scope) {
+    }
+
+    /** An identifier in the text, as offsets {@code [start, end)}, and whether a {@code (} follows it. */
+    record Word(String text, int start, int end, boolean call) {
     }
 
     final long id;
@@ -32,6 +39,7 @@ final class Buffer implements AutoCloseable {
     final Node page;
     private final Breadcrumb<Path> crumbs;
     private final Highlighter highlighter;
+    private final Outline outline;
     private final Subscription dirtyWatch;
     private final Subscription caretWatch;
     private final Consumer<Boolean> dirty;
@@ -56,6 +64,7 @@ final class Buffer implements AutoCloseable {
         this.dirty = dirty;
         this.field = new TextField(gui, "")
                 .multiline(true)
+                .autoIndent(true)
                 .lineNumbers(true)
                 .wordWrap(wrap);
         // The field sits on the card rather than in a well of its own. Its border is the field's to repaint on
@@ -72,6 +81,8 @@ final class Buffer implements AutoCloseable {
                 .background(gui.theme().color(Look.CARD))
                 .children(crumbs.node(), field.node());
         this.highlighter = new Highlighter(gui, field);
+        // A new outline can change the scope under a caret that has not moved, so it says where the caret is again.
+        this.outline = new Outline(gui, field, this::path, () -> caret.accept(position()));
 
         field.text(content.text());
         field.caret(0);
@@ -85,11 +96,13 @@ final class Buffer implements AutoCloseable {
             if (!text.equals(highlighted)) {
                 highlighted = text;
                 highlighter.refresh();
+                outline.refresh();
             }
         });
         this.dirtyWatch = field.history().status().onCommitLatest(s -> dirty.accept(unsavedWrite || !s.value().clean()));
         this.caretWatch = field.document().onCommitLatest(d -> caret.accept(position(d.value())));
         highlighter.language(name());
+        outline.language(highlighter.language());
     }
 
     Path path() {
@@ -145,6 +158,12 @@ final class Buffer implements AutoCloseable {
     void savedAs(Path target) {
         this.path = target;
         highlighter.language(name());
+        outline.language(highlighter.language());
+    }
+
+    /** What this document declares, from its text as it is now. Empty for one that is not Java. */
+    List<sibarum.concordance.index.Symbol> declarations() {
+        return outline.declarations();
     }
 
     /**
@@ -184,8 +203,13 @@ final class Buffer implements AutoCloseable {
         field.wordWrap(wrap);
     }
 
+    /** Where the caret is now. */
+    Position position() {
+        return position(field.document().value());
+    }
+
     /** Where the caret is in {@code doc}: one pass over the text before it. */
-    static Position position(Document doc) {
+    private Position position(Document doc) {
         String text = doc.text();
         int caret = Math.min(doc.caret(), text.length());
         int line = 1;
@@ -196,12 +220,97 @@ final class Buffer implements AutoCloseable {
                 lineStart = i + 1;
             }
         }
-        return new Position(line, caret - lineStart + 1);
+        int column = caret - lineStart + 1;
+        return new Position(line, column, outline.scopeAt(line, column));
+    }
+
+    /**
+     * The identifier the caret is in or just after, or null. "Just after" because the caret at the end of a word
+     * is where it is left by typing the word or double-clicking it.
+     */
+    Word wordAtCaret() {
+        Document doc = field.document().value();
+        return wordAt(doc.text(), doc.caret());
+    }
+
+    static Word wordAt(String text, int caret) {
+        int at = Math.min(Math.max(caret, 0), text.length());
+        int start = at;
+        while (start > 0 && Character.isJavaIdentifierPart(text.charAt(start - 1))) {
+            start--;
+        }
+        int end = at;
+        while (end < text.length() && Character.isJavaIdentifierPart(text.charAt(end))) {
+            end++;
+        }
+        // Skip what cannot begin a name: the digits of a number are not one.
+        while (start < end && !Character.isJavaIdentifierStart(text.charAt(start))) {
+            start++;
+        }
+        if (start >= end) {
+            return null;
+        }
+        int next = end;
+        while (next < text.length() && (text.charAt(next) == ' ' || text.charAt(next) == '\t')) {
+            next++;
+        }
+        boolean call = next < text.length() && text.charAt(next) == '(';
+        return new Word(text.substring(start, end), start, end, call);
+    }
+
+    /**
+     * Select the name {@code name} declared at {@code line}:{@code column} — the first whole-word {@code name} at
+     * or after that place, since a declaration begins at its annotations and modifiers rather than at its name.
+     * The caret goes to the place itself when the name is not found there, as after an edit since the index was
+     * built. Selecting is what scrolls the field to it.
+     */
+    void selectDeclaration(String name, int line, int column) {
+        int found = declaredNameAt(name, line, column);
+        if (found >= 0) {
+            field.select(found, found + name.length());
+        } else {
+            field.caret(offsetOf(field.text(), line, column));
+        }
+    }
+
+    /** Where the name of the declaration at {@code line}:{@code column} is in the text, or -1. */
+    int declaredNameAt(String name, int line, int column) {
+        String text = field.text();
+        int from = offsetOf(text, line, column);
+        return wholeWord(text, name, from, Math.min(text.length(), from + 4_000));
+    }
+
+    /** The offset of 1-based {@code line}:{@code column} in {@code text}, clamped into it. */
+    static int offsetOf(String text, int line, int column) {
+        int offset = 0;
+        for (int l = 1; l < line; l++) {
+            int nl = text.indexOf('\n', offset);
+            if (nl < 0) {
+                return text.length();
+            }
+            offset = nl + 1;
+        }
+        int lineEnd = text.indexOf('\n', offset);
+        int max = lineEnd < 0 ? text.length() : lineEnd;
+        return Math.min(offset + Math.max(column - 1, 0), max);
+    }
+
+    private static int wholeWord(String text, String word, int from, int until) {
+        for (int i = text.indexOf(word, from); i >= 0 && i < until; i = text.indexOf(word, i + 1)) {
+            boolean before = i == 0 || !Character.isJavaIdentifierPart(text.charAt(i - 1));
+            int end = i + word.length();
+            boolean after = end >= text.length() || !Character.isJavaIdentifierPart(text.charAt(end));
+            if (before && after) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Override
     public void close() {
         highlighter.close();
+        outline.close();
         dirtyWatch.close();
         caretWatch.close();
         field.close();

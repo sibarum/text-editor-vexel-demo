@@ -75,11 +75,17 @@ final class Session {
     /**
      * Reopen what was open, then {@code extra} (the command line's files), in order, on {@code io}. The tabs come
      * back in their old order because the loads run one after another on one task rather than racing.
+     *
+     * <p><b>Only a launch with no paths has a session.</b> One started with paths is somebody's "open this" (the
+     * user's, or Vexplore's, one new window per spawn): it opens just those, never arms, and so never writes. Two
+     * windows would otherwise overwrite each other's session, and a one-file window would drag the last project's
+     * tabs in.
      */
     void restore(Actions actions, List<Path> extra, Executor io) {
-        String folder = settings.getString(FOLDER, "");
-        List<String> files = settings.getList(FILES);
-        String front = settings.getString(FRONT, "");
+        boolean ephemeral = !extra.isEmpty();
+        String folder = ephemeral ? "" : settings.getString(FOLDER, "");
+        List<String> files = ephemeral ? List.of() : settings.getList(FILES);
+        String front = ephemeral ? "" : settings.getString(FRONT, "");
         io.execute(() -> {
             if (!folder.isEmpty() && Files.isDirectory(Path.of(folder))) {
                 actions.showFolder(Path.of(folder));
@@ -101,10 +107,13 @@ final class Session {
                     actions.load(p);
                 }
             }
+            if (ephemeral) {
+                return;
+            }
             // Armed only now: a commit before this point would write a session with half the tabs still to come.
             armed = true;
             remember();
-            if (extra.isEmpty() && !front.isEmpty()) {
+            if (!front.isEmpty()) {
                 actions.open(Path.of(front));
             }
         });

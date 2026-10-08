@@ -17,7 +17,36 @@
         "source": "target/text-editor.exe",
         "icon": "src/main/rc/editor.ico",
         "addToPath": true,
-        "shortcuts": { "desktop": true, "startMenu": true, "label": "Text Editor" }
+        "shortcuts": { "desktop": true, "startMenu": true, "label": "Text Editor" },
+        "fileAssociations": [
+          { "extension": ".txt", "description": "Text Document", "contentType": "text/plain" },
+          { "extension": ".log", "description": "Log File", "contentType": "text/plain" },
+          { "extension": ".md", "description": "Markdown Document", "contentType": "text/markdown" },
+          { "extension": ".markdown", "description": "Markdown Document", "contentType": "text/markdown" },
+          { "extension": ".json", "description": "JSON File", "contentType": "application/json" },
+          { "extension": ".jsonc", "description": "JSON with Comments File" },
+          { "extension": ".xml", "description": "XML Document", "contentType": "application/xml" },
+          { "extension": ".xsd", "description": "XML Schema" },
+          { "extension": ".xsl", "description": "XSL Stylesheet" },
+          { "extension": ".yaml", "description": "YAML File", "contentType": "application/yaml" },
+          { "extension": ".yml", "description": "YAML File", "contentType": "application/yaml" },
+          { "extension": ".ini", "description": "Configuration Settings" },
+          { "extension": ".properties", "description": "Properties File" },
+          { "extension": ".html", "description": "HTML Document" },
+          { "extension": ".htm", "description": "HTML Document" },
+          { "extension": ".css", "description": "CSS Stylesheet" },
+          { "extension": ".mjs", "description": "JavaScript Module" },
+          { "extension": ".cjs", "description": "CommonJS Module" },
+          { "extension": ".java", "description": "Java Source File" },
+          { "extension": ".py", "description": "Python Source File" },
+          { "extension": ".pyi", "description": "Python Stub File" },
+          { "extension": ".sh", "description": "Shell Script" },
+          { "extension": ".bash", "description": "Bash Script" },
+          { "extension": ".psd1", "description": "PowerShell Data File" },
+          { "extension": ".diff", "description": "Diff File", "contentType": "text/x-diff" },
+          { "extension": ".patch", "description": "Patch File", "contentType": "text/x-diff" },
+          { "extension": ".dockerfile", "description": "Dockerfile" }
+        ]
       }
     ]
   }

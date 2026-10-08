@@ -41,15 +41,24 @@ mvn compile exec:exec -Dautomation=0                      # with a driving socke
 | Ctrl+B | show or hide the navigator |
 | Ctrl+Shift+E | put the keyboard in the navigator |
 | Alt+Z | word wrap on or off |
+| Ctrl+Enter | go to the declaration of the name under the caret (Java); again for the next one |
 | Ctrl+F | find in the document (Enter / Shift+Enter step, Escape closes) |
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
 
+In the text, the editing is the framework's `TextField` and works the way editors do: double-click selects a
+word and triple-click a line, and holding the button after either and dragging extends by whole words or whole
+lines; Shift+click extends the selection. Home goes to where a line's indentation ends and then to the margin,
+Enter keeps the indentation, and Tab over several lines indents them. Ctrl+Insert, Shift+Insert and Shift+Delete
+copy, paste and cut alongside Ctrl+C, V and X.
+
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree so the walk carries on. Enter opens a folder. A folder's menu can make it the root; every
-row's menu can copy its path. `.git`, `target`, `node_modules` and a few others are left out of the listing.
+row's menu can copy its path and has *Open in Vexplore*. `.git`, `target`, `node_modules` and a few others are left out of the listing.
 
-A tab's menu has Close, Close others, Close all, Reveal in navigator and Copy path. A dot in front of a tab's name
+A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
+Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
+the navigator opens as itself); it is greyed out as *Vexplore not installed* when the install record is missing. A dot in front of a tab's name
 means it has unsaved changes. Closing anything with unsaved work asks — Save, Don't save, Cancel — and a save that
 fails, or a Save As that is cancelled, cancels whatever was waiting on it, quitting included.
 
@@ -126,7 +135,7 @@ chords yet, so Ctrl-commands cannot be scripted (framework-notes FN-3); clicks, 
 ## Logging
 
 The framework configures it: info to the console and debug to `target/logs/text-editor.log` from a checkout,
-more under automation. This application logs as `editor.files`, `editor.dialogs` and `editor.highlight`;
+more under automation. This application logs as `editor.files`, `editor.dialogs`, `editor.highlight` and `editor.index`;
 `-Dlog.level.editor.files=debug` raises one of them.
 
 ## Native build and installer
@@ -134,4 +143,7 @@ more under automation. This application logs as `editor.files`, `editor.dialogs`
 `mvn -Pnative-release package` builds `target/text-editor.exe` (GUI subsystem, no automation; what ships) and `mvn -Pnative package` builds `target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
 prompt); see [docs/native-build.md](docs/native-build.md). `installer.json` describes the per-user installer
 for it (`vexelray-installer`), with `text-editor` added to `PATH`: `text-editor <folder or files...>` opens a new
-window, a folder as the navigator's root and files as tabs.
+window, a folder as the navigator's root and files as tabs. It also registers the editor for plain-text and
+highlighted file types (`.txt`, `.log`, `.md`, `.json`, `.xml`, `.yaml`, sources, ...): always under **Open with**,
+and the default only where no other program has claimed the type. Types Windows runs (`.js`, `.ps1`, `.bat`,
+`.cmd`, ...) are highlighted but never associated; the installer refuses them.

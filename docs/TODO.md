@@ -8,16 +8,11 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 
 ## Next
 
-- [ ] Only a launch with no arguments may restore or write the saved session **and the window's placement**.
-      One started with paths — as vexplore or mainframe will do, one new window per spawn — starts clean and
-      saves nothing, or two windows overwrite each other's state and a single-file window drags the last
-      project's tabs in. Today a launch with paths *still restores the saved tabs first and also writes the
-      session*. There are two seams: `Session` reads `session.folder`, `session.files` and `session.front` once in
-      `restore()`, before the command-line paths are opened (`Recipes.restore`), and writes them from
-      `remember()`, called by the model listener and at the end of `restore`; and the framework's window memory
-      writes `window.main.*` (x, y, size) to the same `~/.text-editor/settings.properties`, which is upstream, see
-      *Settings and the session* in the framework TODO. The editor's half: skip both `restore` and `remember`
-      when `launch.rest()` is non-empty.
+- [ ] Only a launch with no arguments may write **the window's placement**. The session half is done: a launch
+      with paths (Vexplore's *Open in Text Editor* is one) opens only those and never arms `Session`, so it neither
+      restores nor writes the tabs. The framework's window memory still writes `window.main.*` (x, y, size) to the
+      same `~/.text-editor/settings.properties` from every window, which is upstream: *Settings and the session*
+      in the framework TODO.
 - [ ] Drive the chords once ottermate can press them (FN-3): Ctrl+S on a dirty file, Ctrl+W through the
       question, Ctrl+Tab round the bar. Today they are checked by reading the claim rules, not by pressing.
 - [ ] Notice a file changing on disk under an open, clean tab, and reload it; ask if the tab is dirty.

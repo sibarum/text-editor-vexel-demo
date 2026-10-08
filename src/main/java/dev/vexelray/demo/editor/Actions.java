@@ -4,6 +4,8 @@ import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.app.CloseRequest;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Modals;
+import sibarum.concordance.index.Index;
+import sibarum.concordance.index.Symbol;
 import sibarum.probe.Log;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
@@ -13,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -38,6 +41,7 @@ final class Actions {
     private final Ui ui;
     private final Workspace ws;
     private final Navigator nav;
+    private final ProjectIndex concordance;
     private final Executor io;
 
     private volatile Dialogs dialogs = Dialogs.NONE;
@@ -47,12 +51,13 @@ final class Actions {
      */
     private volatile Consumer<Modal> ask = Modals::show;
 
-    Actions(Gui gui, Model model, Ui ui) {
+    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance) {
         this.gui = gui;
         this.model = model;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
+        this.concordance = concordance;
         this.io = gui.offload();
         // From the navigator the keyboard stays in the navigator, so walking it with the arrows keeps walking.
         nav.onOpenFile(file -> open(file, false));
@@ -63,11 +68,14 @@ final class Actions {
                 return;
             }
             Buffer b = all.get(index);
+            boolean vexplore = Suite.hasVexplore();
             menu.item("Close", () -> close(b))
                     .item("Close others", all.size() > 1, () -> closeAll(others(b)))
                     .item("Close all", () -> closeAll(ws.all()))
                     .separator()
                     .item("Reveal in navigator", b.path() != null, () -> reveal(b))
+                    .item(Suite.vexploreLabel(vexplore), vexplore && b.path() != null,
+                            () -> Suite.showInVexplore(b.path(), io))
                     .item("Copy path", b.path() != null, () -> gui.clipboard().set(String.valueOf(b.path())));
         });
     }
@@ -97,6 +105,10 @@ final class Actions {
         gui.shortcut(Key.B, ui::toggleNavigator, Modifier.CONTROL);
         gui.shortcut(Key.E, nav::focus, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.Z, this::toggleWrap, Modifier.ALT);
+        // The field's own Ctrl+Enter follows a hyperlink under the caret, and the editor gives its fields none;
+        // without a link it fell through to inserting a newline, which this claim now outranks.
+        gui.shortcut(Key.ENTER, this::goToDeclaration, Modifier.CONTROL);
+        gui.shortcut(Key.NUMPAD_ENTER, this::goToDeclaration, Modifier.CONTROL);
     }
 
     // ------------------------------------------------------------------ opening
@@ -162,13 +174,16 @@ final class Actions {
         tell("Could not open " + file.getFileName(), reason);
     }
 
-    /** Point the navigator at {@code folder}. */
+    /** Point the navigator at {@code folder}, and index it if it is a Maven project. */
     void showFolder(Path folder) {
         if (folder != null && !Files.isDirectory(folder)) {
             model.say("Not a folder: " + folder);
             return;
         }
-        nav.show(folder, () -> model.folder(nav.folder()));
+        nav.show(folder, () -> {
+            model.folder(nav.folder());
+            concordance.folder(nav.folder());
+        });
         ui.showNavigator(true);
     }
 
@@ -342,6 +357,135 @@ final class Actions {
         return unsaved.size() == 1
                 ? names + " has unsaved changes."
                 : unsaved.size() + " documents have unsaved changes: " + names + ".";
+    }
+
+    // ------------------------------------------------------------------ code
+
+    /**
+     * One declaration go to declaration may land on.
+     *
+     * @param file  where it is, or null when it is in {@code in}, an Untitled document
+     * @param in    the open document it was read from when it was read from one, whose text is fresher than the
+     *              index; else null
+     * @param label how the status line names it
+     */
+    private record Target(Symbol symbol, Path file, Buffer in, String label) {
+    }
+
+    /**
+     * Ctrl+Enter: go to where the name under the caret is declared.
+     *
+     * <p>The document in front is read as it is now, and the rest of the project from its index. Names are
+     * matched as Concordance matches them — by name, not by resolving them — so a common name can have several
+     * declarations. They are visited in a fixed order, and pressing again on the one just reached goes on to the
+     * next: a list nobody has to open, at the cost of not seeing them all at once. Which comes first depends on
+     * what the name is doing: before a {@code (} it is a method or constructor, otherwise a type or a field.
+     */
+    void goToDeclaration() {
+        Buffer b = ws.front();
+        if (b == null) {
+            return;
+        }
+        Buffer.Word word = b.wordAtCaret();
+        if (word == null) {
+            model.say("Go to declaration: the caret is not on a name");
+            return;
+        }
+        List<Target> targets = declarationsOf(b, word);
+        if (targets.isEmpty()) {
+            model.say(concordance.indexing()
+                    ? "No declaration of " + word.text() + " in this file; the project is still being indexed"
+                    : concordance.current() == null
+                    ? "No declaration of " + word.text() + " in this file"
+                    : "No declaration of " + word.text() + " in this project");
+            return;
+        }
+        int here = -1;
+        for (int i = 0; i < targets.size(); i++) {
+            Target t = targets.get(i);
+            if (t.in() == b && b.declaredNameAt(t.symbol().name(), t.symbol().line(), t.symbol().at().column())
+                    == word.start()) {
+                here = i;
+                break;
+            }
+        }
+        int next = (here + 1) % targets.size();
+        Target to = targets.get(next);
+        String where = to.file() == null ? "" : " in " + to.file().getFileName();
+        goTo(to, targets.size() == 1
+                ? (here == 0 ? to.label() + " is the only declaration of " + word.text() : to.label() + where)
+                : to.label() + where + " (" + (next + 1) + " of " + targets.size() + ", Ctrl+Enter for the next)");
+    }
+
+    /**
+     * Every declaration named {@code word}, in the order {@link #goToDeclaration} visits them. The order does not
+     * depend on which document is in front, or pressing again from the one just reached would start a different
+     * walk and never arrive at the rest.
+     */
+    private List<Target> declarationsOf(Buffer front, Buffer.Word word) {
+        String name = word.text();
+        List<Target> out = new ArrayList<>();
+        Path frontFile = front.path() == null ? null : front.path().toAbsolutePath().normalize();
+        List<Symbol> local = front.declarations();
+        for (Symbol s : local) {
+            if (s.name().equals(name)) {
+                out.add(new Target(s, frontFile, front, Outline.label(s, local)));
+            }
+        }
+        Index index = concordance.current();
+        if (index != null) {
+            for (Symbol s : index.namesContaining(name)) {
+                if (!s.name().equals(name)) {
+                    continue;
+                }
+                Path file = s.file().toAbsolutePath().normalize();
+                if (file.equals(frontFile) && !local.isEmpty()) {
+                    continue;   // the front document's own declarations were read from its text, which is newer
+                }
+                Buffer open = ws.find(file);
+                out.add(new Target(s, file, open, Outline.label(s, index.declaredIn(s.file()))));
+            }
+        }
+        out.sort(Comparator
+                .comparingInt((Target t) -> preference(t.symbol().kind(), word.call()))
+                .thenComparing(t -> t.file() == null ? "" : t.file().toString())
+                .thenComparingInt(t -> t.symbol().line())
+                .thenComparingInt(t -> t.symbol().at().column()));
+        return out;
+    }
+
+    /** Which kinds of declaration a name most likely means, smallest first: a name before a {@code (} is called. */
+    private static int preference(Symbol.Kind kind, boolean call) {
+        return switch (kind) {
+            case METHOD, CONSTRUCTOR -> call ? 0 : 2;
+            case FIELD -> call ? 2 : 1;
+            default -> call ? 1 : 0;   // a type: `new Circle(` reaches the class when it declares no constructor
+        };
+    }
+
+    /**
+     * Bring {@code to}'s document forward, opening it if it is not open, select the declared name, and then say
+     * {@code message} — after, because opening a file says so on the status line too, and the jump is the news.
+     */
+    private void goTo(Target to, String message) {
+        Symbol s = to.symbol();
+        Buffer open = to.in() != null ? to.in() : ws.find(to.file());
+        if (open != null) {
+            if (open != ws.front()) {
+                ws.show(open);
+            }
+            open.selectDeclaration(s.name(), s.line(), s.at().column());
+            model.say(message);
+            return;
+        }
+        io.execute(() -> {
+            load(to.file(), true);
+            Buffer loaded = ws.find(to.file());
+            if (loaded != null) {
+                loaded.selectDeclaration(s.name(), s.line(), s.at().column());
+                model.say(message);
+            }
+        });
     }
 
     // ------------------------------------------------------------------ view

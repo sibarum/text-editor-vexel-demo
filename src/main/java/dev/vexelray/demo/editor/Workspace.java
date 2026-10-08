@@ -106,7 +106,7 @@ final class Workspace {
             Buffer b = front();
             if (b != null) {
                 model.front(b.id);
-                caret.accept(Buffer.position(b.field.document().value()));
+                caret.accept(b.position());
             }
         });
     }

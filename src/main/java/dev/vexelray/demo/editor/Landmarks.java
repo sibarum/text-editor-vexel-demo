@@ -20,9 +20,11 @@ final class Landmarks {
     /** The navigator's heading. Its name is the folder's. */
     static final String FOLDER = "folder";
 
-    /** The status line, and its three slots. The slot keys are landmarks too, so a script can read each. */
+    /** The status line, and its four slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";
     static final String STATUS_MESSAGE = "status.message";
+    /** The declaration the caret is in — {@code Outer › method} — in a Java document; empty otherwise. */
+    static final String STATUS_SCOPE = "status.scope";
     static final String STATUS_LANGUAGE = "status.language";
     static final String STATUS_POSITION = "status.position";
 

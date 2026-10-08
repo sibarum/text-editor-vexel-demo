@@ -59,18 +59,23 @@ final class Ui {
 
         status = new StatusBar(gui)
                 .slot(Landmarks.STATUS_MESSAGE, StatusBar.Side.LEFT, "")
+                .slot(Landmarks.STATUS_SCOPE, StatusBar.Side.RIGHT, "")
                 .slot(Landmarks.STATUS_LANGUAGE, StatusBar.Side.RIGHT, "")
                 .slot(Landmarks.STATUS_POSITION, StatusBar.Side.RIGHT, "Ln 1, Col 1")
                 .minWidth(Landmarks.STATUS_POSITION, Length.rem(7));
         status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
         gui.landmark(Landmarks.STATUS, status.node());
-        for (String slot : new String[] {Landmarks.STATUS_MESSAGE, Landmarks.STATUS_LANGUAGE, Landmarks.STATUS_POSITION}) {
+        for (String slot : new String[] {Landmarks.STATUS_MESSAGE, Landmarks.STATUS_SCOPE, Landmarks.STATUS_LANGUAGE,
+                Landmarks.STATUS_POSITION}) {
             gui.landmark(slot, status.slot(slot));
         }
 
         navigator = new Navigator(gui, motion);
         workspace = new Workspace(gui, motion, model,
-                p -> status.text(Landmarks.STATUS_POSITION, "Ln " + p.line() + ", Col " + p.column()),
+                p -> {
+                    status.text(Landmarks.STATUS_SCOPE, p.scope());
+                    status.text(Landmarks.STATUS_POSITION, "Ln " + p.line() + ", Col " + p.column());
+                },
                 navigator::reveal);
 
         split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), workspace.node())

@@ -84,9 +84,12 @@ final class Navigator {
                 .enabledWhen(Files::isRegularFile));
         tree.action(TreeView.Action.<Path>of("»", "Make this the root", (p, job) -> openFolder.accept(p))
                 .shownWhen(Files::isDirectory));
-        tree.onContextMenu((p, menu) -> menu
-                .separator()
-                .item("Copy path", () -> gui.clipboard().set(p.toString())));
+        tree.onContextMenu((p, menu) -> {
+            boolean vexplore = Suite.hasVexplore();
+            menu.separator()
+                    .item(Suite.vexploreLabel(vexplore), vexplore, () -> Suite.showInVexplore(p, gui.offload()))
+                    .item("Copy path", () -> gui.clipboard().set(p.toString()));
+        });
 
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)

@@ -240,4 +240,97 @@ class EditorTreeTest {
         assertNotNull(ws.front());
         assertTrue(ws.front() != only && ws.front().pristine());
     }
+
+    @Test
+    void openingAMavenProjectIndexesItAndOpeningAnotherFolderForgetsIt() throws Exception {
+        Path project = Files.createDirectories(dir.resolve("shapes"));
+        Files.writeString(project.resolve("pom.xml"), """
+                <project><modelVersion>4.0.0</modelVersion>
+                <groupId>g</groupId><artifactId>shapes</artifactId><version>1</version></project>
+                """);
+        Path src = Files.createDirectories(project.resolve("src/main/java/shapes"));
+        Files.writeString(src.resolve("Shape.java"), "package shapes; interface Shape { double area(); }\n");
+        Files.writeString(src.resolve("Circle.java"),
+                "package shapes; final class Circle implements Shape { public double area() { return 1; } }\n");
+
+        ProjectIndex index = wiring.projectIndex();
+        wiring.actions().showFolder(project);
+        eventually("the index", () -> index.current() != null);
+        assertEquals(project.toAbsolutePath().normalize(), index.root().toAbsolutePath().normalize());
+        assertEquals(java.util.List.of("Circle"),
+                index.current().implementationsOf("Shape").stream().map(s -> s.name()).toList());
+        eventually("the status line to say so",
+                () -> wiring.model().doc().status().startsWith("Indexed shapes"));
+
+        Path plain = Files.createDirectories(dir.resolve("plain"));
+        wiring.actions().showFolder(plain);
+        eventually("the index to be forgotten", () -> index.current() == null && index.root() == null);
+    }
+
+    @Test
+    void theStatusLineNamesTheDeclarationTheCaretIsIn() throws Exception {
+        String source = """
+                package shapes;
+                class Outer {
+                    int count;
+                    static class Inner {
+                        void run() {
+                            go();
+                        }
+                    }
+                }
+                """;
+        Path file = Files.writeString(dir.resolve("Outer.java"), source);
+        wiring.actions().load(file);
+        Workspace ws = wiring.ui().workspace();
+        eventually("the file", () -> ws.front() != null && ws.front().path() != null);
+        Buffer b = ws.front();
+        b.field.caret(source.indexOf("go()"));
+        eventually("the scope", () -> b.position().scope().equals("Outer › Inner › run"));
+        b.field.caret(source.indexOf("count"));
+        eventually("the field", () -> b.position().scope().equals("Outer › count"));
+        b.field.caret(0);
+        eventually("nothing before the first declaration", () -> b.position().scope().isEmpty());
+    }
+
+    @Test
+    void ctrlEnterGoesToTheDeclarationAndAgainToTheNextOne() throws Exception {
+        Path project = Files.createDirectories(dir.resolve("shapes"));
+        Files.writeString(project.resolve("pom.xml"), """
+                <project><modelVersion>4.0.0</modelVersion>
+                <groupId>g</groupId><artifactId>shapes</artifactId><version>1</version></project>
+                """);
+        Path src = Files.createDirectories(project.resolve("src/main/java/shapes"));
+        Path shape = Files.writeString(src.resolve("Shape.java"),
+                "package shapes;\ninterface Shape {\n    double area();\n}\n");
+        Path circle = Files.writeString(src.resolve("Circle.java"),
+                "package shapes;\nfinal class Circle implements Shape {\n    public double area() { return 1; }\n}\n");
+        String mainText = "package shapes;\nclass Main {\n    double d = new Circle().area();\n}\n";
+        Path main = Files.writeString(src.resolve("Main.java"), mainText);
+
+        Actions actions = wiring.actions();
+        actions.showFolder(project);
+        eventually("the index", () -> wiring.projectIndex().current() != null);
+        actions.load(main);
+        Workspace ws = wiring.ui().workspace();
+        eventually("Main", () -> ws.front() != null && main.equals(ws.front().path()));
+        ws.front().field.caret(mainText.indexOf("area") + 2);
+
+        // Two declarations of area: Circle's and Shape's, visited in file order, then round again.
+        actions.goToDeclaration();
+        eventually("Circle's area", () -> isOnArea(ws.front(), circle));
+        eventually("the count", () -> wiring.model().doc().status().contains("1 of 2"));
+        actions.goToDeclaration();
+        eventually("Shape's area", () -> isOnArea(ws.front(), shape));
+        actions.goToDeclaration();
+        eventually("Circle's again", () -> isOnArea(ws.front(), circle));
+    }
+
+    private static boolean isOnArea(Buffer b, Path file) {
+        if (b == null || !file.equals(b.path())) {
+            return false;
+        }
+        Buffer.Word w = b.wordAtCaret();
+        return w != null && w.text().equals("area") && w.start() == b.field.text().indexOf("area");
+    }
 }
