@@ -41,7 +41,7 @@ and `rc.exe` are MSVC's and on `PATH`; Git Bash's own `link.exe` is not the link
 
 ## The metadata (`src/main/resources/META-INF/native-image/dev.vexelray.demo/`)
 
-Both files are a stopgap; the framework's ruling is that metadata travels with the backend jars or a starter,
+All three files are a stopgap; the framework's ruling is that metadata travels with the backend jars or a starter,
 never with an application.
 
 - `text-editor-vexel-demo/reachability-metadata.json` was traced with `native-image-agent` from a JVM run that
@@ -52,6 +52,11 @@ never with an application.
   certificate ends up in the image heap, and every type that represents an X.509 certificate must be
   registered or the build fails with `Type not found during analysis`. Do not delete it because a native image
   has no jars to verify.
+- `text-editor-vexel-demo-fonts/reachability-metadata.json` is written by hand, and a re-trace does not touch it:
+  `vexelray-text`'s font manifest (`fonts.json`) and every face's metrics and pixels (`*/*.json`, `*/*.rgba`),
+  whichever faces it bakes. A trace lists only the files one run opened, so it went stale when the atlas
+  became a set of families, and the image died at startup with `font file not found: the manifest`.
+  Name `fonts.json` exactly: a top-level `atlas/*.json` glob matched nothing in GraalVM 25.
 
 To re-trace after a dependency change: run the JVM app with
 `-agentlib:native-image-agent=config-output-dir=<dir>,config-write-period-secs=2` (the agent's write at exit did not
