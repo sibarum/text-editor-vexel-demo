@@ -42,7 +42,7 @@ public final class TextEditor {
     static final String APP = "text-editor";
 
     /** The window's title. */
-    static final String TITLE = "Text Editor";
+    static final String TITLE = "Vex";
 
     /** Window size on a first run, in the engine's logical coordinates. */
     static final int W = 1180;

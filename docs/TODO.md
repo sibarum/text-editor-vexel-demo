@@ -1,6 +1,6 @@
 # TODO
 
-Work on **Text Editor** that is known about and not done. Distinct from
+Work on **Vex** that is known about and not done. Distinct from
 [framework-notes.md](framework-notes.md), which is about the framework rather than about this application —
 if the fix belongs upstream, it goes there instead.
 
@@ -9,7 +9,7 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 ## Next
 
 - [ ] Only a launch with no arguments may write **the window's placement**. The session half is done: a launch
-      with paths (Vexplore's *Open in Text Editor* is one) opens only those and never arms `Session`, so it neither
+      with paths (Vexplore's *Open in Vex* is one) opens only those and never arms `Session`, so it neither
       restores nor writes the tabs. The framework's window memory still writes `window.main.*` (x, y, size) to the
       same `~/.text-editor/settings.properties` from every window, which is upstream: *Settings and the session*
       in the framework TODO.

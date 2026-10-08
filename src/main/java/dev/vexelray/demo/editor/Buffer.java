@@ -4,6 +4,7 @@ import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.text.Document;
+import dev.vexelray.gui.core.text.Whitespace;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.TextField;
 import sibarum.atchung.Subscription;
@@ -32,6 +33,9 @@ final class Buffer implements AutoCloseable {
     /** An identifier in the text, as offsets {@code [start, end)}, and whether a {@code (} follows it. */
     record Word(String text, int start, int end, boolean call) {
     }
+
+    /** Whether this system ends its lines with {@code \r\n}: a file that does otherwise has its line ends marked. */
+    private static final boolean SYSTEM_CRLF = System.lineSeparator().equals("\r\n");
 
     final long id;
     final TextField field;
@@ -66,7 +70,11 @@ final class Buffer implements AutoCloseable {
                 .multiline(true)
                 .autoIndent(true)
                 .lineNumbers(true)
-                .wordWrap(wrap);
+                .wordWrap(wrap)
+                .whitespace(Whitespace.BOUNDARY)
+                // The file's newlines are all one kind once loaded, and saved back as that kind, so the mark is
+                // all or nothing: on every line of a file that will not be written the way this system writes.
+                .lineEnds(crlf != SYSTEM_CRLF);
         // The field sits on the card rather than in a well of its own. Its border is the field's to repaint on
         // every change of focus, so the accent ring round the document stays (framework-notes FN-14).
         field.node().width(Length.FILL).height(Length.FILL).textSize(Type.CODE)

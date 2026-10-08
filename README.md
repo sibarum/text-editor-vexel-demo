@@ -1,4 +1,4 @@
-# Text Editor
+# Vex
 
 A tabbed text editor with a file navigator, on the VexelRay stack.
 
@@ -51,6 +51,10 @@ word and triple-click a line, and holding the button after either and dragging e
 lines; Shift+click extends the selection. Home goes to where a line's indentation ends and then to the margin,
 Enter keeps the indentation, and Tab over several lines indents them. Ctrl+Insert, Shift+Insert and Shift+Delete
 copy, paste and cut alongside Ctrl+C, V and X.
+
+Whitespace that matters shows as a faint dot: indentation, what trails a line, and any run of two or more blanks —
+not the single space between words. A file whose newlines are not this system's (LF on Windows, CRLF elsewhere)
+ends each line with a faint `¬`, since that is how it will be saved.
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree so the walk carries on. Enter opens a folder. A folder's menu can make it the root; every

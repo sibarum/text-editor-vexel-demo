@@ -1,7 +1,7 @@
 # Framework notes
 
 Findings about VexelRay, vexelray-gui, Kronometer, tactroller and atchung that came out of building
-**Text Editor** — things the framework does not have, does not document, or does in a way that cost time to
+**Vex** — things the framework does not have, does not document, or does in a way that cost time to
 discover.
 
 **Why this file exists.** An application built on a framework is the only place its gaps are visible, and they

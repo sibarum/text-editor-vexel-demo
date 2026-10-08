@@ -1,6 +1,6 @@
 {
   "id": "text-editor",
-  "name": "Text Editor",
+  "name": "Vex",
   "publisher": "sibarum",
   "description": "A tabbed text editor with a file navigator, on the VexelRay stack.",
   "version": "0.1.0",
@@ -17,7 +17,7 @@
         "source": "target/text-editor.exe",
         "icon": "src/main/rc/editor.ico",
         "addToPath": true,
-        "shortcuts": { "desktop": true, "startMenu": true, "label": "Text Editor" },
+        "shortcuts": { "desktop": true, "startMenu": true, "label": "Vex" },
         "fileAssociations": [
           { "extension": ".txt", "description": "Text Document", "contentType": "text/plain" },
           { "extension": ".log", "description": "Log File", "contentType": "text/plain" },
