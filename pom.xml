@@ -207,16 +207,10 @@
                         <imageName>${native.imageName}</imageName>
                         <mainClass>${app.mainClass}</mainClass>
                         <buildArgs>
+                            <!-- The FFM flags (Panama downcalls, the window procedure's upcall, shared arenas)
+                                 come from the libraries' own META-INF/native-image metadata, with every
+                                 signature they declare. -->
                             <buildArg>--no-fallback</buildArg>
-                            <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
-                            <!-- The graphics stack and both input backends are Panama downcalls, and Win32
-                                 calls back in through an upcall stub for the window procedure. The
-                                 signatures are in reachability-metadata.json. -->
-                            <buildArg>-H:+ForeignAPISupport</buildArg>
-                            <!-- Raw input registrations each get an Arena.ofShared, opened on one thread and
-                                 read on another; without this the app runs and then throws on the way out. -->
-                            <buildArg>-H:+SharedArenaSupport</buildArg>
-                            <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
                             <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                             <buildArg>-J-Djava.io.tmpdir=${project.build.directory}/nitmp</buildArg>
                             <!-- WINDOWS = no console window, and /ENTRY:mainCRTStartup is not optional

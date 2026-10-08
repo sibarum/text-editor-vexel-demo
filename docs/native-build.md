@@ -29,9 +29,9 @@ and `rc.exe` are MSVC's and on `PATH`; Git Bash's own `link.exe` is not the link
 
 ## The switches (pom, `pluginManagement`; profiles `native` and `native-release`)
 
-- `-H:+ForeignAPISupport`: the graphics stack, both input backends, the clipboard and the file dialogs are
-  Panama downcalls, and Win32 calls back through an upcall stub.
-- `-H:+SharedArenaSupport`: raw input opens an `Arena.ofShared` on one thread and reads it on another.
+- No FFM switches: `-H:+ForeignAPISupport`, `-H:+SharedArenaSupport` and `--enable-native-access` come from the
+  `native-image.properties` in the library jars that make Panama calls (the graphics stack, both input backends,
+  the clipboard and the file dialogs).
 - `-J-Djava.io.tmpdir=target/nitmp`: Windows Application Control blocks a new unsigned `.exe` under `%TEMP%`,
   and native-image's own probes are exactly that. `Unable to run 'WindowsDirectives.exe'` means this blocked
   a probe: retry.
@@ -41,24 +41,21 @@ and `rc.exe` are MSVC's and on `PATH`; Git Bash's own `link.exe` is not the link
 
 ## The metadata (`src/main/resources/META-INF/native-image/dev.vexelray.demo/`)
 
-All three files are a stopgap; the framework's ruling is that metadata travels with the backend jars or a starter,
-never with an application.
+Metadata travels with the jars that need it. vexelray, supirvast, tactroller, vexelray-gui-nfd and imagelib-wrapper
+each carry their own under `META-INF/native-image/`: the FFM build flags (`native-image.properties`), every downcall
+shape they declare, their window-procedure upcalls, their services, the shaders and the whole font atlas. This
+application lists only what is its own.
 
 - `text-editor-vexel-demo/reachability-metadata.json` was traced with `native-image-agent` from a JVM run that
-  opened a file of each grammar and pressed the screenshot button (the native save dialog). It holds the
-  foreign descriptors, `WindowsPlatform`/`Win32Window`/tactroller reflection, ServiceLoader and shader/atlas
-  resources, and the `grammars/*` resources and TM4E `Raw*` classes, which are this application's own.
+  opened a file of each grammar and pressed the screenshot button (the native save dialog), then trimmed of
+  everything the library jars register. What is left: `TextEditor`, the `grammars/*` and `tables/*` resources,
+  the TM4E `Raw*` classes, and the JDK entries the trace saw.
 - `text-editor-vexel-demo-signed-jar/reachability-metadata.json`: TM4E ships as a signed jar, the signing
   certificate ends up in the image heap, and every type that represents an X.509 certificate must be
   registered or the build fails with `Type not found during analysis`. Do not delete it because a native image
   has no jars to verify.
-- `text-editor-vexel-demo-fonts/reachability-metadata.json` is written by hand, and a re-trace does not touch it:
-  `vexelray-text`'s font manifest (`fonts.json`) and every face's metrics and pixels (`*/*.json`, `*/*.rgba`),
-  whichever faces it bakes. A trace lists only the files one run opened, so it went stale when the atlas
-  became a set of families, and the image died at startup with `font file not found: the manifest`.
-  Name `fonts.json` exactly: a top-level `atlas/*.json` glob matched nothing in GraalVM 25.
 
 To re-trace after a dependency change: run the JVM app with
 `-agentlib:native-image-agent=config-output-dir=<dir>,config-write-period-secs=2` (the agent's write at exit did not
-appear in our runs), drive it with `ottermate`, and copy `<dir>`'s file over
-the first one.
+appear in our runs), drive it with `ottermate`, and merge only the new entries that are this application's into the
+first file. Whatever names a library's class, native call, shader or font belongs in that library's metadata.
