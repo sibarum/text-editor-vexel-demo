@@ -89,6 +89,18 @@ final class Look {
         return Oklab.polar(level.l(), 0.024, p.accent().hueDegrees()).toColor();
     };
 
+    /**
+     * The navigator's card in Open: the card's level a step up, steeped in the accent's hue, so picking a root reads
+     * as somewhere else at a glance. Darker than {@link #SELECTED}, so the selected row still stands out on it.
+     */
+    static final Role PICKING = p -> {
+        Oklab level = Oklab.of(p.surface(2));
+        return Oklab.polar(level.l(), 0.030, p.accent().hueDegrees()).toColor();
+    };
+
+    /** The hairline round the card in Open: the accent itself, where Edit's is {@link #RIM}. */
+    static final Role PICKING_RIM = p -> p.accent().toColor();
+
     /** A scrollbar thumb: level 5 ({@code #313a47}), where the framework's GRIP is a loud level 10. */
     static final Role THUMB = p -> p.surface(5);
 

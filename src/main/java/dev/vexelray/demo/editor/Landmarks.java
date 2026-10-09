@@ -17,15 +17,14 @@ final class Landmarks {
     /** The navigator's tree. */
     static final String TREE = "navigator";
 
-    /** The navigator's heading. Its name is the folder's, in either mode. */
+    /** The navigator's heading: a button that switches between Edit and Open. Its name is the folder's. */
     static final String FOLDER = "folder";
-
-    /** The navigator's two mode chips: the files under the root, and the folders a root can be picked from. */
-    static final String MODE_EDIT = "navigator.edit";
-    static final String MODE_OPEN = "navigator.open";
 
     /** Open's tree of folders, where a click makes one the root. */
     static final String PICKER = "navigator.roots";
+
+    /** Open's breadcrumb over its folders: every folder above the top one, each a button that lists from there. */
+    static final String ANCESTRY = "navigator.ancestry";
 
     /** Open's recent roots, one button each. */
     static final String RECENT = "navigator.recent";

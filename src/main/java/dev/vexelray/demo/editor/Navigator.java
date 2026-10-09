@@ -5,12 +5,16 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.core.style.Theme;
+import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
+import dev.vexelray.gui.widget.Tooltip;
 import dev.vexelray.gui.widget.TreeView;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -19,7 +23,7 @@ import java.util.function.Consumer;
 
 /**
  * The file navigator, in one of two modes: <b>Edit</b>, the files under the root, and <b>Open</b>, the folders a
- * new root can be picked from.
+ * new root can be picked from. Clicking the root's name, the card's heading, switches between them.
  *
  * <p>In Edit, selecting a file opens it — a click or an arrow key onto its row — which is what the previous editor
  * did and what makes walking a folder with the keyboard a way of reading it. Enter on a folder opens it in place.
@@ -48,9 +52,8 @@ final class Navigator {
     private final RootSource roots = new RootSource();
     private final TreeView<Path> tree;
     private final TreeView<Path> picker;
-    private final Button editChip;
-    private final Button openChip;
-    private final Node heading;
+    private final Button heading;
+    private final Tooltip hint;
     private final Node label;
     private final Node empty;
     private final Node editPane;
@@ -58,7 +61,7 @@ final class Navigator {
     private final Node recentLabel;
     private final Button[] recentButtons = new Button[RECENT_SHOWN];
     private final AtomicReferenceArray<Path> recentPaths = new AtomicReferenceArray<>(RECENT_SHOWN);
-    private final Node top;
+    private final Breadcrumb<Path> ancestry;
     private final Node root;
 
     private volatile Mode mode = Mode.EDIT;
@@ -70,17 +73,6 @@ final class Navigator {
         this.motion = motion;
         this.io = gui.offload();
 
-        // The two modes are chips, so the one showing is the one pressed, and Tab, Enter and Space reach them.
-        // The design draws a page and a folder on them; the toolkit draws no icons yet, so they are words.
-        editChip = new Button(gui, "Edit").kind(Button.Kind.GHOST).toggle(true).show(true);
-        openChip = new Button(gui, "Open").kind(Button.Kind.GHOST).toggle(true);
-        editChip.onToggle(on -> mode(Mode.EDIT));
-        openChip.onToggle(on -> mode(Mode.OPEN));
-        gui.landmark(Landmarks.MODE_EDIT, editChip.node());
-        gui.landmark(Landmarks.MODE_OPEN, openChip.node());
-        Node chips = gui.row().gap(Type.TIGHT).alignItems(AlignItems.CENTER)
-                .children(editChip.node(), openChip.node());
-
         // A line saying what the card is for over the root's name, as the design has it. The design sets the name
         // bold, which is not something a node can ask for (framework-notes FN-15).
         label = gui.text("Editing")
@@ -88,15 +80,16 @@ final class Navigator {
                 .textSize(Type.SMALL)
                 .textColor(gui.theme().color(Role.FAINT))
                 .padding(Length.ZERO, Type.TIGHT);
-        heading = gui.text("No folder")
-                .font(Type.UI)
-                .textSize(Type.LABEL)
-                .textColor(gui.theme().color(Role.INK))
-                .padding(Length.ZERO, Type.TIGHT)
-                .wordWrap(false);
-        gui.landmark(Landmarks.FOLDER, heading);
+        // The root's name is what switches between Edit and Open: the thing to change is the thing to press. A
+        // button rather than a clickable text, so Tab, Enter and Space reach it too.
+        heading = new Button(gui, "No folder").kind(Button.Kind.GHOST)
+                .onPress(() -> mode(mode == Mode.EDIT ? Mode.OPEN : Mode.EDIT));
+        heading.node().font(Type.UI).wordWrap(false);
+        gui.landmark(Landmarks.FOLDER, heading.node());
+        hint = new Tooltip(gui).attach(heading.node(),
+                () -> mode == Mode.EDIT ? "Pick another root" : "Back to the files");
 
-        empty = gui.text("Pick a folder in Open, or press Ctrl+Shift+O")
+        empty = gui.text("Click above to pick a folder, or press Ctrl+Shift+O")
                 .font(Type.UI)
                 .textSize(Type.SMALL)
                 .textColor(gui.theme().color(Role.FAINT));
@@ -154,12 +147,12 @@ final class Navigator {
         }
         gui.landmark(Landmarks.RECENT, recent);
 
-        top = gui.text("")
-                .font(Type.MONO)
-                .textSize(Type.SMALL)
-                .textColor(gui.theme().color(Role.FAINT))
-                .padding(Length.ZERO, Type.TIGHT)
-                .wordWrap(false);
+        // The way up: the top folder's ancestors, each a button that lists the folders from there. Moving up does
+        // not change the root, it only widens what can be picked; the root stays unfolded and selected below.
+        ancestry = new Breadcrumb<Path>(gui, Navigator::crumbLabel).font(Type.UI).maxSegments(2)
+                .onNavigate(this::widen);
+        ancestry.node().padding(Length.ZERO, Type.TIGHT);
+        gui.landmark(Landmarks.ANCESTRY, ancestry.node());
         // No arrival ramp here. Open unfolds the top and scrolls to the root in one go, and with the folders above
         // the root growing in from nothing, the scroll is measured against rows a frame old and lands short.
         picker = new TreeView<>(gui, roots);
@@ -176,8 +169,8 @@ final class Navigator {
                 .gap(Type.TIGHT)
                 .alignItems(AlignItems.STRETCH)
                 .visible(false)
-                .children(recent, gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)), top,
-                        picker.node());
+                .children(recent, gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
+                        ancestry.node(), picker.node());
 
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
@@ -188,7 +181,7 @@ final class Navigator {
                 .corner(Type.CORNER)
                 .border(Type.RULE, gui.theme().color(Look.RIM))
                 .alignItems(AlignItems.STRETCH)
-                .children(chips, label, heading, editPane, openPane);
+                .children(label, heading.node(), editPane, openPane);
     }
 
     Node node() {
@@ -217,6 +210,11 @@ final class Navigator {
         return picker;
     }
 
+    /** The folder Open lists from, or null before Open has been shown. */
+    Path openTop() {
+        return roots.top();
+    }
+
     /**
      * Show the files under the root, or the folders a root can be picked from. Going to Open lists the folder
      * above the root, which is I/O, so that part runs on the offload lane.
@@ -224,30 +222,45 @@ final class Navigator {
     void mode(Mode value) {
         mode = value;
         boolean open = value == Mode.OPEN;
-        editChip.show(!open);
-        openChip.show(open);
         label.text(open ? "Pick a folder to make it the root" : "Editing");
+        // Open is a different place, and looks it: the card steeps in the accent and wears it as its edge, the line
+        // above the name says so in it, and a sweep runs down the card as it changes, so the switch is seen even
+        // by an eye that was on the document.
+        Theme theme = gui.theme();
+        root.background(theme.color(open ? Look.PICKING : Look.CARD))
+                .border(Type.RULE, theme.color(open ? Look.PICKING_RIM : Look.RIM));
+        label.textColor(theme.color(open ? Role.ACCENT : Role.FAINT));
+        if (open) {
+            motion.cues.play(root, Cue.scanline(theme.color(Role.ACCENT)));
+        }
         editPane.visible(!open);
         openPane.visible(open);
         if (open) {
-            io.execute(this::listRoots);
+            io.execute(() -> listRoots(RootSource.above(source.base())));
         }
     }
 
     /**
-     * Point the picker at the folder above the root and select the root there. The top is re-listed every time:
-     * Open is where a folder made since the last look is expected to be.
+     * Point the picker at {@code folder}, show its ancestry above it, and unfold the way down to the root and select
+     * it, when the root is under it. Re-listed every time: Open is where a folder made since the last look is
+     * expected to be.
      */
-    private void listRoots() {
+    private void listRoots(Path folder) {
         Path current = source.base();
-        Path above = RootSource.above(current);
-        roots.top(above);
+        roots.top(folder);
         picker.refresh();
-        top.text(String.valueOf(above));
-        if (current != null && !current.equals(roots.top())) {
+        Path shown = roots.top();
+        ancestry.path(ancestors(shown));
+        if (current != null && current.startsWith(shown) && !current.equals(shown)) {
+            // Every folder between is a row, since nothing is merged here, so the chain is just the walk down.
+            List<Path> chain = new ArrayList<>();
+            chain.add(shown);
+            for (Path part : shown.relativize(current)) {
+                chain.add(chain.getLast().resolve(part));
+            }
             // Scrolled to here as well: when the root is already the selected row, as it is on every Open after the
             // first, selecting it again is a no-op and does not scroll, and a pane that was hidden starts at the top.
-            picker.revealPath(List.of(roots.top(), current), () -> {
+            picker.revealPath(chain, () -> {
                 Node row = picker.rowNode(current);
                 if (row != null) {
                     row.scrollIntoView();
@@ -256,6 +269,26 @@ final class Navigator {
         } else {
             picker.expand(roots.top());
         }
+    }
+
+    /** List Open's folders from {@code folder}, an ancestor of the top: the breadcrumb's step up. The root stays. */
+    void widen(Path folder) {
+        io.execute(() -> listRoots(folder));
+    }
+
+    /** {@code folder} and every folder above it, the top of the drive first: the breadcrumb's chain. */
+    static List<Path> ancestors(Path folder) {
+        List<Path> chain = new ArrayList<>();
+        for (Path p = folder; p != null; p = p.getParent()) {
+            chain.addFirst(p);
+        }
+        return chain;
+    }
+
+    /** A folder's name, or the drive's own name ({@code C:}) for the top of one. */
+    private static String crumbLabel(Path p) {
+        Path n = p.getFileName();
+        return n == null ? p.toString().replaceAll("[\\\\/]+$", "") : n.toString();
     }
 
     /** Make {@code folder} the root, and go back to its files. Picking the root it already is just goes back. */
@@ -304,7 +337,7 @@ final class Navigator {
             tree.refresh();
             Path shown = source.base();
             Path name = shown == null ? null : shown.getFileName();
-            heading.text(shown == null ? "No folder" : String.valueOf(name == null ? shown : name));
+            heading.label(shown == null ? "No folder" : String.valueOf(name == null ? shown : name));
             empty.visible(shown == null);
             tree.node().visible(shown != null);
             if (then != null) {

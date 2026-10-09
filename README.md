@@ -60,9 +60,12 @@ Selecting a file in the navigator opens it — a click, or walking the tree with
 keyboard in the tree so the walk carries on. Enter opens a folder. A folder's menu can make it the root; every
 row's menu can copy its path and has *Open in Vexplore*. `.git`, `target`, `node_modules` and a few others are left out of the listing.
 
-The navigator has two modes, chosen with the **Edit** and **Open** buttons at its top. Edit is the files under the
+The navigator has two modes, and clicking the root's name at its top switches between them; Open tints the panel in
+the accent and edges it with it, so it is never mistaken for the files. Edit is the files under the
 root, as above. Open is the same panel showing folders only: the last few roots under *Recent*, then the folder
-above the root with the root selected among its siblings. A click on any folder (or Enter on it) makes it the root
+above the root with the root selected among its siblings. Over that list a breadcrumb climbs: its last segment is
+the folder the list starts from, and a click on the one before it (or on `…`, two up) lists from there instead,
+as far as the top of the drive, with the root still unfolded and selected underneath. A click on any folder (or Enter on it) makes it the root
 and goes back to Edit; the arrow keys only move, so walking the folders does not change the root as it goes. The
 root you leave becomes the first recent one, and Recent is remembered between runs.
 

@@ -293,6 +293,33 @@ class EditorTreeTest {
     }
 
     @Test
+    void openCanWidenToAnyAncestorAndTheRootStaysSelectedUnderIt() throws Exception {
+        Path module = Files.createDirectories(dir.resolve("code/project/module"));
+        Path top = dir.toAbsolutePath().normalize();
+        Navigator nav = wiring.ui().navigator();
+        wiring.actions().showFolder(module);
+        eventually("the root", () -> module.toAbsolutePath().normalize().equals(wiring.model().doc().folder()));
+
+        nav.mode(Navigator.Mode.OPEN);
+        eventually("the root selected", () -> module.toAbsolutePath().normalize().equals(nav.picker().selected()));
+        nav.widen(top);
+        eventually("the top widened", () -> top.equals(nav.openTop()));
+        eventually("the root unfolded and selected under it",
+                () -> module.toAbsolutePath().normalize().equals(nav.picker().selected()));
+        assertEquals(module.toAbsolutePath().normalize(), wiring.model().doc().folder(), "widening is not picking");
+        assertEquals(Navigator.Mode.OPEN, nav.mode());
+    }
+
+    @Test
+    void theAncestryRunsFromTheTopOfTheDriveDownToTheFolder() {
+        Path folder = dir.toAbsolutePath().normalize();
+        java.util.List<Path> chain = Navigator.ancestors(folder);
+        assertEquals(folder.getRoot(), chain.getFirst());
+        assertEquals(folder, chain.getLast());
+        assertEquals(folder.getNameCount() + 1, chain.size());
+    }
+
+    @Test
     void theStatusLineNamesTheDeclarationTheCaretIsIn() throws Exception {
         String source = """
                 package shapes;
