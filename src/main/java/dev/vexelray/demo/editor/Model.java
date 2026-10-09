@@ -4,6 +4,7 @@ import sibarum.atchung.Committer;
 import sibarum.atchung.State;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -62,6 +63,10 @@ final class Model {
 
     void folder(Path folder) {
         change(d -> d.withFolder(folder));
+    }
+
+    void recent(List<Path> roots) {
+        change(d -> d.withRecent(roots));
     }
 
     /** Say something on the status line. */

@@ -17,8 +17,18 @@ final class Landmarks {
     /** The navigator's tree. */
     static final String TREE = "navigator";
 
-    /** The navigator's heading. Its name is the folder's. */
+    /** The navigator's heading. Its name is the folder's, in either mode. */
     static final String FOLDER = "folder";
+
+    /** The navigator's two mode chips: the files under the root, and the folders a root can be picked from. */
+    static final String MODE_EDIT = "navigator.edit";
+    static final String MODE_OPEN = "navigator.open";
+
+    /** Open's tree of folders, where a click makes one the root. */
+    static final String PICKER = "navigator.roots";
+
+    /** Open's recent roots, one button each. */
+    static final String RECENT = "navigator.recent";
 
     /** The status line, and its four slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";

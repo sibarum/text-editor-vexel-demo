@@ -10,7 +10,8 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 
 /**
- * What comes back next time: the folder the navigator showed, the files that were open, and which was in front.
+ * What comes back next time: the folder the navigator showed, the files that were open, which was in front, and
+ * the roots the navigator's Open offers as recent.
  *
  * <p>Written whenever that set changes — not on every keystroke, since dirtiness and the status line are not part
  * of it — and read once, at start, after the window exists. Files named on the command line open after the
@@ -24,15 +25,17 @@ final class Session {
     static final String FOLDER = "session.folder";
     static final String FILES = "session.files";
     static final String FRONT = "session.front";
+    static final String RECENT = "session.recent";
 
     /** What is remembered, as a value, so "did it change" is an equals. */
-    record Saved(String folder, List<String> files, String front) {
+    record Saved(String folder, List<String> files, String front, List<String> recent) {
 
         static Saved of(Doc doc) {
             Doc.Entry f = doc.front();
             return new Saved(doc.folder() == null ? "" : doc.folder().toString(),
                     doc.files().stream().map(Path::toString).toList(),
-                    f == null || f.path() == null ? "" : f.path().toString());
+                    f == null || f.path() == null ? "" : f.path().toString(),
+                    doc.recent().stream().map(Path::toString).toList());
         }
     }
 
@@ -69,6 +72,7 @@ final class Session {
         settings.putString(FOLDER, now.folder())
                 .putList(FILES, now.files())
                 .putString(FRONT, now.front())
+                .putList(RECENT, now.recent())
                 .save();
     }
 
@@ -86,7 +90,16 @@ final class Session {
         String folder = ephemeral ? "" : settings.getString(FOLDER, "");
         List<String> files = ephemeral ? List.of() : settings.getList(FILES);
         String front = ephemeral ? "" : settings.getString(FRONT, "");
+        // Recent roots are history rather than this window's tabs, so a launch with paths offers them too.
+        List<String> recent = settings.getList(RECENT);
         io.execute(() -> {
+            List<Path> roots = new ArrayList<>();
+            for (String r : recent) {
+                if (Files.isDirectory(Path.of(r))) {
+                    roots.add(Path.of(r));
+                }
+            }
+            model.recent(roots);
             if (!folder.isEmpty() && Files.isDirectory(Path.of(folder))) {
                 actions.showFolder(Path.of(folder));
             }

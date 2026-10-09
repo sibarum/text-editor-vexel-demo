@@ -268,6 +268,31 @@ class EditorTreeTest {
     }
 
     @Test
+    void openShowsTheRootAmongItsSiblingsAndPickingOneMakesItTheRootAndGoesBackToEdit() throws Exception {
+        Path code = Files.createDirectories(dir.resolve("code"));
+        Path indexer = Files.createDirectories(code.resolve("indexer"));
+        Path vexelray = Files.createDirectories(code.resolve("vexelray"));
+        Navigator nav = wiring.ui().navigator();
+        wiring.actions().showFolder(indexer);
+        eventually("the root", () -> indexer.toAbsolutePath().normalize().equals(wiring.model().doc().folder()));
+
+        nav.mode(Navigator.Mode.OPEN);
+        eventually("the root selected among its siblings",
+                () -> indexer.toAbsolutePath().normalize().equals(nav.picker().selected()));
+
+        nav.pick(vexelray);
+        assertEquals(Navigator.Mode.EDIT, nav.mode());
+        eventually("the new root", () -> vexelray.toAbsolutePath().normalize().equals(wiring.model().doc().folder()));
+        assertEquals(java.util.List.of(indexer.toAbsolutePath().normalize()), wiring.model().doc().recent(),
+                "the old root is the recent one");
+
+        nav.mode(Navigator.Mode.OPEN);
+        nav.pick(vexelray);
+        assertEquals(Navigator.Mode.EDIT, nav.mode(), "picking the root it already is just goes back");
+        assertEquals(java.util.List.of(indexer.toAbsolutePath().normalize()), wiring.model().doc().recent());
+    }
+
+    @Test
     void theStatusLineNamesTheDeclarationTheCaretIsIn() throws Exception {
         String source = """
                 package shapes;

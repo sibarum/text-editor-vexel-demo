@@ -141,6 +141,7 @@ final class Ui {
                 : front == null ? "" : front.title());
         status.text(Landmarks.STATUS_MESSAGE, doc.status());
         status.text(Landmarks.STATUS_LANGUAGE, front == null ? "" : front.language());
+        navigator.recent(doc.recent(), folder);
         workspace.retitle(doc);
     }
 }

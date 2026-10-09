@@ -60,6 +60,12 @@ Selecting a file in the navigator opens it — a click, or walking the tree with
 keyboard in the tree so the walk carries on. Enter opens a folder. A folder's menu can make it the root; every
 row's menu can copy its path and has *Open in Vexplore*. `.git`, `target`, `node_modules` and a few others are left out of the listing.
 
+The navigator has two modes, chosen with the **Edit** and **Open** buttons at its top. Edit is the files under the
+root, as above. Open is the same panel showing folders only: the last few roots under *Recent*, then the folder
+above the root with the root selected among its siblings. A click on any folder (or Enter on it) makes it the root
+and goes back to Edit; the arrow keys only move, so walking the folders does not change the root as it goes. The
+root you leave becomes the first recent one, and Recent is remembered between runs.
+
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
 the navigator opens as itself); it is greyed out as *Vexplore not installed* when the install record is missing. A dot in front of a tab's name
@@ -85,7 +91,7 @@ over it, so a failure leaves the old file whole.
 | `Ui.java` | the window: title bar, navigator beside the tabs, status line. `show(Doc)` writes everything derived from the session |
 | `Workspace.java` | the tab bar and one `Buffer` per tab, kept in step |
 | `Buffer.java` | one document: its `TextField`, its highlighter, its path and line endings |
-| `Navigator.java`, `FolderSource.java` | the file tree, over the disk, read lazily |
+| `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
 | `Actions.java` | every command, and the questions some of them ask first; also the close gate |
 | `Dialogs.java`, `NativeDialogs.java` | the OS's open/save/folder dialogs, asked from anywhere, run on the frame loop |
 | `Session.java` | what is remembered between runs, and bringing it back |

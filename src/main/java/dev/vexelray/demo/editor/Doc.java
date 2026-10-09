@@ -7,8 +7,8 @@ import java.util.function.UnaryOperator;
 
 /**
  * Everything the editor knows about its session, in one immutable value: which documents are open, in what order,
- * which one is in front, whether each has unsaved work, which folder the navigator shows, and the last thing the
- * status line was told.
+ * which one is in front, whether each has unsaved work, which folder the navigator shows and which it showed
+ * before, and the last thing the status line was told.
  *
  * <p><b>What it does not hold is the text.</b> Each document's text is already one versioned value — the
  * {@code State<Document>} inside its {@code TextField} — so copying it here would be a second place it lives, and
@@ -18,10 +18,13 @@ import java.util.function.UnaryOperator;
  * <p>A tab is named by an {@code id} rather than an index. An index is a fact about the tab bar at one instant,
  * and a close landing between a read and a write turns it into the neighbour's index.
  */
-record Doc(List<Entry> tabs, long active, Path folder, String status) {
+record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent, String status) {
 
     /** No tab is in front. Only true for a moment: the workspace never leaves itself with no tabs. */
     static final long NONE = -1;
+
+    /** How many roots {@link #recent} keeps, newest first. The current folder is never among them. */
+    static final int RECENT = 4;
 
     /**
      * One open document.
@@ -54,11 +57,12 @@ record Doc(List<Entry> tabs, long active, Path folder, String status) {
 
     Doc {
         tabs = List.copyOf(tabs);
+        recent = List.copyOf(recent);
     }
 
     /** No documents, no folder. */
     static Doc initial() {
-        return new Doc(List.of(), NONE, null, "");
+        return new Doc(List.of(), NONE, null, List.of(), "");
     }
 
     /** The entry with {@code id}, or null if it has gone. */
@@ -89,13 +93,13 @@ record Doc(List<Entry> tabs, long active, Path folder, String status) {
     Doc withTab(Entry entry) {
         List<Entry> next = new ArrayList<>(tabs);
         next.add(entry);
-        return new Doc(next, active, folder, status);
+        return new Doc(next, active, folder, recent, status);
     }
 
     Doc without(long id) {
         List<Entry> next = new ArrayList<>(tabs);
         next.removeIf(e -> e.id() == id);
-        return new Doc(next, active == id ? NONE : active, folder, status);
+        return new Doc(next, active == id ? NONE : active, folder, recent, status);
     }
 
     /** Change one entry, whatever it currently is. A no-op on an entry that has gone. */
@@ -104,18 +108,37 @@ record Doc(List<Entry> tabs, long active, Path folder, String status) {
         for (Entry e : tabs) {
             next.add(e.id() == id ? change.apply(e) : e);
         }
-        return new Doc(next, active, folder, status);
+        return new Doc(next, active, folder, recent, status);
     }
 
     Doc withActive(long id) {
-        return new Doc(tabs, id, folder, status);
+        return new Doc(tabs, id, folder, recent, status);
     }
 
+    /**
+     * Show {@code value} in the navigator. The folder it replaces goes to the front of {@link #recent}, which is
+     * how a root left behind stays one click away; the first folder of a session replaces nothing and adds nothing.
+     */
     Doc withFolder(Path value) {
-        return new Doc(tabs, active, value, status);
+        if (folder == null || folder.equals(value)) {
+            return new Doc(tabs, active, value, recent, status);
+        }
+        List<Path> next = new ArrayList<>(RECENT);
+        next.add(folder);
+        for (Path p : recent) {
+            if (next.size() < RECENT && !p.equals(folder) && !p.equals(value)) {
+                next.add(p);
+            }
+        }
+        return new Doc(tabs, active, value, next, status);
+    }
+
+    /** What the navigator offered as recent roots last time, as the session brings it back. */
+    Doc withRecent(List<Path> value) {
+        return new Doc(tabs, active, folder, value.stream().limit(RECENT).toList(), status);
     }
 
     Doc withStatus(String value) {
-        return new Doc(tabs, active, folder, value);
+        return new Doc(tabs, active, folder, recent, value);
     }
 }

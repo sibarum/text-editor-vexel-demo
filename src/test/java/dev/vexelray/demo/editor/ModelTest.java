@@ -158,4 +158,29 @@ class ModelTest {
         // Dirtiness and the status line are not part of what is remembered, so they do not cause a write.
         assertEquals(saved, Session.Saved.of(doc.withEntry(1, e -> e.withDirty(true)).withStatus("hi")));
     }
+
+    @Test
+    void aRootLeftBehindIsTheNewestRecentOneAndNeverTheCurrentOne() {
+        Path a = Path.of("a");
+        Path b = Path.of("b");
+        Path c = Path.of("c");
+        Doc doc = Doc.initial().withFolder(a);
+        assertEquals(List.of(), doc.recent(), "the first folder replaces nothing");
+        doc = doc.withFolder(b).withFolder(c);
+        assertEquals(List.of(b, a), doc.recent());
+        doc = doc.withFolder(a);
+        assertEquals(List.of(c, b), doc.recent(), "going back to a takes it out, and c joins at the front");
+        assertEquals(doc, doc.withFolder(a), "showing the same folder again changes nothing");
+        assertEquals(List.of("c", "b"), Session.Saved.of(doc).recent());
+    }
+
+    @Test
+    void recentKeepsOnlyTheNewestFew() {
+        Doc doc = Doc.initial();
+        for (int i = 0; i < Doc.RECENT + 3; i++) {
+            doc = doc.withFolder(Path.of("p" + i));
+        }
+        assertEquals(Doc.RECENT, doc.recent().size());
+        assertEquals(Path.of("p" + (Doc.RECENT + 1)), doc.recent().getFirst());
+    }
 }
