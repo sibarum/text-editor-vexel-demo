@@ -17,7 +17,8 @@ Keep an entry short enough that it does not need editing, and delete it when it 
       question, Ctrl+Tab round the bar. Today they are checked by reading the claim rules, not by pressing.
 - [ ] Notice a file changing on disk under an open, clean tab, and reload it; ask if the tab is dirty.
 - [ ] Remember the navigator's width and whether it is shown, beside the session.
-- [ ] Wear the `prompt` mark from `vexelray-icons` once a generated wiring can name an icon (FN-2).
+- [ ] The window wears the executable's icon (`src/main/rc/vex-window.svg`, from the suite icon canvas) once a
+      generated wiring can name an icon (FN-2).
 
 ## Later
 
