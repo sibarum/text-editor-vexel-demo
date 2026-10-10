@@ -40,16 +40,16 @@
               "kind": "native",
               "file": "text-editor.exe",
               "url": "https://github.com/sibarum/text-editor-vexel-demo/releases/download/v0.1.0/text-editor.exe",
-              "sha256": "eccaa486b234601812db1db998334f8c7fa3c3e4266d5e5a070ddc30ca222b4a",
-              "size": 56549376,
+              "sha256": "47ddb9b624de9c39123b3652c27545cc209cbf874551e5ee6b5af1bcec3127b4",
+              "size": 60493824,
               "installPath": "{installDir}\\text-editor.exe",
               "executable": true,
               "addToPath": true,
               "icon": {
                 "file": "text-editor.ico",
                 "url": "https://github.com/sibarum/text-editor-vexel-demo/releases/download/v0.1.0/text-editor.ico",
-                "sha256": "39e83c6e71fd49a1b5ff48bf280779b42d734c16e0ae935d747f6de4178f5863",
-                "size": 12551,
+                "sha256": "4e18013e4a24c98d9b41f22b2a6c5b9bc85c0b528929e46f4e357b1cf79194fc",
+                "size": 25998,
                 "installPath": "{installDir}\\text-editor.ico"
               },
               "shortcuts": {
@@ -208,7 +208,8 @@
             }
           ]
         }
-      }
+      },
+      "updatedAt": "2026-10-10T04:14:24Z"
     }
   ]
 }

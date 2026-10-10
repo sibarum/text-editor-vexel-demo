@@ -41,7 +41,7 @@ Set these in the same PowerShell window *before* the install command:
 
 | File | Kind | Version | Size | Installed to |
 | --- | --- | --- | --- | --- |
-| `text-editor.exe` | native executable | 0.1.0 | 53.9 MB | `%LOCALAPPDATA%\Programs\Vex\text-editor.exe` |
+| `text-editor.exe` | native executable | 0.1.0 | 57.7 MB | `%LOCALAPPDATA%\Programs\Vex\text-editor.exe` |
 
 Everything installed is recorded in `%LOCALAPPDATA%\Programs\Vex\install-manifest.json`, and a copy
 in `%LOCALAPPDATA%\vexelray-installer\installs\text-editor.json`.
