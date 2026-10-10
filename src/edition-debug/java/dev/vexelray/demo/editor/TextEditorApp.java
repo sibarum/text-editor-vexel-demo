@@ -14,7 +14,7 @@ import dev.vexelray.framework.automation.AutomationStarter;
  * (property {@code edition.src}); keep the two annotations identical apart from {@code starters}.
  */
 @VexelApp(name = TextEditor.APP, title = TextEditor.TITLE, width = TextEditor.W, height = TextEditor.H,
-        starters = AutomationStarter.class)
+        icon = "/editor.ico", starters = AutomationStarter.class)
 final class TextEditorApp {
 
     private TextEditorApp() {

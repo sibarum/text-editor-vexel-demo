@@ -152,6 +152,19 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The mark, on the class path for the window: the same file src/main/rc/editor.rc links into the
+                 executable, so the two are one file and cannot drift. @VexelApp(icon) names it. -->
+            <resource>
+                <directory>src/main/rc</directory>
+                <includes>
+                    <include>editor.ico</include>
+                </includes>
+            </resource>
+        </resources>
         <pluginManagement>
             <plugins>
                 <plugin>

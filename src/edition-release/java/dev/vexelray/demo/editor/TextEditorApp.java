@@ -9,7 +9,8 @@ import dev.vexelray.framework.api.VexelApp;
  * nothing). The debug edition is {@code src/edition-debug}; keep the two annotations identical apart from
  * {@code starters}.
  */
-@VexelApp(name = TextEditor.APP, title = TextEditor.TITLE, width = TextEditor.W, height = TextEditor.H)
+@VexelApp(name = TextEditor.APP, title = TextEditor.TITLE, width = TextEditor.W, height = TextEditor.H,
+        icon = "/editor.ico")
 final class TextEditorApp {
 
     private TextEditorApp() {
