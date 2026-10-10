@@ -1,5 +1,5 @@
 {
-  "comment": ["Traced with native-image-agent from a JVM run of this editor (open files of each grammar, tree clicks,", "the screenshot button for the native save dialog), then trimmed of everything the library jars register", "themselves: the foreign descriptors, the Win32 / tactroller / nfd entries, the shaders and the font atlas.", "What is left is this application's: TextEditor, the grammars/ and tables/ resources, the TM4E Raw* classes,", "and the JDK entries the trace saw. See docs/native-build.md."],
+  "comment": ["Traced with native-image-agent from a JVM run of this editor (open files of each grammar, tree clicks,", "the screenshot button for the native save dialog), then trimmed of everything the library jars register", "themselves: the foreign descriptors, the Win32 / tactroller / nfd entries, the shaders and the font atlas.", "What is left is this application's: TextEditor, the grammars/ resources, every jcodings tables/*.bin (a trace lists only the tables one run loaded, so Markdown failed on CR_L.bin), the TM4E Raw* classes,", "and the JDK entries the trace saw. See docs/native-build.md."],
   "reflection": [
     {
       "type": "dev.vexelray.demo.editor.TextEditor",
@@ -285,43 +285,7 @@
       "glob": "grammars/yaml.tmLanguage.json"
     },
     {
-      "glob": "tables/CR_Alpha.bin"
-    },
-    {
-      "glob": "tables/CR_Digit.bin"
-    },
-    {
-      "glob": "tables/CR_NEWLINE.bin"
-    },
-    {
-      "glob": "tables/CR_Print.bin"
-    },
-    {
-      "glob": "tables/CR_Space.bin"
-    },
-    {
-      "glob": "tables/CR_Upper.bin"
-    },
-    {
-      "glob": "tables/CR_Word.bin"
-    },
-    {
-      "glob": "tables/CaseFold.bin"
-    },
-    {
-      "glob": "tables/CaseUnfold_11.bin"
-    },
-    {
-      "glob": "tables/CaseUnfold_11_Locale.bin"
-    },
-    {
-      "glob": "tables/CaseUnfold_12.bin"
-    },
-    {
-      "glob": "tables/CaseUnfold_12_Locale.bin"
-    },
-    {
-      "glob": "tables/CaseUnfold_13.bin"
+      "glob": "tables/*.bin"
     },
     {
       "module": "java.base",

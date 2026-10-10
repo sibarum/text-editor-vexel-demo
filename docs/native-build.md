@@ -48,8 +48,10 @@ application lists only what is its own.
 
 - `text-editor-vexel-demo/reachability-metadata.json` was traced with `native-image-agent` from a JVM run that
   opened a file of each grammar and pressed the screenshot button (the native save dialog), then trimmed of
-  everything the library jars register. What is left: `TextEditor`, the `grammars/*` and `tables/*` resources,
-  the TM4E `Raw*` classes, and the JDK entries the trace saw.
+  everything the library jars register. What is left: `TextEditor`, the `grammars/*` resources, the TM4E `Raw*`
+  classes, and the JDK entries the trace saw, plus `tables/*.bin`, every one of jcodings' Unicode tables (about
+  3 MB). That glob is written by hand, and a re-trace must not replace it: a trace lists only the tables one run
+  loaded, so the image once had 13 of them, and highlighting a Markdown file failed on `CR_L.bin`.
 - `text-editor-vexel-demo-signed-jar/reachability-metadata.json`: TM4E ships as a signed jar, the signing
   certificate ends up in the image heap, and every type that represents an X.509 certificate must be
   registered or the build fails with `Type not found during analysis`. Do not delete it because a native image
