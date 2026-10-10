@@ -60,14 +60,26 @@ Selecting a file in the navigator opens it — a click, or walking the tree with
 keyboard in the tree so the walk carries on. Enter opens a folder. A folder's menu can make it the root; every
 row's menu can copy its path and has *Open in Vexplore*. `.git`, `target`, `node_modules` and a few others are left out of the listing.
 
-The navigator has two modes, and clicking the root's name at its top switches between them; Open tints the panel in
-the accent and edges it with it, so it is never mistaken for the files. Edit is the files under the
-root, as above. Open is the same panel showing folders only: the last few roots under *Recent*, then the folder
-above the root with the root selected among its siblings. Over that list a breadcrumb climbs: its last segment is
-the folder the list starts from, and a click on the one before it (or on `…`, two up) lists from there instead,
-as far as the top of the drive, with the root still unfolded and selected underneath. A click on any folder (or Enter on it) makes it the root
-and goes back to Edit; the arrow keys only move, so walking the folders does not change the root as it goes. The
-root you leave becomes the first recent one, and Recent is remembered between runs.
+The navigator has two modes. The root's name at its top is a toggle: pressed, the navigator is in **Open**, for
+picking a root; released, it is in **Edit**, the files under the root, as above. A window with nothing to show
+starts in Open, and a root arriving from the folder dialog or the command line goes back to Edit.
+
+Open is a different place and looks it: the panel is tinted and edged in the accent, and a line sweeps down it on
+the way in. It shows folders only: the last few roots under *Recent*, then the folder above the root with the root
+selected among its siblings. Over that list a breadcrumb climbs: its last segment is the folder the list starts
+from, and a click on the one before it (or on `…`, two up) lists from there instead, as far as the top of the
+drive, with the root still unfolded and selected underneath. A folder under the pointer lights strongly and takes
+the hand; a click on it (or Enter) makes it the root and goes back to Edit. The arrow keys only move, so walking
+the folders does not change the root as it goes. The root you leave becomes the first recent one, and Recent is
+remembered between runs.
+
+While Open is up the editor steps aside for a picture of the folder under the pointer (or, with the pointer
+elsewhere, of the selected one), drawn as it is read so a large build fills in rather than keeping you waiting: its
+Maven packaging and artifactId, how many modules it gathers, whether it is itself a module of a bigger build (`in
+vexelray-gui`: that one is the likelier root), whether a git repository starts there, a bar of its languages by
+file count, how many Java files, classes, records, interfaces and enums it holds, and its modules and most-used
+annotations as bars against each other. The look is bounded (`Survey`: 6,000 files, 900 Java files read), so a
+home folder answers as quickly as a module.
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -95,6 +107,7 @@ over it, so a failure leaves the old file whole.
 | `Workspace.java` | the tab bar and one `Buffer` per tab, kept in step |
 | `Buffer.java` | one document: its `TextField`, its highlighter, its path and line endings |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
+| `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `Actions.java` | every command, and the questions some of them ask first; also the close gate |
 | `Dialogs.java`, `NativeDialogs.java` | the OS's open/save/folder dialogs, asked from anywhere, run on the frame loop |
 | `Session.java` | what is remembered between runs, and bringing it back |

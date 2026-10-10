@@ -187,6 +187,12 @@ final class Actions {
         ui.showNavigator(true);
     }
 
+    /** Put the navigator in Open, to pick a root. */
+    void chooseRoot() {
+        nav.mode(Navigator.Mode.OPEN);
+        ui.showNavigator(true);
+    }
+
     void reveal(Buffer b) {
         if (!nav.reveal(b.path())) {
             model.say(b.name() + " is not inside the open folder");

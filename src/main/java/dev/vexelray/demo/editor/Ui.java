@@ -3,6 +3,7 @@ package dev.vexelray.demo.editor;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.LayoutEnums.Direction;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -30,6 +31,7 @@ final class Ui {
     private final StatusBar status;
     private final Workspace workspace;
     private final Navigator navigator;
+    private final Preview preview;
     private final SplitPane split;
     private final Motion motion;
     private final Color danger;
@@ -78,7 +80,23 @@ final class Ui {
                 },
                 navigator::reveal);
 
-        split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), workspace.node())
+        // In Open the editor steps aside for a picture of the folder being considered: the two share the place
+        // beside the navigator, one showing at a time, and the tabs keep everything they had while hidden.
+        preview = new Preview(gui);
+        Node stage = gui.column().width(Length.FILL).height(Length.FILL).scroll(false, false)
+                .alignItems(AlignItems.STRETCH)
+                .children(workspace.node(), preview.node());
+        navigator.onPreview(preview::show);
+        navigator.onMode(m -> {
+            boolean open = m == Navigator.Mode.OPEN;
+            if (open) {
+                preview.forget();
+            }
+            workspace.node().visible(!open);
+            preview.node().visible(open);
+        });
+
+        split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), stage)
                 .minFirst(Length.ZERO)
                 // The gap between the two cards is the divider: all of it is the target, a hairline is painted
                 // down its middle, and the line fades to the accent on hover and holds it for the whole drag.

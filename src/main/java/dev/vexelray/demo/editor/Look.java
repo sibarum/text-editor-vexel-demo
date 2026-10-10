@@ -101,6 +101,21 @@ final class Look {
     /** The hairline round the card in Open: the accent itself, where Edit's is {@link #RIM}. */
     static final Role PICKING_RIM = p -> p.accent().toColor();
 
+    /** A tile or a bar's track on Open's cards: a step above {@link #PICKING}, in the same hue. */
+    static final Role TILE = p -> {
+        Oklab level = Oklab.of(p.surface(3));
+        return Oklab.polar(level.l(), 0.034, p.accent().hueDegrees()).toColor();
+    };
+
+    /**
+     * A folder under the pointer in Open: well above the card and strongly in the accent's hue, where a hovered row
+     * elsewhere is a quiet neutral. A click there changes the whole window, and the row says so by how it lights.
+     */
+    static final Role PICK_HOVER = p -> {
+        Oklab level = Oklab.of(p.surface(5));
+        return Oklab.polar(level.l(), 0.070, p.accent().hueDegrees()).toColor();
+    };
+
     /** A scrollbar thumb: level 5 ({@code #313a47}), where the framework's GRIP is a loud level 10. */
     static final Role THUMB = p -> p.surface(5);
 

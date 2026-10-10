@@ -113,12 +113,18 @@ final class Session {
             for (Path p : open) {
                 actions.load(p);
             }
+            boolean somewhere = !folder.isEmpty() && Files.isDirectory(Path.of(folder)) || !open.isEmpty();
             for (Path p : extra) {
                 if (Files.isDirectory(p)) {
                     actions.showFolder(p);
                 } else {
                     actions.load(p);
                 }
+                somewhere = true;
+            }
+            // A window with nothing to show has one thing to do first, and Open is where it is done.
+            if (!somewhere) {
+                actions.chooseRoot();
             }
             if (ephemeral) {
                 return;

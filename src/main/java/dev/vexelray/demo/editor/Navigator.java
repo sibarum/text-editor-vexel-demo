@@ -2,6 +2,8 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.input.CursorShape;
+import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -9,7 +11,6 @@ import dev.vexelray.gui.core.style.Theme;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
-import dev.vexelray.gui.widget.Tooltip;
 import dev.vexelray.gui.widget.TreeView;
 
 import java.nio.file.Files;
@@ -31,7 +32,8 @@ import java.util.function.Consumer;
  *
  * <p>Open is the same card showing folders only: the roots used recently, then the folder above the root with the
  * root selected among its siblings. A click on a folder, or Enter, makes it the root and goes back to Edit. The
- * arrow keys only move, so walking the folders does not change the root at every step.
+ * arrow keys only move, so walking the folders does not change the root at every step. Whichever folder the pointer
+ * is on, or the keys have reached, is handed to {@link #onPreview}, which pictures it where the editor stands.
  *
  * <p>There is one tree per mode for the life of the window, and changing folder re-points a source and refreshes
  * its tree. The refresh lists the new folder, which is I/O, so it runs on the offload lane rather than wherever the
@@ -53,9 +55,6 @@ final class Navigator {
     private final TreeView<Path> tree;
     private final TreeView<Path> picker;
     private final Button heading;
-    private final Tooltip hint;
-    private final Node label;
-    private final Node empty;
     private final Node editPane;
     private final Node openPane;
     private final Node recentLabel;
@@ -67,32 +66,23 @@ final class Navigator {
     private volatile Mode mode = Mode.EDIT;
     private volatile Consumer<Path> openFile = p -> { };
     private volatile Consumer<Path> openFolder = p -> { };
+    private volatile Consumer<Mode> modeChanged = m -> { };
+    private volatile Consumer<Path> previewing = p -> { };
+    private volatile Path recentHover;
+    private volatile Path treeHover;
 
     Navigator(Gui gui, Motion motion) {
         this.gui = gui;
         this.motion = motion;
         this.io = gui.offload();
 
-        // A line saying what the card is for over the root's name, as the design has it. The design sets the name
-        // bold, which is not something a node can ask for (framework-notes FN-15).
-        label = gui.text("Editing")
-                .font(Type.UI)
-                .textSize(Type.SMALL)
-                .textColor(gui.theme().color(Role.FAINT))
-                .padding(Length.ZERO, Type.TIGHT);
-        // The root's name is what switches between Edit and Open: the thing to change is the thing to press. A
-        // button rather than a clickable text, so Tab, Enter and Space reach it too.
-        heading = new Button(gui, "No folder").kind(Button.Kind.GHOST)
-                .onPress(() -> mode(mode == Mode.EDIT ? Mode.OPEN : Mode.EDIT));
+        // The root's name is what switches between Edit and Open: the thing to change is the thing to press. A chip,
+        // outlined and so plainly pressable, that stays pressed while Open is up, so the way back is the same name
+        // held down. A button rather than a clickable text, so Tab, Enter and Space reach it too.
+        heading = new Button(gui, "No folder").kind(Button.Kind.SECONDARY).toggle(true)
+                .onToggle(on -> mode(on ? Mode.OPEN : Mode.EDIT));
         heading.node().font(Type.UI).wordWrap(false);
         gui.landmark(Landmarks.FOLDER, heading.node());
-        hint = new Tooltip(gui).attach(heading.node(),
-                () -> mode == Mode.EDIT ? "Pick another root" : "Back to the files");
-
-        empty = gui.text("Click above to pick a folder, or press Ctrl+Shift+O")
-                .font(Type.UI)
-                .textSize(Type.SMALL)
-                .textColor(gui.theme().color(Role.FAINT));
 
         tree = new TreeView<>(gui, source).motion(motion.arrival);
         // The tree sits in the card rather than in a well of its own. Its border is the tree's to repaint on every
@@ -123,7 +113,7 @@ final class Navigator {
         editPane = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
                 .alignItems(AlignItems.STRETCH)
-                .children(empty, tree.node());
+                .children(tree.node());
 
         // Open: the recent roots first, as the shortest way back, then the folder above the root.
         recentLabel = gui.text("Recent")
@@ -142,6 +132,15 @@ final class Navigator {
                 }
             });
             b.node().visible(false);
+            gui.onState(b.node(), state -> {
+                Path p = recentPaths.get(slot);
+                if (state != InteractionState.NORMAL) {
+                    recentHover = p;
+                } else if (Objects.equals(recentHover, p)) {
+                    recentHover = null;   // a late leave of an entry the pointer has since left clears nothing else
+                }
+                repicture();
+            });
             recentButtons[i] = b;
             recent.append(b.node());
         }
@@ -155,10 +154,21 @@ final class Navigator {
         gui.landmark(Landmarks.ANCESTRY, ancestry.node());
         // No arrival ramp here. Open unfolds the top and scrolls to the root in one go, and with the folders above
         // the root growing in from nothing, the scroll is measured against rows a frame old and lands short.
-        picker = new TreeView<>(gui, roots);
+        // A row here lights strongly and takes the hand, because a click on it changes the whole window; and the
+        // folder under the pointer is the one pictured where the editor was, so what a click would choose is in
+        // view before the click. Off the rows, the picture is of the selected row: the root, or wherever the arrow
+        // keys have walked to.
+        picker = new TreeView<>(gui, roots)
+                .hoverStyle(Look.PICK_HOVER, Role.ACCENT)
+                .rowCursor(CursorShape.POINTER);
         picker.node().width(Length.FILL).height(Length.grow(1))
                 .background(gui.theme().color(Role.NONE));
         gui.landmark(Landmarks.PICKER, picker.node());
+        picker.onHover(p -> {
+            treeHover = p;
+            repicture();
+        });
+        picker.onSelect(p -> repicture());
         picker.onClick(this::pick);
         picker.onActivate(this::pick);
         picker.action(TreeView.Action.<Path>of("»", "Make this the root", (p, job) -> pick(p)));
@@ -181,7 +191,38 @@ final class Navigator {
                 .corner(Type.CORNER)
                 .border(Type.RULE, gui.theme().color(Look.RIM))
                 .alignItems(AlignItems.STRETCH)
-                .children(label, heading.node(), editPane, openPane);
+                .children(heading.node(), editPane, openPane);
+    }
+
+    /**
+     * Picture what the pointer is on, Recent before the tree, else where the picture rests. Worked out from both
+     * every time rather than from whichever event came last, because the leave of one control and the enter of
+     * the next arrive from a pool in no promised order.
+     */
+    private void repicture() {
+        Path r = recentHover;
+        Path t = treeHover;
+        previewing.accept(r != null ? r : t != null ? t : resting());
+    }
+
+    /** What Open pictures with nothing under the pointer: the selected folder, else the root, else the top. */
+    private Path resting() {
+        Path selected = picker.selected();
+        if (selected != null) {
+            return selected;
+        }
+        Path base = source.base();
+        return base != null ? base : roots.top();
+    }
+
+    /** Be told when the card changes mode. Runs on whichever thread asked for the change. */
+    void onMode(Consumer<Mode> handler) {
+        this.modeChanged = handler == null ? m -> { } : handler;
+    }
+
+    /** Be told which folder Open is pointing at, to picture it. Runs on a worker. */
+    void onPreview(Consumer<Path> handler) {
+        this.previewing = handler == null ? p -> { } : handler;
     }
 
     Node node() {
@@ -222,15 +263,18 @@ final class Navigator {
     void mode(Mode value) {
         mode = value;
         boolean open = value == Mode.OPEN;
-        label.text(open ? "Pick a folder to make it the root" : "Editing");
-        // Open is a different place, and looks it: the card steeps in the accent and wears it as its edge, the line
-        // above the name says so in it, and a sweep runs down the card as it changes, so the switch is seen even
-        // by an eye that was on the document.
+        heading.show(open);
+        // Open is a different place, and looks it: the card steeps in the accent and wears it as its edge, the name
+        // stays pressed, and a sweep runs down the card as it changes, so the switch is seen even by an eye that was
+        // on the document.
         Theme theme = gui.theme();
         root.background(theme.color(open ? Look.PICKING : Look.CARD))
                 .border(Type.RULE, theme.color(open ? Look.PICKING_RIM : Look.RIM));
-        label.textColor(theme.color(open ? Role.ACCENT : Role.FAINT));
+        modeChanged.accept(value);
         if (open) {
+            recentHover = null;
+            treeHover = null;
+            repicture();
             motion.cues.play(root, Cue.scanline(theme.color(Role.ACCENT)));
         }
         editPane.visible(!open);
@@ -338,8 +382,12 @@ final class Navigator {
             Path shown = source.base();
             Path name = shown == null ? null : shown.getFileName();
             heading.label(shown == null ? "No folder" : String.valueOf(name == null ? shown : name));
-            empty.visible(shown == null);
             tree.node().visible(shown != null);
+            // A root arriving from anywhere (the folder dialog, the command line) is somewhere to edit; Open was
+            // for finding one.
+            if (shown != null && mode == Mode.OPEN) {
+                mode(Mode.EDIT);
+            }
             if (then != null) {
                 then.run();
             }

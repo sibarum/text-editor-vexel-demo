@@ -26,6 +26,9 @@ final class Landmarks {
     /** Open's breadcrumb over its folders: every folder above the top one, each a button that lists from there. */
     static final String ANCESTRY = "navigator.ancestry";
 
+    /** What stands in the editor's place in Open: the folder under the pointer, surveyed. */
+    static final String PREVIEW = "preview";
+
     /** Open's recent roots, one button each. */
     static final String RECENT = "navigator.recent";
 
