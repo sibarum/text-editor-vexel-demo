@@ -51,7 +51,7 @@ edge.
 
 ### FN-1 · A side-effect-only recipe has to invent a type to return 🔬
 
-Two things this application does at `ATTACH` produce nothing: arming the close gate (`shell.onClose(...)`) and
+Two things this application does at `ATTACH` produce nothing: arming the close gate (`windows().main().onClose(...)`) and
 restoring last time's session. Both need the `Shell`, or values that exist only by then, so both belong in a
 `@Provides` method — and a provider returning `void` is a compile error ("provides nothing"), and so is one
 returning a record ("a record behind `@Provides` is the smell"). `Recipes.restore` returns an empty marker class,
@@ -139,8 +139,9 @@ tests in `EditorTreeTest` go through those.
 **Update, 2026-10-11: the dialogs half is fixed upstream.** The framework hands out `Dialogs`, a value a recipe takes
 from the first phase and a test supplies (`shell.dialogs(...)` after a headless `tree`, or a `@Provides Dialogs`). A
 question asked before the window exists is held until it does. `Actions` takes it in its constructor, and its `ask`
-field is gone; `EditorTreeTest` hands back dialogs that answer. The `CloseRequest` half is still open, so
-`guardClose(Runnable, Runnable)` stays: see the framework's TODO, *a close gate per window*.
+field is gone; `EditorTreeTest` hands back dialogs that answer. The `CloseRequest` half followed the same day: a close
+gate is a `CloseGate`, two callbacks on `Window.onClose`, so `guardClose(Runnable, Runnable)` is the gate itself and
+the `CloseRequest` overload is gone.
 
 ### FN-7 · The file dialogs are main-thread, block the frame loop, and need the application to quit them 🔬
 

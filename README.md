@@ -108,8 +108,7 @@ over it, so a failure leaves the old file whole.
 | `Buffer.java` | one document: its `TextField`, its highlighter, its path and line endings |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
-| `Actions.java` | every command, and the questions some of them ask first; also the close gate |
-| `Dialogs.java`, `NativeDialogs.java` | the OS's open/save/folder dialogs, asked from anywhere, run on the frame loop |
+| `Actions.java` | every command, and the questions some of them ask first, through the framework's `Dialogs`; also the main window's close gate |
 | `Session.java` | what is remembered between runs, and bringing it back |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |
@@ -123,7 +122,8 @@ nothing else owns. Which phase each part lands in is visible in
 ### Threads, and the two rules
 
 Handlers run on workers, and the GUI thread never reads the model. Disk reads and writes go to the offload lane,
-never to the frame loop; the native dialogs are the one thing that runs there, because they must.
+never to the frame loop. The file dialogs are the framework's: on Windows they run on a dialog thread of their own, and
+only on macOS, where AppKit insists, on the frame loop.
 
 Two rules keep the tab bookkeeping deadlock-free, and both are written out on `Workspace`: **nothing commits to
 the model while holding the workspace lock**, and **nothing reached from a model listener takes it**. atchung's
@@ -161,7 +161,7 @@ chords yet, so Ctrl-commands cannot be scripted (framework-notes FN-3); clicks, 
 ## Logging
 
 The framework configures it: info to the console and debug to `target/logs/text-editor.log` from a checkout,
-more under automation. This application logs as `editor.files`, `editor.dialogs`, `editor.highlight` and `editor.index`;
+more under automation. This application logs as `editor.files`, `editor.highlight`, `editor.index` and `editor.suite`;
 `-Dlog.level.editor.files=debug` raises one of them.
 
 ## Native build and installer
