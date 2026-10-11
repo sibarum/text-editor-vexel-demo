@@ -1,7 +1,10 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
+import dev.vexelray.gui.nfd.FileDialog;
+import dev.vexelray.gui.widget.Modal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,7 +12,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,11 +32,50 @@ class EditorTreeTest {
 
     private Shell shell;
     private TextEditorAppWiring wiring;
+    /** How a question is answered: by default it fails the test, since nothing should be asked unexpectedly. */
+    private volatile Consumer<Modal> answers = modal -> {
+        throw new AssertionError("asked unexpectedly: " + modal.title());
+    };
+    /** Where Save As answers, or null to cancel it. */
+    private volatile Path saveTo;
 
     @BeforeEach
     void build() {
         wiring = new TextEditorAppWiring();
         shell = VexelApplication.tree(wiring, new String[0]);
+        // This test's dialogs in place of the framework's, which would hold every question for a window that never
+        // comes. Taken back as late as WINDOW, so handing them over after the tree is built is in time.
+        shell.dialogs(new Answering());
+    }
+
+    /** Dialogs that answer a question with {@link #answers}, Save As with {@link #saveTo}, and cancel the rest. */
+    private final class Answering implements Dialogs {
+
+        @Override
+        public void ask(Modal modal) {
+            answers.accept(modal);
+        }
+
+        @Override
+        public void openFile(Path start, List<FileDialog.Filter> filters, Consumer<Path> picked, Runnable cancelled) {
+            cancelled.run();
+        }
+
+        @Override
+        public void openFolder(Path start, Consumer<Path> picked, Runnable cancelled) {
+            cancelled.run();
+        }
+
+        @Override
+        public void saveFile(Path start, String name, List<FileDialog.Filter> filters, Consumer<Path> picked,
+                             Runnable cancelled) {
+            Path target = saveTo;
+            if (target == null) {
+                cancelled.run();
+            } else {
+                picked.accept(target);
+            }
+        }
     }
 
     @AfterEach
@@ -95,28 +139,6 @@ class EditorTreeTest {
         assertEquals(2, ws.all().size());
     }
 
-    /** Dialogs that answer Save As with {@code target}, or cancel when it is null. */
-    private static Dialogs savingTo(Path target) {
-        return new Dialogs() {
-            @Override
-            public void openFile(Path start, java.util.function.Consumer<Path> picked) {
-            }
-
-            @Override
-            public void openFolder(Path start, java.util.function.Consumer<Path> picked) {
-            }
-
-            @Override
-            public void saveFile(Path start, String name, java.util.function.Consumer<Path> picked, Runnable cancelled) {
-                if (target == null) {
-                    cancelled.run();
-                } else {
-                    picked.accept(target);
-                }
-            }
-        };
-    }
-
     /** Answer every question by pressing the button labelled {@code label}, and remember the question. */
     private static java.util.function.Consumer<dev.vexelray.gui.widget.Modal> pressing(String label,
             java.util.List<String> asked) {
@@ -149,7 +171,7 @@ class EditorTreeTest {
     void anUntitledDocumentIsSavedWhereTheDialogSays() throws Exception {
         Path target = dir.resolve("new.py");
         Actions actions = wiring.actions();
-        actions.dialogs(savingTo(target));
+        saveTo = target;
         Buffer b = wiring.ui().workspace().front();
         b.field.insert("print('hi')");
         actions.save();
@@ -162,7 +184,7 @@ class EditorTreeTest {
     @Test
     void theCloseGateLetsACleanSessionGoWithoutAsking() {
         java.util.List<String> asked = new java.util.ArrayList<>();
-        wiring.actions().ask(pressing("Cancel", asked));
+        answers = pressing("Cancel", asked);
         boolean[] proceeded = {false};
         wiring.actions().guardClose(() -> proceeded[0] = true, () -> { });
         assertTrue(proceeded[0]);
@@ -175,7 +197,7 @@ class EditorTreeTest {
         b.field.insert("unsaved");
         eventually("dirty", b::dirty);
         java.util.List<String> asked = new java.util.ArrayList<>();
-        wiring.actions().ask(pressing("Cancel", asked));
+        answers = pressing("Cancel", asked);
         boolean[] answer = {false, false};
         wiring.actions().guardClose(() -> answer[0] = true, () -> answer[1] = true);
         assertEquals(java.util.List.of("Quit with unsaved changes?"), asked);
@@ -188,8 +210,8 @@ class EditorTreeTest {
         Buffer b = wiring.ui().workspace().front();
         b.field.insert("unsaved");
         eventually("dirty", b::dirty);
-        wiring.actions().dialogs(savingTo(null));
-        wiring.actions().ask(pressing("Save all", new java.util.ArrayList<>()));
+        saveTo = null;
+        answers = pressing("Save all", new java.util.ArrayList<>());
         java.util.concurrent.atomic.AtomicInteger proceeded = new java.util.concurrent.atomic.AtomicInteger();
         java.util.concurrent.atomic.AtomicInteger cancelled = new java.util.concurrent.atomic.AtomicInteger();
         wiring.actions().guardClose(proceeded::incrementAndGet, cancelled::incrementAndGet);
@@ -209,8 +231,8 @@ class EditorTreeTest {
         Buffer untitled = ws.untitled();
         untitled.field.insert("2");
         eventually("both dirty", () -> wiring.model().doc().unsaved().size() == 2);
-        actions.dialogs(savingTo(dir.resolve("b.txt")));
-        actions.ask(pressing("Save all", new java.util.ArrayList<>()));
+        saveTo = dir.resolve("b.txt");
+        answers = pressing("Save all", new java.util.ArrayList<>());
         java.util.concurrent.atomic.AtomicInteger proceeded = new java.util.concurrent.atomic.AtomicInteger();
         actions.guardClose(proceeded::incrementAndGet, () -> { });
         eventually("the quit to proceed", () -> proceeded.get() == 1);
@@ -225,7 +247,7 @@ class EditorTreeTest {
         b.field.insert("x");
         eventually("dirty", b::dirty);
         java.util.List<String> asked = new java.util.ArrayList<>();
-        wiring.actions().ask(pressing("Don't save", asked));
+        answers = pressing("Don't save", asked);
         wiring.actions().close(b);
         assertEquals(java.util.List.of("Unsaved changes"), asked);
         assertTrue(ws.byId(b.id) == null);
@@ -321,7 +343,7 @@ class EditorTreeTest {
     void goingToOpenAsksAboutUnsavedWorkAndCancelStaysInEdit() throws Exception {
         Buffer b = dirtyTabIn(Files.createDirectories(dir.resolve("one")));
         java.util.List<String> asked = new java.util.ArrayList<>();
-        wiring.actions().ask(pressing("Cancel", asked));
+        answers = pressing("Cancel", asked);
         Navigator nav = wiring.ui().navigator();
         nav.askToOpen();
         assertEquals(java.util.List.of("Unsaved changes"), asked);
@@ -333,7 +355,7 @@ class EditorTreeTest {
     void discardingOnTheWayToOpenPutsTheFileBackAndKeepsItsTab() throws Exception {
         Buffer b = dirtyTabIn(Files.createDirectories(dir.resolve("one")));
         java.util.List<String> asked = new java.util.ArrayList<>();
-        wiring.actions().ask(pressing("Discard", asked));
+        answers = pressing("Discard", asked);
         Navigator nav = wiring.ui().navigator();
         nav.askToOpen();
         eventually("Open", () -> nav.mode() == Navigator.Mode.OPEN);
@@ -346,7 +368,7 @@ class EditorTreeTest {
     @Test
     void goingToOpenWithNothingUnsavedAsksNothing() throws Exception {
         java.util.List<String> asked = new java.util.ArrayList<>();
-        wiring.actions().ask(pressing("Cancel", asked));
+        answers = pressing("Cancel", asked);
         Navigator nav = wiring.ui().navigator();
         nav.askToOpen();
         eventually("Open", () -> nav.mode() == Navigator.Mode.OPEN);

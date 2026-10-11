@@ -1,9 +1,10 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.app.CloseRequest;
 import dev.vexelray.gui.widget.Modal;
-import dev.vexelray.gui.widget.Modals;
+import dev.vexelray.gui.nfd.FileDialog;
 import sibarum.concordance.index.Index;
 import sibarum.concordance.index.Symbol;
 import sibarum.probe.Log;
@@ -47,15 +48,19 @@ final class Actions {
     /** The root last asked for — set as it is asked for, where the navigator's own folder arrives a listing later. */
     private volatile Path root;
 
-    private volatile Dialogs dialogs = Dialogs.NONE;
     /**
-     * Where a question goes. The framework's dialogs, which are a process-wide static installed with the window;
-     * a test hands its own, since there is no window for those to open in. See docs/framework-notes.md, FN-6.
+     * Where every question goes, a {@code Modal} or a file dialog: the framework's, which hold a question until there
+     * is a window to ask it in, or a test's, which answer it. See docs/framework-notes.md, FN-6.
      */
-    private volatile Consumer<Modal> ask = Modals::show;
+    private final Dialogs dialogs;
 
-    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session) {
+    /** What Save As offers: every language the highlighter knows, by extension. */
+    private static final List<FileDialog.Filter> TEXT = List.of(FileDialog.Filter.of("Text files",
+            Highlighter.knownExtensions().stream().sorted().toArray(String[]::new)));
+
+    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session, Dialogs dialogs) {
         this.gui = gui;
+        this.dialogs = dialogs;
         this.model = model;
         this.ui = ui;
         this.ws = ui.workspace();
@@ -83,16 +88,6 @@ final class Actions {
                             () -> Suite.showInVexplore(b.path(), io))
                     .item("Copy path", b.path() != null, () -> gui.clipboard().set(String.valueOf(b.path())));
         });
-    }
-
-    /** Replace where questions go: a test answers them itself. */
-    void ask(Consumer<Modal> ask) {
-        this.ask = ask;
-    }
-
-    /** The window exists: from here on the dialogs are real. */
-    void dialogs(Dialogs dialogs) {
-        this.dialogs = dialogs == null ? Dialogs.NONE : dialogs;
     }
 
     /** Every chord, as a {@code GLOBAL} claim: a focused field still owns the keys it claims for itself. */
@@ -123,12 +118,12 @@ final class Actions {
     }
 
     void open() {
-        dialogs.openFile(startDir(), this::open);
+        dialogs.openFile(startDir(), List.of(), this::open, () -> { });
     }
 
     /** Ctrl+Shift+O: the folder dialog, as the way to a new root, so unsaved work is settled before it as Open settles it. */
     void openFolder() {
-        settleUnsaved(ws.all(), () -> dialogs.openFolder(startDir(), this::switchRoot), () -> { });
+        settleUnsaved(ws.all(), () -> dialogs.openFolder(startDir(), this::switchRoot, () -> { }), () -> { });
     }
 
     /** Open {@code file} in a tab, or bring forward the tab it is already in. */
@@ -235,7 +230,7 @@ final class Actions {
             proceed.run();
             return;
         }
-        ask.accept(Modal.of("Unsaved changes", unsavedMessage(unsaved))
+        dialogs.ask(Modal.of("Unsaved changes", unsavedMessage(unsaved))
                 .defaultButton("Save all", () -> saveAll(unsaved, proceed, cancel))
                 .button("Discard", () -> io.execute(() -> {
                     unsaved.forEach(this::discard);
@@ -331,7 +326,7 @@ final class Actions {
         Path at = b.path();
         Path dir = at != null && at.getParent() != null ? at.getParent() : startDir();
         String name = at != null ? String.valueOf(at.getFileName()) : "untitled.txt";
-        dialogs.saveFile(dir, name, target -> write(b, target, saved, failed), failed);
+        dialogs.saveFile(dir, name, TEXT, target -> write(b, target, saved, failed), failed);
     }
 
     /**
@@ -402,7 +397,7 @@ final class Actions {
             return;
         }
         String name = b.name() == null ? "Untitled" : b.name();
-        ask.accept(Modal.of("Unsaved changes", "Save the changes to " + name + " before closing it?")
+        dialogs.ask(Modal.of("Unsaved changes", "Save the changes to " + name + " before closing it?")
                 .defaultButton("Save", () -> save(b, () -> ws.close(b.id), () -> { }))
                 .button("Don't save", () -> ws.close(b.id))
                 .cancelButton("Cancel", () -> { }));
@@ -416,7 +411,7 @@ final class Actions {
             closeThem.run();
             return;
         }
-        ask.accept(Modal.of("Unsaved changes", unsavedMessage(unsaved))
+        dialogs.ask(Modal.of("Unsaved changes", unsavedMessage(unsaved))
                 .defaultButton("Save all", () -> saveAll(unsaved, closeThem, () -> { }))
                 .button("Discard", closeThem)
                 .cancelButton("Cancel", () -> { }));
@@ -443,14 +438,14 @@ final class Actions {
             proceed.run();
             return;
         }
-        ask.accept(Modal.of("Quit with unsaved changes?", unsavedMessage(unsaved))
+        dialogs.ask(Modal.of("Quit with unsaved changes?", unsavedMessage(unsaved))
                 .defaultButton("Save all", () -> saveAll(unsaved, proceed, cancel))
                 .button("Discard", proceed)
                 .cancelButton("Cancel", cancel));
     }
 
     private void tell(String title, String message) {
-        ask.accept(Modal.of(title, message).defaultButton("OK", () -> { }));
+        dialogs.ask(Modal.of(title, message).defaultButton("OK", () -> { }));
     }
 
     private static String unsavedMessage(List<Buffer> unsaved) {

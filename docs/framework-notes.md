@@ -136,6 +136,12 @@ tests in `EditorTreeTest` go through those.
 `CloseRequest` gets a public way to be made from two callbacks. **v1:** `Shell`'s accessors are frozen; the static
 `Modals` is how every application reaches dialogs today, so that choice is being made by default.
 
+**Update, 2026-10-11: the dialogs half is fixed upstream.** The framework hands out `Dialogs`, a value a recipe takes
+from the first phase and a test supplies (`shell.dialogs(...)` after a headless `tree`, or a `@Provides Dialogs`). A
+question asked before the window exists is held until it does. `Actions` takes it in its constructor, and its `ask`
+field is gone; `EditorTreeTest` hands back dialogs that answer. The `CloseRequest` half is still open, so
+`guardClose(Runnable, Runnable)` stays: see the framework's TODO, *a close gate per window*.
+
 ### FN-7 · The file dialogs are main-thread, block the frame loop, and need the application to quit them 🔬
 
 `vexelray-gui-nfd`'s dialogs are synchronous, modal, and must be called on the window's thread. A request from a
@@ -168,6 +174,10 @@ window sends the GUI thread a message, and a GUI thread parked in `join()` deadl
 `WindowControls.of(window)` (what a popup gets) posts with `Runnable::run` and captures nothing, so on a popup the
 macOS lane would run a dialog on whatever thread clicked, and a screenshot would do nothing. The `@MainThread`
 colouring of the recipe stands: `NativeDialogs` still takes the `GuiApp` for `post` and the window handle.
+
+**Update, 2026-10-11: fixed upstream.** The framework owns the file dialogs now, as `Dialogs`: installed at `ATTACH`,
+NFD quit at shutdown, the answer on the handler lane. `NativeDialogs` moved into the framework, and the
+`@MainThread` recipe that built it is gone: `Actions` takes `Dialogs`, which is not main-thread.
 
 ### FN-8 · `TextField.onChange` is one slot, and fires when only the spans changed 🔬
 

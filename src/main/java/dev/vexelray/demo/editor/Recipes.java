@@ -1,13 +1,12 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.framework.api.Configuration;
-import dev.vexelray.framework.api.MainThread;
 import dev.vexelray.framework.api.Provides;
 import dev.vexelray.framework.core.Launch;
 import dev.vexelray.framework.shell.Appearance;
+import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.gui.core.Gui;
-import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.krono.KronoGui;
@@ -23,8 +22,8 @@ import java.util.List;
  *
  * <p>{@code TextEditorAppWiring} is generated from this while the project compiles. A part's phase is the latest
  * phase of anything it takes, so the look and the model exist first, the window's contents wait for the
- * {@code Gui}, the file dialogs wait for the window, and the session — which needs the close gate, and so the
- * {@code Shell} — comes last.
+ * {@code Gui}, and the session — which needs the close gate, and so the {@code Shell} — comes last. The dialogs are
+ * the framework's {@code Dialogs}, there from the first phase, so nothing waits for the window to ask a question.
  */
 @Configuration
 final class Recipes {
@@ -73,23 +72,11 @@ final class Recipes {
      * the session or a dialog brings something else.
      */
     @Provides
-    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session) {
-        Actions actions = new Actions(gui, model, ui, index, session);
+    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session, Dialogs dialogs) {
+        Actions actions = new Actions(gui, model, ui, index, session, dialogs);
         actions.shortcuts();
         ui.workspace().untitled();
         return actions;
-    }
-
-    /**
-     * The OS file dialogs, parented to the main window. Main-thread because it takes the {@code GuiApp}; the dialogs
-     * it makes post themselves to the frame loop, so {@link Actions} may call them from anywhere.
-     */
-    @Provides
-    @MainThread
-    NativeDialogs dialogs(GuiApp app, Gui gui, Actions actions) {
-        NativeDialogs dialogs = new NativeDialogs(app, gui.handlers());
-        actions.dialogs(dialogs);
-        return dialogs;
     }
 
     /**
