@@ -24,6 +24,9 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 
 - [ ] Find across the open folder, with results as a list that opens at the line.
 - [ ] Reopen a recently closed tab (Ctrl+Shift+T).
+- [ ] Go to a library's declarations. Index the project's dependencies too (concordance reads a `-sources.jar`,
+      or decompiles the classes when there is none) and open a `Source` that is not on disk in a read-only tab, as
+      its `readOnly()` asks. Today go-to-declaration skips them, and the index holds none.
 - [ ] The native build (`-Pnative`, [docs/native-build.md](native-build.md)) works and every grammar renders in it,
       but its metadata was traced from a JVM run. Walk the paths nobody drove: Ctrl+O and Ctrl+S (the native
       dialogs), Save As, the clipboard, and the chords `ottermate` cannot press. Most of the metadata belongs

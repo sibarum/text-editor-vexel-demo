@@ -6,6 +6,7 @@ import dev.vexelray.gui.core.app.CloseRequest;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.nfd.FileDialog;
 import sibarum.concordance.index.Index;
+import sibarum.concordance.index.Source;
 import sibarum.concordance.index.Symbol;
 import sibarum.probe.Log;
 import sibarum.tactroller.api.Key;
@@ -536,12 +537,17 @@ final class Actions {
                 if (!s.name().equals(name)) {
                     continue;
                 }
-                Path file = s.file().toAbsolutePath().normalize();
+                // A library's declaration lives in a jar, shown read-only or decompiled, and a tab is a file it
+                // can save. The project index holds only the project's own files, so none arrives here yet.
+                if (!(s.source() instanceof Source.OnDisk disk)) {
+                    continue;
+                }
+                Path file = disk.file().toAbsolutePath().normalize();
                 if (file.equals(frontFile) && !local.isEmpty()) {
                     continue;   // the front document's own declarations were read from its text, which is newer
                 }
                 Buffer open = ws.find(file);
-                out.add(new Target(s, file, open, Outline.label(s, index.declaredIn(s.file()))));
+                out.add(new Target(s, file, open, Outline.label(s, index.declaredIn(s.source()))));
             }
         }
         out.sort(Comparator
