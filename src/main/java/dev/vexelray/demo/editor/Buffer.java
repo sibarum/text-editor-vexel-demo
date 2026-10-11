@@ -46,6 +46,7 @@ final class Buffer implements AutoCloseable {
     private final Outline outline;
     private final Subscription dirtyWatch;
     private final Subscription caretWatch;
+    private final Subscription ringWatch;
     private final Consumer<Boolean> dirty;
 
     private volatile Path path;
@@ -76,9 +77,10 @@ final class Buffer implements AutoCloseable {
                 // all or nothing: on every line of a file that will not be written the way this system writes.
                 .lineEnds(crlf != SYSTEM_CRLF);
         // The field sits on the card rather than in a well of its own. Its border is the field's to repaint on
-        // every change of focus, so the accent ring round the document stays (framework-notes FN-14).
+        // every change of focus, so a ring round the document stays (framework-notes FN-14); Look.ring quiets it.
         field.node().width(Length.FILL).height(Length.FILL).textSize(Type.CODE)
                 .background(gui.theme().color(Look.CARD));
+        this.ringWatch = Look.ring(gui, field.node());
         this.crumbs = new Breadcrumb<Path>(gui, p -> {
             Path name = p.getFileName();
             return name == null ? p.toString() : name.toString();
@@ -335,6 +337,7 @@ final class Buffer implements AutoCloseable {
         outline.close();
         dirtyWatch.close();
         caretWatch.close();
+        ringWatch.close();
         field.close();
     }
 }

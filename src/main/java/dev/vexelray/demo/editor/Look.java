@@ -1,13 +1,17 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.InteractionState;
+import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
 import dev.vexelray.gui.core.style.Relief;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.style.Shading;
 import dev.vexelray.gui.core.style.Theme;
+import sibarum.atchung.Subscription;
 
 /**
  * The palette, as anchors.
@@ -118,6 +122,26 @@ final class Look {
 
     /** A scrollbar thumb: level 5 ({@code #313a47}), where the framework's GRIP is a loud level 10. */
     static final Role THUMB = p -> p.surface(5);
+
+    /**
+     * The ring round a focused document or tree: the accent's hue at half its chroma and well under its lightness.
+     * The full accent round a whole card pulled the eye off the text; this still says where the keys go.
+     */
+    static final Role FOCUS = p -> Oklab.polar(0.4800, 0.0550, p.accent().hueDegrees()).toColor();
+
+    /**
+     * Repaints {@code node}'s ring in {@link #FOCUS} rather than ACCENT. TextField and TreeView repaint their own
+     * border on every focus change with no hook to change the colour (framework-notes FN-14), and ACCENT cannot be
+     * overridden for them alone; the bus delivers inline in subscription order, so subscribing after the widget
+     * paints last.
+     */
+    static Subscription ring(Gui gui, Node node) {
+        return gui.bus().subscribe(gui.focusEvents(), e -> {
+            if (e.nodeId() == node.id()) {
+                node.border(Length.rem(0.1f), gui.theme().color(e.gained() ? FOCUS : Role.LINE));
+            }
+        });
+    }
 
     // ---------------------------------------------------------------- theme
 

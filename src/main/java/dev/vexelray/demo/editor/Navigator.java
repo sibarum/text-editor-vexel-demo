@@ -94,9 +94,10 @@ final class Navigator {
 
         tree = new TreeView<>(gui, source).motion(motion.arrival);
         // The tree sits in the card rather than in a well of its own. Its border is the tree's to repaint on every
-        // change of focus, so that stays (framework-notes FN-14).
+        // change of focus, so that stays (framework-notes FN-14); Look.ring quiets it.
         tree.node().width(Length.FILL).height(Length.grow(1)).visible(false)
                 .background(gui.theme().color(Role.NONE));
+        Look.ring(gui, tree.node());
         gui.landmark(Landmarks.TREE, tree.node());
         tree.onSelect(p -> {
             if (Files.isRegularFile(p)) {
@@ -171,6 +172,7 @@ final class Navigator {
                 .rowCursor(CursorShape.POINTER);
         picker.node().width(Length.FILL).height(Length.grow(1))
                 .background(gui.theme().color(Role.NONE));
+        Look.ring(gui, picker.node());
         gui.landmark(Landmarks.PICKER, picker.node());
         picker.onHover(p -> {
             treeHover = p;
