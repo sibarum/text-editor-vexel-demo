@@ -80,15 +80,15 @@ final class Recipes {
     }
 
     /**
-     * Arm the close gate and bring back last time's session. Takes the {@code Shell} because {@code onClose} is only
-     * reachable through it, which is also what puts this last: the window, the dialogs and the clipboard all exist.
+     * Arm the main window's close gate and bring back last time's session. Takes the {@code Shell} to be last: the
+     * window and the clipboard exist, and a tree built headless for a test does not restore a session or write one.
      *
      * <p>Returns the session's restore as a value only because a provider must return something; see
      * docs/framework-notes.md, FN-3.
      */
     @Provides
     Restored restore(Shell shell, Actions actions, Session session, Launch launch, Gui gui) {
-        shell.onClose(actions::guardClose);
+        shell.windows().main().onClose(actions::guardClose);
         List<Path> extra = launch.rest().stream().map(Path::of).toList();
         session.restore(actions, extra, gui.offload());
         return new Restored();

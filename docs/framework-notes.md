@@ -63,7 +63,7 @@ effect in its inferred phase, or a separate annotation for the same thing. **v1:
 `void` later is additive (it removes an error), but the record rule's message steers people to "return an
 interface", which is the wrong advice for this case.
 
-### FN-2 · An application on a generated wiring cannot wear an icon 🔬
+### FN-2 · An application on a generated wiring cannot wear an icon 🔬 — **fixed, `@VexelApp(icon)`**
 
 The first finding of the previous port was "the application's mark": the framework never named an icon. That was
 fixed with `AppInfo.withIcon` — which only a hand-written wiring can call. A generated wiring builds its `AppInfo`

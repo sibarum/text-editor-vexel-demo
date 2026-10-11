@@ -2,7 +2,6 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.gui.core.Gui;
-import dev.vexelray.gui.core.app.CloseRequest;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.nfd.FileDialog;
 import sibarum.concordance.index.Index;
@@ -425,14 +424,10 @@ final class Actions {
     }
 
     /**
-     * The close gate. The window is still open and drawing while this is unanswered, so the question is an
-     * ordinary dialog. Every path through it answers the request exactly once.
+     * The close gate, a {@code CloseGate}: the framework calls it when the main window is asked to close, and a test
+     * calls it with answers of its own. The window is still open and drawing while this is unanswered, so the
+     * question is an ordinary dialog. Every path through it answers exactly once.
      */
-    void guardClose(CloseRequest request) {
-        guardClose(request::proceed, request::cancel);
-    }
-
-    /** The gate, over its two answers — separate because a {@code CloseRequest} cannot be made outside gui-core. */
     void guardClose(Runnable proceed, Runnable cancel) {
         List<Buffer> unsaved = ws.all().stream().filter(Buffer::dirty).toList();
         if (unsaved.isEmpty()) {
