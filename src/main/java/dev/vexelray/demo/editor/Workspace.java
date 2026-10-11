@@ -10,6 +10,7 @@ import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.text.TextLayout;
+import sibarum.concordance.index.Source;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -130,6 +131,15 @@ final class Workspace {
      * stops at the first file.
      */
     Buffer add(Path path, TextFile.Loaded content, boolean focus) {
+        return add(path, content, focus, null);
+    }
+
+    /** A library's source, read-only and in front, as {@code content} was read from it. */
+    Buffer addLibrary(Source library, TextFile.Loaded content) {
+        return add(null, content, true, library);
+    }
+
+    private Buffer add(Path path, TextFile.Loaded content, boolean focus, Source library) {
         long id = ids.incrementAndGet();
         // Both of these are document listeners, so neither may take the lock (see the class note): the caret asks
         // the model which document is in front rather than asking the bar.
@@ -140,15 +150,17 @@ final class Workspace {
                         caret.accept(position);
                     }
                 },
-                reveal);
+                reveal, library);
         buffer.place(model.doc().folder());
+        Doc.Entry entry = new Doc.Entry(id, path, false, buffer.language(),
+                library == null ? null : buffer.name());
         Buffer replaced = null;
         synchronized (lock) {
             Buffer in = frontLocked();
             if (in != null && in.pristine() && buffers.size() == 1) {
                 replaced = in;
             }
-            tabs.add(new Doc.Entry(id, path, false, buffer.language()).title(), buffer.page);
+            tabs.add(entry.title(), buffer.page);
             int index = buffers.size();
             // The bar painted the header before the mark existed, and selecting a tab that is already selected
             // repaints nothing, so the mark is moved here as well as by the skin.
@@ -162,7 +174,7 @@ final class Workspace {
                 slideMarkTo(header);
             }
         }
-        model.opened(new Doc.Entry(id, path, false, buffer.language()));
+        model.opened(entry);
         if (replaced != null) {
             close(replaced.id);
         }
@@ -227,6 +239,16 @@ final class Workspace {
         for (Buffer b : all()) {
             Path p = b.path();
             if (p != null && p.toAbsolutePath().normalize().equals(want)) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /** The open document showing library source {@code source}, or null. */
+    Buffer findLibrary(Source source) {
+        for (Buffer b : all()) {
+            if (source.equals(b.library())) {
                 return b;
             }
         }

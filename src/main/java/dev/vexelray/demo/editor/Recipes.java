@@ -11,6 +11,7 @@ import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.krono.KronoGui;
 import dev.vexelray.gui.widget.TitleBar;
+import sibarum.concordance.index.JarCache;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
 
@@ -80,15 +81,19 @@ final class Recipes {
     }
 
     /**
-     * Arm the main window's close gate and bring back last time's session. Takes the {@code Shell} to be last: the
-     * window and the clipboard exist, and a tree built headless for a test does not restore a session or write one.
+     * Arm the main window's close gate, let the index keep what it learns, and bring back last time's session. Takes
+     * the {@code Shell} to be last: the window and the clipboard exist, and a tree built headless for a test does not
+     * restore a session or write one, nor save an index. Indexes go beside the settings, one per project root; jars
+     * go to Concordance's cache, which every project on the machine shares.
      *
      * <p>Returns the session's restore as a value only because a provider must return something; see
      * docs/framework-notes.md, FN-3.
      */
     @Provides
-    Restored restore(Shell shell, Actions actions, Session session, Launch launch, Gui gui) {
+    Restored restore(Shell shell, Actions actions, Session session, Launch launch, Gui gui, Settings settings,
+                     ProjectIndex index) {
         shell.windows().main().onClose(actions::guardClose);
+        index.persist(settings.path().resolveSibling("index"), JarCache.defaultLocation());
         List<Path> extra = launch.rest().stream().map(Path::of).toList();
         session.restore(actions, extra, gui.offload());
         return new Restored();

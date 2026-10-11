@@ -6,6 +6,7 @@ import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.nfd.FileDialog;
 import sibarum.concordance.index.Index;
 import sibarum.concordance.index.Source;
+import sibarum.concordance.index.SourceRef;
 import sibarum.concordance.index.Symbol;
 import sibarum.probe.Log;
 import sibarum.tactroller.api.Key;
@@ -18,6 +19,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -86,7 +89,9 @@ final class Actions {
                     .item("Reveal in navigator", b.path() != null, () -> reveal(b))
                     .item(Suite.vexploreLabel(vexplore), vexplore && b.path() != null,
                             () -> Suite.showInVexplore(b.path(), io))
-                    .item("Copy path", b.path() != null, () -> gui.clipboard().set(String.valueOf(b.path())));
+                    // A library's source has no path of its own, and its archive!/entry is the next best thing.
+                    .item("Copy path", b.path() != null || b.library() != null, () -> gui.clipboard().set(
+                            String.valueOf(b.path() != null ? b.path() : b.library())));
         });
     }
 
@@ -311,7 +316,9 @@ final class Actions {
 
     /** Save {@code b} where it is, or ask where if it has never been saved. Exactly one of the two runs. */
     private void save(Buffer b, Runnable saved, Runnable failed) {
-        if (b.path() == null) {
+        if (b.readOnly()) {
+            refuseReadOnly(b, failed);
+        } else if (b.path() == null) {
             saveAs(b, saved, failed);
         } else {
             write(b, b.path(), saved, failed);
@@ -323,6 +330,10 @@ final class Actions {
      * that was waiting on it stays open.
      */
     private void saveAs(Buffer b, Runnable saved, Runnable failed) {
+        if (b.readOnly()) {
+            refuseReadOnly(b, failed);
+            return;
+        }
         Path at = b.path();
         Path dir = at != null && at.getParent() != null ? at.getParent() : startDir();
         String name = at != null ? String.valueOf(at.getFileName()) : "untitled.txt";
@@ -368,6 +379,12 @@ final class Actions {
             model.say("Saved " + target.getFileName());
             saved.run();
         });
+    }
+
+    /** A library's source is shown, not kept: it cannot be changed, so there is nothing of the user's to save. */
+    private void refuseReadOnly(Buffer b, Runnable failed) {
+        model.say(b.name() + " is a library's source, and read-only");
+        failed.run();
     }
 
     /** Save every one of {@code buffers} in turn; {@code done} once all have, {@code failed} on the first that does not. */
@@ -458,12 +475,45 @@ final class Actions {
     /**
      * One declaration go to declaration may land on.
      *
-     * @param file  where it is, or null when it is in {@code in}, an Untitled document
-     * @param in    the open document it was read from when it was read from one, whose text is fresher than the
-     *              index; else null
-     * @param label how the status line names it
+     * @param file    where it is, or null when it is in a library or in {@code in}, an Untitled document
+     * @param library the library source it is in, or null
+     * @param in      the open document showing it, if any: for one read from the text in front, that text, which
+     *                is fresher than the index
+     * @param context what it was declared beside, for its label; null to ask the index, which is asked only for the
+     *                one target gone to, since a common name has hundreds of declarations in a project's libraries
      */
-    private record Target(Symbol symbol, Path file, Buffer in, String label) {
+    private record Target(Symbol symbol, Path file, Source library, Buffer in, List<Symbol> context) {
+
+        /** Where it is, for the status line: the file, or the library's jar. Empty in a document never saved. */
+        String where() {
+            if (file != null) {
+                return " in " + file.getFileName();
+            }
+            return switch (library) {
+                case Source.InArchive a -> " in " + a.archive().getFileName();
+                case Source.Decompiled d -> " in " + d.archive().getFileName() + ", decompiled";
+                case null, default -> "";
+            };
+        }
+    }
+
+    /**
+     * Where each library declaration gone to turned out to be. A declaration read from a class file has no line
+     * until its class is decompiled and searched, which is too slow to redo on every Ctrl+Enter; this is how
+     * pressing again on one just reached knows it is there.
+     */
+    private final Map<Symbol, SourceRef> located = new ConcurrentHashMap<>();
+
+    /** Where {@code t}'s declaration is in the text it is shown in, as far as is known without reading it. */
+    private SourceRef position(Target t) {
+        SourceRef known = located.get(t.symbol());
+        return known != null ? known : t.symbol().at();
+    }
+
+    private String label(Target t, Index index) {
+        List<Symbol> context = t.context() != null ? t.context()
+                : index != null ? index.declaredIn(t.symbol().source()) : List.of(t.symbol());
+        return Outline.label(t.symbol(), context);
     }
 
     /**
@@ -472,8 +522,12 @@ final class Actions {
      * <p>The document in front is read as it is now, and the rest of the project from its index. Names are
      * matched as Concordance matches them — by name, not by resolving them — so a common name can have several
      * declarations. They are visited in a fixed order, and pressing again on the one just reached goes on to the
-     * next: a list nobody has to open, at the cost of not seeing them all at once. Which comes first depends on
-     * what the name is doing: before a {@code (} it is a method or constructor, otherwise a type or a field.
+     * next: a list nobody has to open, at the cost of not seeing them all at once. The project's own come before
+     * its libraries', and within each which comes first depends on what the name is doing: before a {@code (} it
+     * is a method or constructor, otherwise a type or a field.
+     *
+     * <p>A library's declaration opens its source read-only in a tab of its own: the text from its
+     * {@code -sources.jar}, or its class decompiled when the library came without sources.
      */
     void goToDeclaration() {
         Buffer b = ws.front();
@@ -497,18 +551,18 @@ final class Actions {
         int here = -1;
         for (int i = 0; i < targets.size(); i++) {
             Target t = targets.get(i);
-            if (t.in() == b && b.declaredNameAt(t.symbol().name(), t.symbol().line(), t.symbol().at().column())
-                    == word.start()) {
+            SourceRef at = position(t);
+            if (t.in() == b && b.declaredNameAt(t.symbol().name(), at.line(), at.column()) == word.start()) {
                 here = i;
                 break;
             }
         }
         int next = (here + 1) % targets.size();
         Target to = targets.get(next);
-        String where = to.file() == null ? "" : " in " + to.file().getFileName();
+        String label = label(to, concordance.current());
         goTo(to, targets.size() == 1
-                ? (here == 0 ? to.label() + " is the only declaration of " + word.text() : to.label() + where)
-                : to.label() + where + " (" + (next + 1) + " of " + targets.size() + ", Ctrl+Enter for the next)");
+                ? (here == 0 ? label + " is the only declaration of " + word.text() : label + to.where())
+                : label + to.where() + " (" + (next + 1) + " of " + targets.size() + ", Ctrl+Enter for the next)");
     }
 
     /**
@@ -520,10 +574,11 @@ final class Actions {
         String name = word.text();
         List<Target> out = new ArrayList<>();
         Path frontFile = front.path() == null ? null : front.path().toAbsolutePath().normalize();
+        Source frontLibrary = front.library();
         List<Symbol> local = front.declarations();
         for (Symbol s : local) {
             if (s.name().equals(name)) {
-                out.add(new Target(s, frontFile, front, Outline.label(s, local)));
+                out.add(new Target(s, frontFile, frontLibrary, front, local));
             }
         }
         Index index = concordance.current();
@@ -532,22 +587,25 @@ final class Actions {
                 if (!s.name().equals(name)) {
                     continue;
                 }
-                // A library's declaration lives in a jar, shown read-only or decompiled, and a tab is a file it
-                // can save. The project index holds only the project's own files, so none arrives here yet.
-                if (!(s.source() instanceof Source.OnDisk disk)) {
-                    continue;
+                if (s.source() instanceof Source.OnDisk disk) {
+                    Path file = disk.file().toAbsolutePath().normalize();
+                    if (file.equals(frontFile) && !local.isEmpty()) {
+                        continue;   // the front document's own declarations were read from its text, which is newer
+                    }
+                    out.add(new Target(s, file, null, ws.find(file), null));
+                } else {
+                    if (s.source().equals(frontLibrary) && !local.isEmpty()) {
+                        continue;   // read from the text in front, which is placed where a class file's are not
+                    }
+                    out.add(new Target(s, null, s.source(), ws.findLibrary(s.source()), null));
                 }
-                Path file = disk.file().toAbsolutePath().normalize();
-                if (file.equals(frontFile) && !local.isEmpty()) {
-                    continue;   // the front document's own declarations were read from its text, which is newer
-                }
-                Buffer open = ws.find(file);
-                out.add(new Target(s, file, open, Outline.label(s, index.declaredIn(s.source()))));
             }
         }
         out.sort(Comparator
-                .comparingInt((Target t) -> preference(t.symbol().kind(), word.call()))
-                .thenComparing(t -> t.file() == null ? "" : t.file().toString())
+                .comparingInt((Target t) -> t.library() == null ? 0 : 1)
+                .thenComparingInt(t -> preference(t.symbol().kind(), word.call()))
+                .thenComparing(t -> t.file() != null ? t.file().toString()
+                        : t.library() != null ? t.library().toString() : "")
                 .thenComparingInt(t -> t.symbol().line())
                 .thenComparingInt(t -> t.symbol().at().column()));
         return out;
@@ -568,6 +626,11 @@ final class Actions {
      */
     private void goTo(Target to, String message) {
         Symbol s = to.symbol();
+        if (to.library() != null && s.source().equals(to.library())) {
+            // From the index, not from the text in front: read the source, and place the declaration in it.
+            io.execute(() -> goToLibrary(to, message));
+            return;
+        }
         Buffer open = to.in() != null ? to.in() : ws.find(to.file());
         if (open != null) {
             if (open != ws.front()) {
@@ -585,6 +648,38 @@ final class Actions {
                 model.say(message);
             }
         });
+    }
+
+    /**
+     * {@link #goTo} for a library's declaration, on the offload lane: open its source read-only if it is not open
+     * — which for a class without sources is decompiling it, a fraction of a second or, for a huge class, up to
+     * Concordance's time limit — and place the declaration in that text.
+     */
+    private void goToLibrary(Target to, String message) {
+        Symbol s = to.symbol();
+        Source source = to.library();
+        String name = Buffer.libraryName(source);
+        Buffer open = ws.findLibrary(source);
+        SourceRef at;
+        try {
+            if (open == null) {
+                if (source instanceof Source.Decompiled) {
+                    model.say("Decompiling " + name);
+                }
+                TextFile.Loaded loaded = TextFile.decode(source.read());
+                open = ws.addLibrary(source, loaded);
+            } else if (open != ws.front()) {
+                ws.show(open);
+            }
+            at = source.locate(s);
+        } catch (TextFile.Unsupported | IOException | RuntimeException e) {
+            LOG.warn("could not show {}", source, e);
+            model.say("Could not show " + name + ": " + e.getMessage());
+            return;
+        }
+        located.put(s, at);
+        open.selectDeclaration(s.name(), at.line(), at.column());
+        model.say(message);
     }
 
     // ------------------------------------------------------------------ view

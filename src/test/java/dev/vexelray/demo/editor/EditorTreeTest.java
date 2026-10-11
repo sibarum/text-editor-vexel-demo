@@ -497,4 +497,105 @@ class EditorTreeTest {
         Buffer.Word w = b.wordAtCaret();
         return w != null && w.text().equals("area") && w.start() == b.field.text().indexOf("area");
     }
+
+    @Test
+    void ctrlEnterOnALibraryNameOpensItsSourcesReadOnly() throws Exception {
+        goesIntoTheLibrary(true);
+    }
+
+    @Test
+    void ctrlEnterOnALibraryNameWithoutSourcesOpensItDecompiled() throws Exception {
+        goesIntoTheLibrary(false);
+    }
+
+    /**
+     * A project that depends on {@code g:lib:1}, in a local repository of the test's own, with or without its
+     * sources jar: Ctrl+Enter on the library's method opens the library's class read-only, on the method, and
+     * Ctrl+S says it cannot be saved.
+     */
+    private void goesIntoTheLibrary(boolean withSources) throws Exception {
+        String libSource = """
+                package lib;
+
+                public class Greeter {
+                    public String greet() {
+                        return "hello";
+                    }
+                }
+                """;
+        Path repo = Files.createDirectories(dir.resolve("repo/g/lib/1"));
+        Files.writeString(repo.resolve("lib-1.pom"), """
+                <project><modelVersion>4.0.0</modelVersion>
+                <groupId>g</groupId><artifactId>lib</artifactId><version>1</version></project>
+                """);
+        Path classes = Files.createDirectories(dir.resolve("lib-classes"));
+        Path javaFile = Files.writeString(Files.createDirectories(dir.resolve("lib-src/lib")).resolve("Greeter.java"),
+                libSource);
+        javax.tools.JavaCompiler javac = javax.tools.ToolProvider.getSystemJavaCompiler();
+        assertEquals(0, javac.run(null, null, null, "-d", classes.toString(), javaFile.toString()));
+        jar(repo.resolve("lib-1.jar"), "lib/Greeter.class", Files.readAllBytes(classes.resolve("lib/Greeter.class")));
+        if (withSources) {
+            jar(repo.resolve("lib-1-sources.jar"), "lib/Greeter.java", libSource.getBytes());
+        }
+
+        Path project = Files.createDirectories(dir.resolve("app"));
+        Files.writeString(project.resolve("pom.xml"), """
+                <project><modelVersion>4.0.0</modelVersion>
+                <groupId>g</groupId><artifactId>app</artifactId><version>1</version>
+                <dependencies><dependency><groupId>g</groupId><artifactId>lib</artifactId><version>1</version>
+                </dependency></dependencies></project>
+                """);
+        String mainText = "package app;\nimport lib.Greeter;\nclass Main {\n    String s = new Greeter().greet();\n}\n";
+        Path main = Files.writeString(Files.createDirectories(project.resolve("src/main/java/app")).resolve("Main.java"),
+                mainText);
+
+        String was = System.getProperty("maven.repo.local");
+        System.setProperty("maven.repo.local", dir.resolve("repo").toString());
+        try {
+            Actions actions = wiring.actions();
+            actions.showFolder(project);
+            eventually("the index, with the library",
+                    () -> wiring.projectIndex().current() != null && !wiring.projectIndex().current()
+                            .namesContaining("greet").isEmpty());
+        } finally {
+            if (was == null) {
+                System.clearProperty("maven.repo.local");
+            } else {
+                System.setProperty("maven.repo.local", was);
+            }
+        }
+        Actions actions = wiring.actions();
+        actions.load(main);
+        Workspace ws = wiring.ui().workspace();
+        eventually("Main", () -> ws.front() != null && main.equals(ws.front().path()));
+        ws.front().field.caret(mainText.indexOf("greet") + 1);
+
+        actions.goToDeclaration();
+        eventually("the library's class, on greet", () -> {
+            Buffer b = ws.front();
+            if (b == null || b.library() == null) {
+                return false;
+            }
+            Buffer.Word w = b.wordAtCaret();
+            return w != null && w.text().equals("greet") && b.field.text().contains("class Greeter");
+        });
+        Buffer lib = ws.front();
+        assertTrue(lib.readOnly() && lib.field.readOnly());
+        assertEquals("Greeter.java", wiring.model().doc().front().title());
+        assertTrue(wiring.model().doc().files().stream().noneMatch(p -> p.getFileName().toString().equals("Greeter.java")),
+                "a library's source is not a file the session remembers");
+        eventually("where it went", () -> wiring.model().doc().status().contains("lib-1"));
+
+        actions.save();
+        eventually("the refusal", () -> wiring.model().doc().status().contains("read-only"));
+        assertFalse(lib.dirty());
+    }
+
+    private static void jar(Path at, String entry, byte[] bytes) throws java.io.IOException {
+        try (var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(at))) {
+            out.putNextEntry(new java.util.zip.ZipEntry(entry));
+            out.write(bytes);
+            out.closeEntry();
+        }
+    }
 }

@@ -7,6 +7,7 @@ import dev.vexelray.gui.core.text.Document;
 import dev.vexelray.gui.core.text.Whitespace;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.TextField;
+import sibarum.concordance.index.Source;
 import sibarum.atchung.Subscription;
 
 import java.nio.file.Path;
@@ -15,7 +16,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * One open document: its field, its highlighter, and where it lives on disk.
+ * One open document: its field, its highlighter, and where it lives on disk — or, for a library's source, which
+ * has no file of its own, the {@link Source} it was read from, shown read-only.
  *
  * <p>The text is the field's own {@code State<Document>}; this class adds only what a file needs on top of a
  * field â€” a path, the line-ending convention to write back, and the question of whether it is saved, which the
@@ -49,6 +51,8 @@ final class Buffer implements AutoCloseable {
     private final Subscription ringWatch;
     private final Consumer<Boolean> dirty;
 
+    /** The library source this shows, or null for a document that is (or will be) a file. */
+    private final Source library;
     private volatile Path path;
     private volatile boolean crlf;
     private volatile boolean unsavedWrite;
@@ -60,11 +64,14 @@ final class Buffer implements AutoCloseable {
     /**
      * @param dirty told whether the document differs from what is on disk, each time that changes
      * @param caret told where the caret is, each time it moves
+     * @param library the library source {@code content} was read from, which makes the document read-only and
+     *                pathless; null for a file
      */
     Buffer(Gui gui, long id, Path path, TextFile.Loaded content, boolean wrap,
-           Consumer<Boolean> dirty, Consumer<Position> caret, Consumer<Path> reveal) {
+           Consumer<Boolean> dirty, Consumer<Position> caret, Consumer<Path> reveal, Source library) {
         this.id = id;
-        this.path = path;
+        this.path = library == null ? path : null;
+        this.library = library;
         this.crlf = content.crlf();
         this.dirty = dirty;
         this.field = new TextField(gui, "")
@@ -75,7 +82,8 @@ final class Buffer implements AutoCloseable {
                 .whitespace(Whitespace.BOUNDARY)
                 // The file's newlines are all one kind once loaded, and saved back as that kind, so the mark is
                 // all or nothing: on every line of a file that will not be written the way this system writes.
-                .lineEnds(crlf != SYSTEM_CRLF);
+                .lineEnds(crlf != SYSTEM_CRLF)
+                .readOnly(library != null);
         // The field sits on the card rather than in a well of its own. Its border is the field's to repaint on
         // every change of focus, so a ring round the document stays (framework-notes FN-14); Look.ring quiets it.
         field.node().width(Length.FILL).height(Length.FILL).textSize(Type.CODE)
@@ -123,10 +131,37 @@ final class Buffer implements AutoCloseable {
         return crlf;
     }
 
-    /** The file name, or null for a document that has never been saved. */
+    /** The library source this shows, or null for a file. */
+    Source library() {
+        return library;
+    }
+
+    /** Whether this cannot be changed or saved: a library's source. */
+    boolean readOnly() {
+        return library != null;
+    }
+
+    /**
+     * The file name, or null for a document that has never been saved. A library source is named for its class,
+     * as a {@code .java} file even when it was decompiled, since Java is what it is shown as.
+     */
     String name() {
         Path p = path;
-        return p == null ? null : String.valueOf(p.getFileName());
+        if (p != null) {
+            return String.valueOf(p.getFileName());
+        }
+        return library == null ? null : libraryName(library);
+    }
+
+    /** {@code C.java} for {@code a/b/C.java} in a sources jar, and for {@code a/b/C.class} decompiled. */
+    static String libraryName(Source source) {
+        String entry = switch (source) {
+            case Source.InArchive a -> a.entry();
+            case Source.Decompiled d -> d.entry();
+            case Source.OnDisk f -> String.valueOf(f.file().getFileName());
+        };
+        String name = entry.substring(entry.lastIndexOf('/') + 1);
+        return name.endsWith(".class") ? name.substring(0, name.length() - ".class".length()) + ".java" : name;
     }
 
     /** What the highlighter calls this document. */

@@ -33,25 +33,30 @@ record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent, String
      * @param path     where it is on disk, or null for one that has never been saved
      * @param dirty    whether it differs from what was last loaded or saved
      * @param language what the highlighter calls it, for the status line
+     * @param library  the name a library's read-only source is shown under, which has no path; null for a file
      */
-    record Entry(long id, Path path, boolean dirty, String language) {
+    record Entry(long id, Path path, boolean dirty, String language, String library) {
+
+        Entry(long id, Path path, boolean dirty, String language) {
+            this(id, path, dirty, language, null);
+        }
 
         /**
-         * The tab's label: the file name, or {@code Untitled}; a bullet in front of either while it is unsaved. A bullet
-         * (U+2022) rather than a heavier dot, because the sans face's atlas has General Punctuation and not
-         * Geometric Shapes, and the missing-glyph box is what a tab header would otherwise show.
+         * The tab's label: the file name, the library source's name, or {@code Untitled}; a bullet in front while it
+         * is unsaved. A bullet (U+2022) rather than a heavier dot, because the sans face's atlas has General
+         * Punctuation and not Geometric Shapes, and the missing-glyph box is what a tab header would otherwise show.
          */
         String title() {
-            String name = path == null ? "Untitled" : String.valueOf(path.getFileName());
+            String name = path != null ? String.valueOf(path.getFileName()) : library != null ? library : "Untitled";
             return dirty ? "• " + name : name;
         }
 
         Entry withDirty(boolean value) {
-            return new Entry(id, path, value, language);
+            return new Entry(id, path, value, language, library);
         }
 
         Entry withPath(Path value, String lang) {
-            return new Entry(id, value, dirty, lang);
+            return new Entry(id, value, dirty, lang, library);
         }
     }
 
