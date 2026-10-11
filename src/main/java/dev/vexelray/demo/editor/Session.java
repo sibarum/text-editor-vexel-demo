@@ -5,7 +5,9 @@ import dev.vexelray.gui.core.app.Settings;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 
@@ -19,6 +21,10 @@ import java.util.concurrent.Executor;
  *
  * <p>A remembered file that has gone is skipped, and a folder that has gone is forgotten; neither is an error,
  * because the user moved them and the editor should not complain about it.
+ *
+ * <p><b>Each root keeps its own tabs.</b> The keys above are for the root the navigator shows now. A root left
+ * behind takes its tabs with it, under keys of its own ({@link #leave}), and gets them back when it is the root
+ * again ({@link #tabsAt}). The newest {@link #ROOTS_KEPT} roots are kept; an older one's tabs are forgotten.
  */
 final class Session {
 
@@ -26,6 +32,24 @@ final class Session {
     static final String FILES = "session.files";
     static final String FRONT = "session.front";
     static final String RECENT = "session.recent";
+    /** The roots with tabs put away, newest first. Each one's tabs are under the two prefixes below and its path. */
+    static final String ROOTS = "session.roots";
+    static final String ROOT_FILES = "session.root.files.";
+    static final String ROOT_FRONT = "session.root.front.";
+    static final int ROOTS_KEPT = 32;
+
+    /** The tabs a root had when it was left: its files in tab order, and the one in front, or null. */
+    record Tabs(List<Path> files, Path front) {
+
+        Tabs {
+            files = List.copyOf(files);
+        }
+
+        static Tabs of(Doc doc) {
+            Doc.Entry f = doc.front();
+            return new Tabs(doc.files(), f == null ? null : f.path());
+        }
+    }
 
     /** What is remembered, as a value, so "did it change" is an equals. */
     record Saved(String folder, List<String> files, String front, List<String> recent) {
@@ -41,6 +65,11 @@ final class Session {
 
     private final Settings settings;
     private final Model model;
+    /**
+     * What a window that never writes has put away — one started with paths. It reads the roots the settings
+     * remember, but what it leaves stays here, for the same reason its tabs are not written.
+     */
+    private final Map<Path, Tabs> unwritten = new HashMap<>();
     private volatile Saved last;
     /** Off until {@link #restore} has read what was saved: before that, writing would overwrite it with the empty tab the tree starts with. */
     private volatile boolean armed;
@@ -74,6 +103,43 @@ final class Session {
                 .putString(FRONT, now.front())
                 .putList(RECENT, now.recent())
                 .save();
+    }
+
+    /**
+     * Put away {@code tabs} as {@code root}'s, to come back when it is the root again. Called as the root changes,
+     * before its tabs close, and told the root rather than reading it from a session already on its way to the next.
+     */
+    synchronized void leave(Path root, Tabs tabs) {
+        Path key = root.toAbsolutePath().normalize();
+        if (!armed) {
+            unwritten.put(key, tabs);
+            return;
+        }
+        String name = key.toString();
+        List<String> roots = new ArrayList<>(settings.getList(ROOTS));
+        roots.remove(name);
+        roots.addFirst(name);
+        while (roots.size() > ROOTS_KEPT) {
+            String gone = roots.removeLast();
+            settings.remove(ROOT_FILES + gone).remove(ROOT_FRONT + gone);
+        }
+        settings.putList(ROOTS, roots)
+                .putList(ROOT_FILES + name, tabs.files().stream().map(Path::toString).toList())
+                .putString(ROOT_FRONT + name, tabs.front() == null ? "" : tabs.front().toString())
+                .save();
+    }
+
+    /** The tabs {@code root} had when it was last left; none for a root never left, or left with nothing open. */
+    synchronized Tabs tabsAt(Path root) {
+        Path key = root.toAbsolutePath().normalize();
+        Tabs held = unwritten.get(key);
+        if (held != null) {
+            return held;
+        }
+        String name = key.toString();
+        String front = settings.getString(ROOT_FRONT + name, "");
+        return new Tabs(settings.getList(ROOT_FILES + name).stream().map(Path::of).toList(),
+                front.isEmpty() ? null : Path.of(front));
     }
 
     /**

@@ -267,6 +267,96 @@ class EditorTreeTest {
         eventually("the index to be forgotten", () -> index.current() == null && index.root() == null);
     }
 
+    /** The files open now, in tab order, by name. */
+    private java.util.List<String> tabNames() {
+        return wiring.ui().workspace().all().stream()
+                .map(b -> b.path() == null ? "Untitled" : String.valueOf(b.path().getFileName()))
+                .toList();
+    }
+
+    @Test
+    void switchingRootsPutsTheTabsAwayAndSwitchingBackBringsThemBack() throws Exception {
+        Path one = Files.createDirectories(dir.resolve("one"));
+        Path two = Files.createDirectories(dir.resolve("two"));
+        Path a = Files.writeString(one.resolve("a.txt"), "a");
+        Path b = Files.writeString(one.resolve("b.txt"), "b");
+        Path c = Files.writeString(two.resolve("c.txt"), "c");
+        Actions actions = wiring.actions();
+        Workspace ws = wiring.ui().workspace();
+
+        actions.showFolder(one);
+        actions.load(a);
+        actions.load(b);
+        actions.open(a);
+        eventually("a in front of a and b",
+                () -> tabNames().equals(java.util.List.of("a.txt", "b.txt")) && "a.txt".equals(name(ws.front())));
+
+        actions.switchRoot(two);
+        eventually("a root never visited to start empty", () -> tabNames().equals(java.util.List.of("Untitled")));
+        actions.load(c);
+        eventually("c", () -> tabNames().equals(java.util.List.of("c.txt")));
+
+        actions.switchRoot(one);
+        eventually("a and b back, a in front",
+                () -> tabNames().equals(java.util.List.of("a.txt", "b.txt")) && "a.txt".equals(name(ws.front())));
+
+        actions.switchRoot(two);
+        eventually("c back", () -> tabNames().equals(java.util.List.of("c.txt")));
+    }
+
+    /** A root {@code one} with {@code a.txt} open in it and typed into, unsaved. */
+    private Buffer dirtyTabIn(Path one) throws Exception {
+        Path a = Files.writeString(one.resolve("a.txt"), "a");
+        wiring.actions().showFolder(one);
+        wiring.actions().load(a);
+        Workspace ws = wiring.ui().workspace();
+        eventually("a", () -> tabNames().equals(java.util.List.of("a.txt")));
+        Buffer b = ws.front();
+        b.field.insert("!");
+        eventually("dirty", b::dirty);
+        return b;
+    }
+
+    @Test
+    void goingToOpenAsksAboutUnsavedWorkAndCancelStaysInEdit() throws Exception {
+        Buffer b = dirtyTabIn(Files.createDirectories(dir.resolve("one")));
+        java.util.List<String> asked = new java.util.ArrayList<>();
+        wiring.actions().ask(pressing("Cancel", asked));
+        Navigator nav = wiring.ui().navigator();
+        nav.askToOpen();
+        assertEquals(java.util.List.of("Unsaved changes"), asked);
+        assertEquals(Navigator.Mode.EDIT, nav.mode());
+        assertTrue(b.dirty());
+    }
+
+    @Test
+    void discardingOnTheWayToOpenPutsTheFileBackAndKeepsItsTab() throws Exception {
+        Buffer b = dirtyTabIn(Files.createDirectories(dir.resolve("one")));
+        java.util.List<String> asked = new java.util.ArrayList<>();
+        wiring.actions().ask(pressing("Discard", asked));
+        Navigator nav = wiring.ui().navigator();
+        nav.askToOpen();
+        eventually("Open", () -> nav.mode() == Navigator.Mode.OPEN);
+        assertEquals(java.util.List.of("Unsaved changes"), asked);
+        assertFalse(b.dirty());
+        assertEquals("a", b.field.text());
+        assertEquals(java.util.List.of("a.txt"), tabNames());
+    }
+
+    @Test
+    void goingToOpenWithNothingUnsavedAsksNothing() throws Exception {
+        java.util.List<String> asked = new java.util.ArrayList<>();
+        wiring.actions().ask(pressing("Cancel", asked));
+        Navigator nav = wiring.ui().navigator();
+        nav.askToOpen();
+        eventually("Open", () -> nav.mode() == Navigator.Mode.OPEN);
+        assertTrue(asked.isEmpty());
+    }
+
+    private static String name(Buffer b) {
+        return b == null || b.path() == null ? null : String.valueOf(b.path().getFileName());
+    }
+
     @Test
     void openShowsTheRootAmongItsSiblingsAndPickingOneMakesItTheRootAndGoesBackToEdit() throws Exception {
         Path code = Files.createDirectories(dir.resolve("code"));

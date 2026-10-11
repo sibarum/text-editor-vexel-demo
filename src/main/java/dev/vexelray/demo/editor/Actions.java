@@ -42,7 +42,10 @@ final class Actions {
     private final Workspace ws;
     private final Navigator nav;
     private final ProjectIndex concordance;
+    private final Session session;
     private final Executor io;
+    /** The root last asked for — set as it is asked for, where the navigator's own folder arrives a listing later. */
+    private volatile Path root;
 
     private volatile Dialogs dialogs = Dialogs.NONE;
     /**
@@ -51,17 +54,19 @@ final class Actions {
      */
     private volatile Consumer<Modal> ask = Modals::show;
 
-    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance) {
+    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session) {
         this.gui = gui;
         this.model = model;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
         this.concordance = concordance;
+        this.session = session;
         this.io = gui.offload();
         // From the navigator the keyboard stays in the navigator, so walking it with the arrows keeps walking.
         nav.onOpenFile(file -> open(file, false));
-        nav.onOpenFolder(this::showFolder);
+        nav.onOpenFolder(this::switchRoot);
+        nav.onOpening((proceed, cancel) -> settleUnsaved(ws.all(), proceed, cancel));
         ws.tabs().onContextMenu((index, menu) -> {
             List<Buffer> all = ws.all();
             if (index < 0 || index >= all.size()) {
@@ -121,8 +126,9 @@ final class Actions {
         dialogs.openFile(startDir(), this::open);
     }
 
+    /** Ctrl+Shift+O: the folder dialog, as the way to a new root, so unsaved work is settled before it as Open settles it. */
     void openFolder() {
-        dialogs.openFolder(startDir(), this::showFolder);
+        settleUnsaved(ws.all(), () -> dialogs.openFolder(startDir(), this::switchRoot), () -> { });
     }
 
     /** Open {@code file} in a tab, or bring forward the tab it is already in. */
@@ -174,17 +180,108 @@ final class Actions {
         tell("Could not open " + file.getFileName(), reason);
     }
 
-    /** Point the navigator at {@code folder}, and index it if it is a Maven project. */
+    /**
+     * Point the navigator at {@code folder}, and index it if it is a Maven project. The tabs stay as they are: this
+     * is the session's restore and the command line, which say which tabs themselves. A root the user picks goes
+     * through {@link #switchRoot}.
+     */
     void showFolder(Path folder) {
         if (folder != null && !Files.isDirectory(folder)) {
             model.say("Not a folder: " + folder);
             return;
         }
+        root = folder == null ? null : folder.toAbsolutePath().normalize();
         nav.show(folder, () -> {
             model.folder(nav.folder());
             concordance.folder(nav.folder());
         });
         ui.showNavigator(true);
+    }
+
+    /**
+     * Make {@code folder} the root, and change the tabs with it: the ones open here are put away as this root's and
+     * closed, and the ones {@code folder} had when it was last left come back, in their order, with the same one in
+     * front.
+     *
+     * <p>Unsaved work was settled on the way here — on entering the navigator's Open, or before the folder dialog
+     * — and the editor is out of sight while a root is picked, so nothing is normally left to ask about. The
+     * question is still put if something is, since these tabs are about to close.
+     *
+     * <p>Tabs open with no root at all belong to no project, so the first root of a window joins them rather than
+     * replacing them.
+     */
+    void switchRoot(Path folder) {
+        if (!Files.isDirectory(folder)) {
+            model.say("Not a folder: " + folder);
+            return;
+        }
+        Path to = folder.toAbsolutePath().normalize();
+        Path from = root;
+        if (to.equals(from)) {
+            return;
+        }
+        List<Buffer> open = from == null ? List.of() : ws.all();
+        settleUnsaved(open, () -> io.execute(() -> swap(from, to, open)), () -> { });
+    }
+
+    /**
+     * Save or throw away the unsaved work in {@code buffers}, asking which, then {@code proceed}; or {@code cancel},
+     * and nothing changes. Throwing away puts a file back as it is on disk, and closes an Untitled document, so the
+     * tabs are all still there for a root that stays the root.
+     */
+    void settleUnsaved(List<Buffer> buffers, Runnable proceed, Runnable cancel) {
+        List<Buffer> unsaved = buffers.stream().filter(Buffer::dirty).toList();
+        if (unsaved.isEmpty()) {
+            proceed.run();
+            return;
+        }
+        ask.accept(Modal.of("Unsaved changes", unsavedMessage(unsaved))
+                .defaultButton("Save all", () -> saveAll(unsaved, proceed, cancel))
+                .button("Discard", () -> io.execute(() -> {
+                    unsaved.forEach(this::discard);
+                    proceed.run();
+                }))
+                .cancelButton("Cancel", cancel));
+    }
+
+    /** Throw away {@code b}'s unsaved work, on the offload lane: back to its file, or closed if it has none to go back to. */
+    private void discard(Buffer b) {
+        if (b.path() != null) {
+            try {
+                b.revert(TextFile.load(b.path()));
+                return;
+            } catch (TextFile.Unsupported | IOException | RuntimeException e) {
+                LOG.warn("could not reread {}; closing it instead", b.path(), e);
+            }
+        }
+        ws.close(b.id);
+    }
+
+    /** {@link #switchRoot}'s work, once nothing is left to ask: on the offload lane, since it reads files. */
+    private void swap(Path from, Path to, List<Buffer> open) {
+        if (from != null) {
+            session.leave(from, Session.Tabs.of(model.doc()));
+        }
+        showFolder(to);
+        open.forEach(b -> ws.close(b.id));
+        Session.Tabs back = session.tabsAt(to);
+        int reopened = 0;
+        for (Path p : back.files()) {
+            if (Files.isRegularFile(p)) {
+                load(p, false);
+                reopened++;
+            }
+        }
+        if (reopened > 0) {
+            // Each load said "Opened" on its own; what happened is one thing.
+            model.say("Reopened " + reopened + (reopened == 1 ? " tab" : " tabs") + " from last time in "
+                    + (to.getFileName() == null ? to : to.getFileName()));
+        }
+        // The keyboard stays where the root was picked, the navigator or a dialog; the tab in front is just shown.
+        Buffer front = back.front() == null ? null : ws.find(back.front());
+        if (front != null) {
+            ws.show(front, false);
+        }
     }
 
     /** Put the navigator in Open, to pick a root. */

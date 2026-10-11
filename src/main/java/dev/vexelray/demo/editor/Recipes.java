@@ -73,8 +73,8 @@ final class Recipes {
      * the session or a dialog brings something else.
      */
     @Provides
-    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index) {
-        Actions actions = new Actions(gui, model, ui, index);
+    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session) {
+        Actions actions = new Actions(gui, model, ui, index, session);
         actions.shortcuts();
         ui.workspace().untitled();
         return actions;

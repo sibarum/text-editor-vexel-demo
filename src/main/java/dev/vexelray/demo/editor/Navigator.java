@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -68,6 +69,7 @@ final class Navigator {
     private volatile Consumer<Path> openFolder = p -> { };
     private volatile Consumer<Mode> modeChanged = m -> { };
     private volatile Consumer<Path> previewing = p -> { };
+    private volatile BiConsumer<Runnable, Runnable> opening = (proceed, cancel) -> proceed.run();
     private volatile Path recentHover;
     private volatile Path treeHover;
 
@@ -80,7 +82,13 @@ final class Navigator {
         // outlined and so plainly pressable, that stays pressed while Open is up, so the way back is the same name
         // held down. A button rather than a clickable text, so Tab, Enter and Space reach it too.
         heading = new Button(gui, "No folder").kind(Button.Kind.SECONDARY).toggle(true)
-                .onToggle(on -> mode(on ? Mode.OPEN : Mode.EDIT));
+                .onToggle(on -> {
+                    if (on) {
+                        askToOpen();
+                    } else {
+                        mode(Mode.EDIT);
+                    }
+                });
         heading.node().font(Type.UI).wordWrap(false);
         gui.landmark(Landmarks.FOLDER, heading.node());
 
@@ -218,6 +226,23 @@ final class Navigator {
     /** Be told when the card changes mode. Runs on whichever thread asked for the change. */
     void onMode(Consumer<Mode> handler) {
         this.modeChanged = handler == null ? m -> { } : handler;
+    }
+
+    /**
+     * Be asked before the user goes to Open: {@code gate} runs exactly one of the two it is given, the first to go
+     * on, the second to stay in Edit. Runs on a worker.
+     */
+    void onOpening(BiConsumer<Runnable, Runnable> gate) {
+        this.opening = gate == null ? (proceed, cancel) -> proceed.run() : gate;
+    }
+
+    /**
+     * The user's way to Open, the root's name pressed: through {@link #onOpening}'s gate, since Open is where the
+     * root changes and whatever has to be settled first is settled before it. Stopped there, the name is released
+     * and the files stay.
+     */
+    void askToOpen() {
+        opening.accept(() -> mode(Mode.OPEN), () -> heading.show(false));
     }
 
     /** Be told which folder Open is pointing at, to picture it. Runs on a worker. */

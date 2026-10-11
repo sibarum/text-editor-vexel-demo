@@ -162,6 +162,20 @@ final class Buffer implements AutoCloseable {
         dirty.accept(true);
     }
 
+    /**
+     * Throw away the unsaved work: show {@code content}, the file as it is on disk, and be clean. The caret stays
+     * where it was, as near as the file now allows.
+     */
+    void revert(TextFile.Loaded content) {
+        int caret = field.caret();
+        crlf = content.crlf();
+        unsavedWrite = false;
+        field.lineEnds(crlf != SYSTEM_CRLF).text(content.text());
+        field.caret(Math.min(caret, field.text().length()));
+        field.history().mark();
+        dirty.accept(false);
+    }
+
     /** The write landed at {@code target}, which is now this document's file. */
     void savedAs(Path target) {
         this.path = target;
