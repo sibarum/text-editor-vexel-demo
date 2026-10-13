@@ -5,10 +5,11 @@
   "description": "A tabbed text editor with a file navigator, on the VexelRay stack.",
   "version": "0.1.0",
 
-  "repo": "sibarum/text-editor-vexel-demo",
+  "repo": "sibarum/vexelray-dist",
   "branch": "main",
-  "releasesRepo": "sibarum/text-editor-vexel-demo",
-  "tagFormat": "v{version}",
+  "repoPath": "apps/text-editor",
+  "releasesRepo": "sibarum/vexelray-dist",
+  "tagFormat": "text-editor-v{version}",
 
   "windows": {
     "binaries": [
