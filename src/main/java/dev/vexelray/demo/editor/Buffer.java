@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.text.Document;
@@ -74,7 +75,10 @@ final class Buffer implements AutoCloseable {
         this.library = library;
         this.crlf = content.crlf();
         this.dirty = dirty;
+        // A document: its past is its own, so Ctrl+Z in one file never reaches into another, and its save mark says
+        // whether this file is saved rather than whether the window is.
         this.field = new TextField(gui, "")
+                .history(new History())
                 .multiline(true)
                 .autoIndent(true)
                 .lineNumbers(true)
