@@ -2,6 +2,8 @@
 
 A tabbed text editor with a file navigator, on the VexelRay stack.
 
+**Install it** on Windows, with the other VexelRay applications, from [sibarum.github.io](https://sibarum.github.io/).
+
 Generated from `vexelray-framework`'s `vexel-desktop` template and built up from there, so the application edge —
 input, the clipboard, window memory, the frame loop, the dialogs, the command line and shutdown — is the
 framework's, and every file here is about editing text. It replaces an earlier editor in this repository that was
