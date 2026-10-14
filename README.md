@@ -157,8 +157,8 @@ Screenshots are `ottermate`'s: it photographs the running window on the applicat
 ottermate shot out.png --launch mvn.cmd compile exec:exec -Dautomation=0
 ```
 
-`ottermate --size 36emx20em shot smallest.png --launch ...` is the window at its minimum. `ottermate` cannot press
-chords yet, so Ctrl-commands cannot be scripted (framework-notes FN-3); clicks, typing and menus can.
+`ottermate --size 36emx20em shot smallest.png --launch ...` is the window at its minimum. Clicks, typing, menus and
+chords (`key CTRL+S`) can all be scripted; `key` learned chords after framework-notes FN-3 was written.
 
 ## Logging
 
