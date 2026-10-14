@@ -37,7 +37,9 @@ and `rc.exe` are MSVC's and on `PATH`; Git Bash's own `link.exe` is not the link
   a probe: retry.
 - `/SUBSYSTEM:WINDOWS` (release; the debug edition passes `/SUBSYSTEM:CONSOLE`) and `/ENTRY:mainCRTStartup`: no
   console window, and the entry is not optional alongside WINDOWS (the linker would look for `WinMain`).
-- `src/main/rc/editor.rc` is compiled by `rc.exe` to `target/text-editor.res` and linked in: the file's icon.
+- `src/main/rc/editor.rc` is compiled by `rc.exe` to `target/text-editor.res` and linked in: the file's icon, and
+  `editor.manifest`, which declares the PerMonitorV2 DPI awareness java.exe declares. Without it the exe is
+  DPI-unaware and Windows draws it at 96 DPI and stretches it, so it looks soft beside `exec:exec`.
 
 ## The metadata (`src/main/resources/META-INF/native-image/dev.vexelray.demo/`)
 

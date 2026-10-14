@@ -7,3 +7,8 @@
 // light variants are beside it. The running window does not wear it yet: that waits on a generated wiring being able
 // to name an icon (docs/TODO.md).
 1 ICON "editor.ico"
+
+// The manifest: PerMonitorV2 DPI awareness and the OS compatibility java.exe declares, so this executable is
+// drawn at the display's real pixels exactly as a JVM launch is, rather than rendered at 96 DPI and stretched by
+// Windows. Resource 1 of type 24 (RT_MANIFEST) is the one the loader reads for a process.
+1 24 "editor.manifest"
