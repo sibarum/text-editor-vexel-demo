@@ -77,6 +77,13 @@
             <artifactId>vexelray-gui-widget</artifactId>
             <version>${vexelray-gui.version}</version>
         </dependency>
+        <!-- The file-type family icons, the ones this project registers with Explorer, as distance fields in their
+             own atlas with the suite's colours: FileIconView.node(gui, FileFamily.ofExtension(ext), side). -->
+        <dependency>
+            <groupId>dev.vexelray.gui</groupId>
+            <artifactId>vexelray-gui-file-icons</artifactId>
+            <version>${vexelray-gui.version}</version>
+        </dependency>
         <!-- The clock. Motion enters at the application edge and nowhere else: -widget declares seams shaped
              out of JDK types and this module satisfies them, so a widget animates without naming Kronometer. -->
         <dependency>
