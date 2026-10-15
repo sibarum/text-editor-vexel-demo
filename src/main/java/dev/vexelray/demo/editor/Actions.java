@@ -83,6 +83,7 @@ final class Actions {
         nav.onOpenFolder(this::switchRoot);
         nav.onOpening((proceed, cancel) -> settleUnsaved(ws.all(), proceed, cancel));
         ws.runButton().onPress(this::runMenu);
+        ws.formattedButton().onPress(this::toggleFormatted);
         ws.tabs().onContextMenu((index, menu) -> {
             List<Buffer> all = ws.all();
             if (index < 0 || index >= all.size()) {
@@ -118,6 +119,7 @@ final class Actions {
         gui.shortcut(Key.B, ui::toggleNavigator, Modifier.CONTROL);
         gui.shortcut(Key.E, nav::focus, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.Z, this::toggleWrap, Modifier.ALT);
+        gui.shortcut(Key.V, this::toggleFormatted, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.F5, this::runMenu);
         // The field's own Ctrl+Enter follows a hyperlink under the caret, and the editor gives its fields none;
         // without a link it fell through to inserting a newline, which this claim now outranks.
@@ -384,6 +386,7 @@ final class Actions {
             }
             Path saved0 = target.toAbsolutePath().normalize();
             b.savedAs(saved0);
+            ws.syncFormatted();
             model.saved(b.id, saved0, b.language());
             model.say("Saved " + target.getFileName());
             saved.run();
@@ -731,6 +734,14 @@ final class Actions {
 
     void toggleWrap() {
         model.say(ws.toggleWrap() ? "Word wrap on" : "Word wrap off");
+    }
+
+    /** Ctrl+Shift+V, and the Formatted button: a Markdown document formatted, or back to its source. */
+    void toggleFormatted() {
+        String said = ws.toggleFormatted();
+        if (said != null) {
+            model.say(said);
+        }
     }
 
     /** Where a dialog starts: beside the document in front, else the open folder, else home. */

@@ -39,9 +39,13 @@ final class Buffer implements AutoCloseable {
     private static final boolean SYSTEM_CRLF = System.lineSeparator().equals("\r\n");
 
     final long id;
+    private final Gui gui;
     final TextField field;
-    /** What the tab shows: the field, on the card. */
+    /** What the tab shows: the field, on the card — or, for Markdown, the formatted view in its place. */
     final Node page;
+    private final Formatted formatted;
+    /** Whether the formatted view is shown in place of the field. */
+    private volatile boolean showingFormatted;
     private final Highlighter highlighter;
     private final Outline outline;
     private final Subscription dirtyWatch;
@@ -66,6 +70,7 @@ final class Buffer implements AutoCloseable {
     Buffer(Gui gui, long id, Path path, TextFile.Loaded content, boolean wrap,
            Consumer<Boolean> dirty, Consumer<Position> caret, Source library) {
         this.id = id;
+        this.gui = gui;
         this.path = library == null ? path : null;
         this.library = library;
         this.crlf = content.crlf();
@@ -88,10 +93,11 @@ final class Buffer implements AutoCloseable {
         field.node().width(Length.FILL).height(Length.FILL).textSize(Type.CODE)
                 .background(gui.theme().color(Look.CARD));
         this.ringWatch = Look.ring(gui, field.node());
+        this.formatted = new Formatted(gui);
         this.page = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .background(gui.theme().color(Look.CARD))
-                .children(field.node());
+                .children(field.node(), formatted.node());
         this.highlighter = new Highlighter(gui, field);
         // A new outline can change the scope under a caret that has not moved, so it says where the caret is again.
         this.outline = new Outline(gui, field, this::path, () -> caret.accept(position()));
@@ -109,6 +115,10 @@ final class Buffer implements AutoCloseable {
                 highlighted = text;
                 highlighter.refresh();
                 outline.refresh();
+                // Nothing is typed while it is shown, but a revert from disk still changes the text under it.
+                if (showingFormatted) {
+                    formatted.show(text);
+                }
             }
         });
         this.dirtyWatch = field.history().status().onCommitLatest(s -> dirty.accept(unsavedWrite || !s.value().clean()));
@@ -223,6 +233,37 @@ final class Buffer implements AutoCloseable {
         field.wordWrap(wrap);
     }
 
+    /** Whether this document can be shown formatted: whether it is Markdown, by its name. */
+    boolean formattable() {
+        return Markdown.handles(name());
+    }
+
+    /** Whether the formatted view is shown in place of the field. */
+    boolean showingFormatted() {
+        return showingFormatted;
+    }
+
+    /**
+     * Show the document formatted, or as its source. Formatted is read-only, so it takes the keyboard from the field
+     * — typing into text that cannot be seen would be edits nobody saw made — and gives it back on the way out.
+     * Ignored for a document that is not Markdown.
+     */
+    void showFormatted(boolean on) {
+        on = on && formattable();
+        showingFormatted = on;
+        if (on) {
+            formatted.show(field.text());
+        }
+        field.node().visible(!on);
+        formatted.node().visible(on);
+        gui.focus(on ? formatted.node() : field.node());
+    }
+
+    /** What has the keyboard when this document is in front: the field, or the formatted view in its place. */
+    Node focusTarget() {
+        return showingFormatted ? formatted.node() : field.node();
+    }
+
     /** Where the caret is now. */
     Position position() {
         return position(field.document().value());
@@ -334,6 +375,7 @@ final class Buffer implements AutoCloseable {
         dirtyWatch.close();
         caretWatch.close();
         ringWatch.close();
+        formatted.close();
         field.close();
     }
 }

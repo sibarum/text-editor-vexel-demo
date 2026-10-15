@@ -43,6 +43,7 @@ mvn compile exec:exec -Dautomation=0                      # with a driving socke
 | Ctrl+B | show or hide the navigator |
 | Ctrl+Shift+E | put the keyboard in the navigator |
 | Alt+Z | word wrap on or off |
+| Ctrl+Shift+V | a Markdown document formatted, or back to its source (the eye button over the tabs does the same) |
 | Ctrl+Enter | go to the declaration of the name under the caret (Java), the project's or a library's (shown read-only, decompiled if it has no sources); again for the next one |
 | Ctrl+F | find in the document (Enter / Shift+Enter step, Escape closes) |
 | Ctrl+Z / Ctrl+Y | undo / redo |

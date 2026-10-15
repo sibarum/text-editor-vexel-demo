@@ -51,6 +51,8 @@ final class Workspace {
     private final Tabs tabs;
     /** The Run button over the tabs; what it offers is {@link Actions}'. */
     private final IconButton run;
+    /** The Formatted button beside it, which says and changes how the document in front is shown. */
+    private final IconButton formatted;
     private final Node card;
     private final AtomicLong ids = new AtomicLong();
     private final Consumer<Buffer.Position> caret;
@@ -98,11 +100,15 @@ final class Workspace {
         // Over the tabs, a row of commands that act on the document in front and its project: Run, for now.
         this.run = new IconButton(gui, Icon.PLAY, "Run").tip("Run");
         gui.landmark(Landmarks.RUN, run.node());
+        // Lit while the document in front is shown formatted, and only pressable when it is Markdown.
+        this.formatted = new IconButton(gui, Icon.EYE, "Formatted").tip("Formatted (Ctrl+Shift+V)")
+                .toggle(true).enabled(false);
+        gui.landmark(Landmarks.FORMATTED, formatted.node());
         Node tools = gui.row()
                 .width(Length.FILL)
                 .padding(Length.dp(2), Type.TIGHT)
                 .alignItems(AlignItems.CENTER)
-                .children(run.node());
+                .children(run.node(), formatted.node());
         this.card = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .background(gui.theme().color(Look.CARD))
@@ -119,7 +125,35 @@ final class Workspace {
                 model.front(b.id);
                 caret.accept(b.position());
             }
+            syncFormatted();
         });
+    }
+
+    IconButton formattedButton() {
+        return formatted;
+    }
+
+    /**
+     * Show the document in front formatted, or as its source if it is formatted now. Returns what happened, for the
+     * status line.
+     */
+    String toggleFormatted() {
+        Buffer b = front();
+        if (b == null) {
+            return null;
+        }
+        if (!b.formattable()) {
+            return "Only Markdown has a formatted view";
+        }
+        b.showFormatted(!b.showingFormatted());
+        syncFormatted();
+        return b.showingFormatted() ? "Formatted view" : "Source view";
+    }
+
+    /** Make the Formatted button say how the document in front is shown, and whether it can be shown otherwise. */
+    void syncFormatted() {
+        Buffer b = front();
+        formatted.enabled(b != null && b.formattable()).on(b != null && b.showingFormatted());
     }
 
     Node node() {
@@ -192,8 +226,9 @@ final class Workspace {
             close(replaced.id);
         }
         if (focus) {
-            gui.focus(buffer.field.node());
+            gui.focus(buffer.focusTarget());
         }
+        syncFormatted();
         return buffer;
     }
 
@@ -297,7 +332,7 @@ final class Workspace {
             motion.cues.play(header, Cue.ring(accent, 1));
         }
         if (focus) {
-            gui.focus(buffer.field.node());
+            gui.focus(buffer.focusTarget());
         }
     }
 
@@ -313,7 +348,7 @@ final class Workspace {
             tabs.select(i);
             next = buffers.get(i);
         }
-        gui.focus(next.field.node());
+        gui.focus(next.focusTarget());
     }
 
     /** Word wrap, for every document open now and opened later. */

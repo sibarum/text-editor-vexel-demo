@@ -43,6 +43,9 @@ final class Landmarks {
     /** The Run button over the tabs, which opens the menu of what can be run here. */
     static final String RUN = "run";
 
+    /** The Formatted button beside Run, which shows a Markdown document formatted in place of its source. */
+    static final String FORMATTED = "formatted";
+
     /** The console window's tab bar and its pages: one run each. The console is {@code window console}. */
     static final String CONSOLE_TABS = "console.tabs";
 
