@@ -41,9 +41,9 @@
           { "extension": ".java", "description": "Java Source File", "icon": "src/main/rc/file-source-code.ico" },
           { "extension": ".py", "description": "Python Source File", "icon": "src/main/rc/file-source-code.ico" },
           { "extension": ".pyi", "description": "Python Stub File", "icon": "src/main/rc/file-source-code.ico" },
-          { "extension": ".sh", "description": "Shell Script", "icon": "src/main/rc/file-scripts.ico" },
-          { "extension": ".bash", "description": "Bash Script", "icon": "src/main/rc/file-scripts.ico" },
-          { "extension": ".psd1", "description": "PowerShell Data File", "icon": "src/main/rc/file-scripts.ico" },
+          { "extension": ".sh", "description": "Shell Script", "icon": "src/main/rc/vex-terminal.ico" },
+          { "extension": ".bash", "description": "Bash Script", "icon": "src/main/rc/vex-terminal.ico" },
+          { "extension": ".psd1", "description": "PowerShell Data File", "icon": "src/main/rc/vex-terminal.ico" },
           { "extension": ".diff", "description": "Diff File", "contentType": "text/x-diff", "icon": "src/main/rc/file-plain-text.ico" },
           { "extension": ".patch", "description": "Patch File", "contentType": "text/x-diff", "icon": "src/main/rc/file-plain-text.ico" },
           { "extension": ".dockerfile", "description": "Dockerfile", "icon": "src/main/rc/file-plain-text.ico" }
