@@ -38,7 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Knobs, as {@code -D} on the mvn command line: {@code bench.only} (comma-separated fixture names),
  * {@code bench.xmx} (the child's heap, default {@value #DEFAULT_XMX}) and {@code bench.timeout} (minutes per
- * fixture, default {@value #DEFAULT_TIMEOUT}).
+ * fixture, default {@value #DEFAULT_TIMEOUT}) and {@code bench.gpu} ({@code false} skips the frame drawn on the GPU,
+ * for a machine without one).
  */
 @EnabledIfSystemProperty(named = "bench.large", matches = "true")
 class LargeFileBench {
@@ -108,6 +109,7 @@ class LargeFileBench {
                 // The tree's settings and session in the target folder, not the user's: the fixtures must never
                 // become tabs the real editor tries to restore.
                 "-Dtext-editor.home=" + home.toAbsolutePath(),
+                "-Dbench.gpu=" + System.getProperty("bench.gpu", "true"),
                 "-cp", System.getProperty("java.class.path"),
                 LargeFileBenchRun.class.getName(),
                 file.toAbsolutePath().toString());
@@ -202,10 +204,41 @@ class LargeFileBench {
             if (r.containsKey("fail")) {
                 note.append(" **Did not finish: ").append(r.get("fail")).append(".**");
             }
+            if (r.containsKey("gpu.fail")) {
+                note.append(" GPU capture failed: ").append(r.get("gpu.fail")).append(".");
+            }
+            if (r.containsKey("gpu.empty.fail")) {
+                note.append(" Empty editor's GPU capture failed: ").append(r.get("gpu.empty.fail")).append(".");
+            }
             notes.add(note.toString());
         }
         md.append("\n¹ Refused by `TextFile`; the reason is in the notes below.\n\n");
         md.append("— means the step was never reached: the run stopped earlier (see the notes).\n\n");
+
+        md.append("## Drawn frame\n\n");
+        md.append("The table above stops at layout. Here each step's settled frame is drawn: *Emit* is the CPU half, ")
+                .append("the tree emitted into a canvas (glyph quads and all) and copied out as the vertex array, the ")
+                .append("same work the window does before every present, timed apart from the layout above. ")
+                .append("*Vertices* are what that frame emitted, six per quad. *GPU capture* is one whole frame ")
+                .append("drawn on the GPU by `GuiApp.capture` after scroll to end; the empty editor's capture is ")
+                .append("beside it. The capture lays the tree out twice itself, so the difference between the two is ")
+                .append("about two of the layout frames above plus what drawing the file costs. Times in ms.\n\n");
+        md.append("| Fixture | Emit: first frame | Vertices | Emit: caret ↓ | Emit: insert char | ")
+                .append("Emit: scroll to end | Vertices | GPU capture | Empty editor |\n");
+        md.append("|---|--:|--:|--:|--:|--:|--:|--:|--:|\n");
+        for (Map.Entry<Fixture, Map<String, String>> e : results.entrySet()) {
+            Map<String, String> r = e.getValue();
+            md.append("| `").append(e.getKey().name()).append("` | ")
+                    .append(cell(r, "first.draw")).append(" | ")
+                    .append(count(r, "first.vertices")).append(" | ")
+                    .append(timed(r, "down.draw")).append(" | ")
+                    .append(timed(r, "insert.draw")).append(" | ")
+                    .append(cell(r, "end.draw")).append(" | ")
+                    .append(count(r, "end.vertices")).append(" | ")
+                    .append(gpu(r, "gpu")).append(" | ")
+                    .append(gpu(r, "gpu.empty")).append(" |\n");
+        }
+        md.append('\n');
         md.append("## Notes\n\n").append(String.join("\n", notes)).append('\n');
         md.append("""
 
@@ -219,9 +252,14 @@ class LargeFileBench {
                 puts the caret at the end of the text and frames until the reveal settles. Background work \
                 (highlighting, the outline) runs on its own threads and is not in these times, except as it \
                 competes for the CPU. Nor is drawing: a headless frame lays out but builds no glyph quads and \
-                submits nothing to the GPU, so a cost that lives in the renderer (as `TextFile.MAX_LINE_CHARS`'s \
-                note says the long line's does) does not show here. Fixtures are written to `target/large-files` \
-                on first use and reused after.
+                submits nothing to the GPU, which is why the drawn frame has a table of its own. Its *Emit* is \
+                `TreeRenderer.emit` into a fresh `Canvas` with the default canvas shader's looks, run once on each \
+                step's settled frame (the window draws every frame, the unsettled ones too, so a step that took \
+                two frames to settle would draw twice). Its *GPU capture* is `GuiApp.capture`, which frames twice, \
+                settles, emits, makes a Vulkan device of its own, uploads, draws, reads back and writes a PNG \
+                (`target/large-files/<fixture>.png`); the device setup is most of the empty editor's figure. \
+                `-Dbench.gpu=false` skips it. Fixtures are written to `target/large-files` on first use and \
+                reused after.
                 """);
         Files.writeString(REPORT, md.toString());
         System.out.println("[bench] wrote " + REPORT.toAbsolutePath());
@@ -239,6 +277,22 @@ class LargeFileBench {
         }
         String n = r.get(key + ".n");
         return v + " (" + r.get(key + ".max") + ")" + ("1".equals(n) ? "*" : "");
+    }
+
+    private static String count(Map<String, String> r, String key) {
+        String v = r.get(key);
+        return v != null ? num(v) : cell(r, key);
+    }
+
+    /** A GPU capture's time, "failed" if it threw (the reason is in the notes), "off" if it was skipped. */
+    private static String gpu(Map<String, String> r, String key) {
+        if (r.containsKey(key + ".fail")) {
+            return "failed";
+        }
+        if (r.containsKey(key)) {
+            return r.get(key);
+        }
+        return r.containsKey("done") ? "off" : cell(r, key);
     }
 
     private static String num(String v) {

@@ -1,8 +1,15 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.canvas.Canvas;
+import dev.vexelray.canvas.CanvasShader;
+import dev.vexelray.canvas.shadelet.CoreLooks;
+import dev.vexelray.canvas.shadelet.LookTable;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.app.GuiApp;
+import dev.vexelray.gui.core.app.TreeRenderer;
+import dev.vexelray.gui.core.model.RetainedNode;
 import dev.vexelray.gui.core.text.TextFaces;
 
 import java.io.PrintStream;
@@ -21,6 +28,10 @@ import java.util.List;
  * <p>Measures only; it changes nothing in the editor. Where {@link TextFile} refuses a file, the refusal is reported
  * and the file is opened anyway, normalized the way {@link TextFile#decode} would but without its limits, so the
  * numbers show what the limit is protecting against.
+ *
+ * <p>A headless frame lays out and stops there, so each step is also drawn: the settled frame's tree emitted into a
+ * {@link Canvas} as the window's renderer emits it, glyph quads and all ({@link #draw}), and at the end one real
+ * frame on the GPU through {@link GuiApp#capture}'s offscreen path. That one is off with {@code -Dbench.gpu=false}.
  */
 final class LargeFileBenchRun {
 
@@ -35,6 +46,13 @@ final class LargeFileBenchRun {
 
     private static Gui gui;
     private static final TextFaces FACES = TextFaces.standard();
+    /** The look table the editor's canvases name: the default canvas shader's, as the window and capture use. */
+    private static final LookTable LOOKS = CoreLooks.table(new CanvasShader.Fragment().composition());
+
+    /** The tree the last frame laid out, which is what the window would draw next. */
+    private static RetainedNode root;
+    /** Vertices the last {@link #draw} emitted: six per quad, so mostly glyphs. */
+    private static int vertices;
 
     public static void main(String[] args) throws Exception {
         Path file = Path.of(args[0]);
@@ -51,6 +69,14 @@ final class LargeFileBenchRun {
             step = "warm-up";
             for (int i = 0; i < 3; i++) {
                 settle();
+                draw();
+            }
+            boolean gpu = Boolean.parseBoolean(System.getProperty("bench.gpu", "true"));
+            if (gpu) {
+                // Twice, and the second reported: the first pays for loading the Vulkan classes and the driver.
+                step = "gpu capture (empty)";
+                capture(file, "gpu.empty");
+                capture(file, "gpu.empty");
             }
             long baseline = retainedHeap();
 
@@ -86,6 +112,9 @@ final class LargeFileBenchRun {
             int frames = settle();
             report("first", ms(System.nanoTime() - f0));
             report("first.frames", frames);
+            step = "first draw";
+            report("first.draw", ms(draw()));
+            report("first.vertices", vertices);
 
             step = "heap";
             report("heap", mb(retainedHeap() - baseline));
@@ -102,6 +131,14 @@ final class LargeFileBenchRun {
             frames = settle();
             report("end", ms(System.nanoTime() - s0));
             report("end.frames", frames);
+            step = "scroll to end draw";
+            report("end.draw", ms(draw()));
+            report("end.vertices", vertices);
+
+            if (gpu) {
+                step = "gpu capture";
+                capture(file, "gpu");
+            }
             report("done", "yes");
         } catch (OutOfMemoryError e) {
             report("fail", "OutOfMemoryError during " + step);
@@ -132,7 +169,7 @@ final class LargeFileBenchRun {
     private static int settle() {
         int n = 0;
         do {
-            gui.frame(TextEditor.W, TextEditor.H, FACES);
+            root = gui.frame(TextEditor.W, TextEditor.H, FACES);
             n++;
         } while (gui.hasPendingWork() && n < SETTLE_CAP);
         return n;
@@ -140,21 +177,65 @@ final class LargeFileBenchRun {
 
     /**
      * Time {@code action} plus the frames that show it, once to warm up and then up to {@link #SAMPLES} times;
-     * report the median and the worst.
+     * report the median and the worst. Each sample's settled frame is then drawn ({@link #draw}), timed apart and
+     * reported under {@code key.draw}.
      */
     private static void sample(String key, Runnable action) {
         List<Long> times = new ArrayList<>();
+        List<Long> draws = new ArrayList<>();
         long spent = 0;
         for (int i = 0; i <= SAMPLES && spent < OP_BUDGET_NANOS; i++) {
             long t = System.nanoTime();
             action.run();
             settle();
             long took = System.nanoTime() - t;
-            spent += took;
+            long drew = draw();
+            spent += took + drew;
             if (i > 0 || spent >= OP_BUDGET_NANOS) {
                 times.add(took);
+                draws.add(drew);
             }
         }
+        report(key, times);
+        report(key + ".draw", draws);
+    }
+
+    /**
+     * The CPU half of drawing the last frame: its tree emitted into a fresh canvas, as the window's renderer does
+     * before every present, and copied out as the vertex array the window uploads. Returns how long it took.
+     */
+    private static long draw() {
+        long t = System.nanoTime();
+        Canvas canvas = new Canvas(TextEditor.W, TextEditor.H).looks(LOOKS).begin();
+        if (root != null) {
+            TreeRenderer.emit(root, canvas, FACES, gui);
+        }
+        vertices = canvas.vertexCount();
+        canvas.toVertexArray();
+        return System.nanoTime() - t;
+    }
+
+    /**
+     * One frame drawn on the GPU through {@link GuiApp#capture}: its two frames and settle, the emit, a device of
+     * its own, the upload, the draw, the read-back and the PNG. A failure is reported under {@code key.fail} and
+     * the run goes on: this is the last measurement, and nothing else depends on it.
+     */
+    private static void capture(Path file, String key) {
+        Path png = file.resolveSibling(file.getFileName() + (key.equals("gpu") ? ".png" : ".empty.png"));
+        long t = System.nanoTime();
+        try {
+            GuiApp.capture(gui, TextEditor.W, TextEditor.H, 0.1f, 0.1f, 0.1f, png.toString());
+            report(key, ms(System.nanoTime() - t));
+        } catch (OutOfMemoryError e) {
+            report(key + ".fail", "OutOfMemoryError after " + ms(System.nanoTime() - t) + " ms");
+        } catch (Throwable e) {
+            report(key + ".fail", e.getClass().getSimpleName() + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /** The median of {@code times} as {@code key}, the worst as {@code key.max} and the count as {@code key.n}. */
+    private static void report(String key, List<Long> times) {
         long[] sorted = times.stream().mapToLong(Long::longValue).sorted().toArray();
         report(key, ms(sorted[sorted.length / 2]));
         report(key + ".max", ms(sorted[sorted.length - 1]));

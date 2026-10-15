@@ -215,6 +215,13 @@ shows what the limit protects against. Each fixture runs in a JVM of its own, so
 times out costs only its row. `-Dbench.only=log-100mb.log,...` picks fixtures, `-Dbench.xmx=8g` sets the heap and
 `-Dbench.timeout=10` the minutes per fixture. Plain `mvn test` skips it.
 
+Those times are layout only: the frames are headless, so they build no glyph quads and draw nothing. A second
+table, *Drawn frame*, has the rest. For each step it times the CPU half of drawing, the settled frame's tree
+emitted into a canvas as the window's renderer emits it, and counts the vertices that produced. Then it draws one
+real frame on the GPU through `GuiApp.capture`'s offscreen path, beside the same capture of the empty editor, and
+leaves the picture at `target/large-files/<fixture>.png`. The same command runs both tables, and the GPU frame needs
+a Vulkan device; `-Dbench.gpu=false` skips it on a machine without one.
+
 ## Logging
 
 The framework configures it: info to the console and debug to `target/logs/text-editor.log` from a checkout,
