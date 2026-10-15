@@ -29,6 +29,7 @@ front. Unsaved work is never remembered — closing the window asks about it fir
 ```
 mvn test                                                  # the model, files, grammars, and the real tree headless
 mvn compile exec:exec -Dautomation=0                      # with a driving socket (see Taking a screenshot)
+mvn -Plarge-file-bench test                               # the large-file benchmark (see below); slow, off by default
 ```
 
 ## Using it
@@ -198,6 +199,21 @@ ottermate shot out.png --launch mvn.cmd compile exec:exec -Dautomation=0
 
 `ottermate --size 36emx20em shot smallest.png --launch ...` is the window at its minimum. Clicks, typing, menus and
 chords (`key CTRL+S`) can all be scripted; `key` learned chords after framework-notes FN-3 was written.
+
+## Large-file benchmark
+
+```
+mvn -Plarge-file-bench test
+```
+
+How the editor copes with large and pathological files: 8 MB of source, 100 MB and 1 GB of log lines, 10 M empty
+lines, one line of 1 M characters, mixed CRLF/LF, and many tabs. For each it times the open, the first frame, a caret
+move, a typed character and a jump to the end, and the heap the open file keeps, and writes the table to
+`target/large-file-bench.md`. The fixtures (~1.2 GB) are generated into `target/large-files` on the first run and
+reused after; a file `TextFile` refuses is reported as refused and then opened past the limit anyway, so the table
+shows what the limit protects against. Each fixture runs in a JVM of its own, so one that runs out of memory or
+times out costs only its row. `-Dbench.only=log-100mb.log,...` picks fixtures, `-Dbench.xmx=8g` sets the heap and
+`-Dbench.timeout=10` the minutes per fixture. Plain `mvn test` skips it.
 
 ## Logging
 

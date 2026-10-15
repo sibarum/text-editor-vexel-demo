@@ -468,5 +468,27 @@
                 </plugins>
             </build>
         </profile>
+        <!--
+          The large-file benchmark: mvn -Plarge-file-bench test
+          Runs LargeFileBench alone, which is otherwise skipped, and writes target/large-file-bench.md. It generates
+          ~1.2 GB of fixtures under target/large-files on its first run. See LargeFileBench for its -D knobs.
+        -->
+        <profile>
+            <id>large-file-bench</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <test>LargeFileBench</test>
+                            <systemPropertyVariables>
+                                <bench.large>true</bench.large>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>
