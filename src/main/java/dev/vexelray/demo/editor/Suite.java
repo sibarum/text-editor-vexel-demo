@@ -8,17 +8,22 @@ import java.nio.file.Path;
 import java.util.concurrent.Executor;
 
 /**
- * The other applications of the suite, as far as the editor reaches them: today, showing a file or folder in
- * Vexplore.
+ * The other applications of the suite, as far as the editor reaches them: showing a file or folder in Vexplore,
+ * and opening a folder in MainFrame.
  *
- * <p>Vexplore is a separate install, found through its install record ({@link Apps}) and started as a new process
- * and a new window: {@code vexplore <folder>} opens the folder, {@code vexplore <file>} opens the folder it is in
- * with it selected. That argument shape is agreed between the two apps, not by the framework.
+ * <p>Each is a separate install, found through its install record ({@link Apps}) and started as a new process and a
+ * new window. {@code vexplore <folder>} opens the folder, {@code vexplore <file>} opens the folder it is in with it
+ * selected; {@code mainframe --dir=<folder>} opens a shell there, as Vexplore's own Open MainFrame Here does (never
+ * positional, which MainFrame would run as its shell). Those argument shapes are agreed between the apps, not by
+ * the framework.
  */
 final class Suite {
 
     /** Vexplore's install id, which is also its command. */
     static final String VEXPLORE = "vexplore";
+
+    /** MainFrame's install id, which is also its command. */
+    static final String MAINFRAME = "mainframe";
 
     private static final Log LOG = Log.of("editor.suite");
 
@@ -44,6 +49,29 @@ final class Suite {
                 }
             } catch (IOException e) {
                 LOG.warn("could not start Vexplore for {}", path, e);
+            }
+        });
+    }
+
+    /** Whether MainFrame is installed, which is what decides the menu item. Reads one small file. */
+    static boolean hasMainFrame() {
+        return Apps.find(MAINFRAME).isPresent();
+    }
+
+    /** The menu item's words: what it does, or why it cannot. */
+    static String mainFrameLabel(boolean installed) {
+        return installed ? "Open in MainFrame" : "MainFrame not installed";
+    }
+
+    /** Open a MainFrame window with a shell in {@code folder}, on {@code io} since it starts a process. */
+    static void openInMainFrame(Path folder, Executor io) {
+        io.execute(() -> {
+            try {
+                if (Apps.spawn(MAINFRAME, "--dir=" + folder.toAbsolutePath()).isEmpty()) {
+                    LOG.warn("MainFrame is not installed; {} was not opened", folder);
+                }
+            } catch (IOException e) {
+                LOG.warn("could not start MainFrame in {}", folder, e);
             }
         });
     }

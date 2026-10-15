@@ -33,6 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class Preview {
 
+    /** Fewer Java files than this, and no pom, and the folder is pictured as blocks: there is no build to describe. */
+    static final int FEW_JAVA = 12;
     private static final int MODULES = 10;
     private static final int LANGUAGES = 6;
     private static final int ANNOTATIONS = 8;
@@ -52,6 +54,8 @@ final class Preview {
     });
     private final AtomicLong generation = new AtomicLong();
     private final Map<Path, Survey> seen = new ConcurrentHashMap<>();
+    private final Map<Path, Blocks.Scene> scenes = new ConcurrentHashMap<>();
+    private final BlockView blocks;
     private volatile Path showing;
 
     private final Node root;
@@ -131,6 +135,7 @@ final class Preview {
 
         // Not a sentence about what to do: an empty folder simply looks empty, a dash where the numbers would be.
         empty = gui.text("—").font(Type.UI).textSize(Type.FIGURE).textColor(theme.color(Role.FAINT)).visible(false);
+        blocks = new BlockView(gui);
 
         body = column().width(Length.FILL).gap(Type.EDGE).alignItems(AlignItems.STRETCH)
                 .children(build, figures, column().gap(Type.GAP).alignItems(AlignItems.STRETCH)
@@ -148,12 +153,22 @@ final class Preview {
                 .scroll(false, true)
                 .clip(true)
                 .visible(false)
-                .children(name, path, body);
+                .children(name, path, body, blocks.node());
         gui.landmark(Landmarks.PREVIEW, root);
     }
 
     Node node() {
         return root;
+    }
+
+    /** The blocks a folder with no build is pictured as. */
+    BlockView blocks() {
+        return blocks;
+    }
+
+    /** Whether {@code s} has so little build to describe that the folder is pictured as blocks instead. */
+    static boolean pictured(Survey s) {
+        return !s.maven() && s.javaFiles() < FEW_JAVA;
     }
 
     /** The folder pictured, or null. */
@@ -164,6 +179,7 @@ final class Preview {
     /** Forget what was surveyed: a new visit to Open looks at the disk again. */
     void forget() {
         seen.clear();
+        scenes.clear();
     }
 
     /** Picture {@code folder}: its name now, the rest when the survey lands. Null is ignored. */
@@ -181,28 +197,58 @@ final class Preview {
         name.text(fileName == null ? dir.toString() : fileName.toString());
         path.text(dir.toString());
         Survey known = seen.get(dir);
+        Blocks.Scene knownScene = scenes.get(dir);
         if (known != null) {
             draw(known);
-            return;
+            picture(knownScene);
+            if (knownScene != null || !pictured(known)) {
+                return;
+            }
+        } else {
+            blank();
         }
-        blank();
         worker.execute(() -> {
             if (generation.get() != mine) {
                 return;
             }
-            Survey s = Survey.of(dir, () -> generation.get() == mine, partial -> {
-                if (generation.get() == mine) {
-                    draw(partial);
-                }
-            });
+            Survey s = known;
             if (s == null) {
+                s = Survey.of(dir, () -> generation.get() == mine, partial -> {
+                    if (generation.get() == mine) {
+                        draw(partial);
+                    }
+                });
+                if (s == null) {
+                    return;
+                }
+                seen.put(dir, s);
+                if (generation.get() == mine) {
+                    draw(s);
+                }
+            }
+            // A folder with a build is described by it. One without is read again, for sizes this time, and
+            // pictured as blocks: the survey has already said there is little else to show.
+            if (!pictured(s)) {
                 return;
             }
-            seen.put(dir, s);
+            Blocks.Walked walked = Blocks.walk(dir, () -> generation.get() == mine);
+            if (walked == null) {
+                return;
+            }
+            Blocks.Scene scene = walked.scene();
+            scenes.put(dir, scene);
             if (generation.get() == mine) {
-                draw(s);
+                picture(scene);
             }
         });
+    }
+
+    /** Show {@code scene}'s blocks in place of the dash an empty survey leaves, or no blocks for null. */
+    private void picture(Blocks.Scene scene) {
+        blocks.show(scene);
+        if (scene != null) {
+            empty.visible(false);
+        }
     }
 
     /**
@@ -214,6 +260,7 @@ final class Preview {
                 languageLegend, modulesSection, annotationsSection, empty}) {
             n.visible(false);
         }
+        blocks.show(null);
     }
 
     /**
@@ -233,7 +280,9 @@ final class Preview {
         repoChip.text("git");
 
         int java = s.javaFiles();
-        figures.visible(java > 0);
+        // A folder pictured as blocks has too little Java to describe: the room goes to the blocks instead.
+        boolean blocky = pictured(s);
+        figures.visible(java > 0 && !blocky);
         int[] values = {java, s.classes(), s.records(), s.interfaces(), s.enums()};
         for (int i = 0; i < values.length; i++) {
             figureValues[i].text((i == 0 && s.truncated() ? "≥" : "") + values[i]);
@@ -259,7 +308,7 @@ final class Preview {
 
         modulesSection.visible(!s.modules().isEmpty());
         modules.fill(s.modules().stream().map(m -> new Survey.Count(m.name(), m.javaFiles())).toList());
-        annotationsSection.visible(!s.annotations().isEmpty());
+        annotationsSection.visible(!s.annotations().isEmpty() && !blocky);
         annotations.fill(s.annotations().stream().map(a -> new Survey.Count("@" + a.name(), a.count())).toList());
 
         empty.visible(total == 0 && !s.maven());

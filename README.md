@@ -63,7 +63,10 @@ ends each line with a faint `¬`, since that is how it will be saved.
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree so the walk carries on. Enter opens a folder. A folder's menu can make it the root; every
-row's menu can copy its path and has *Open in Vexplore*. `.git`, `target`, `node_modules` and a few others are left out of the listing.
+row's menu can copy its path and has *Open in Vexplore*, and a folder's also has *Open in MainFrame*, which starts
+`mainframe --dir=<folder>`, a MainFrame window with a shell there (greyed out as *MainFrame not installed* without
+its install record). The root's name at the top has the same folder menu for the root, and so does every folder in
+Open. `.git`, `target`, `node_modules` and a few others are left out of the listing.
 
 The navigator has two modes. The root's name at its top is a toggle: pressed, the navigator is in **Open**, for
 picking a root; released, it is in **Edit**, the files under the root, as above. A window with nothing to show
@@ -85,6 +88,14 @@ vexelray-gui`: that one is the likelier root), whether a git repository starts t
 file count, how many Java files, classes, records, interfaces and enums it holds, and its modules and most-used
 annotations as bars against each other. The look is bounded (`Survey`: 6,000 files, 900 Java files read), so a
 home folder answers as quickly as a module.
+
+A folder with no pom and fewer than a dozen Java files has no build to describe, so it is pictured as **blocks**
+instead, in 3D: every file a cube whose volume is its size (its side is the cube root of its bytes), every folder a
+square plate its contents stand on, so the folders inside it rise from it a level at a time. Files are coloured by
+their family, as the suite's file icons are, and the larger blocks whose tops can be seen carry their icon. The
+view is a long lens from above at three quarters, close to orthographic, so sizes compare across the picture. It
+is drawn with the engine's polygon meshes (`BlockView`, through `vexelray-technique-mesh`), only when the folder
+or the size of the panel changes. The walk is bounded too (`Blocks`: 1,500 files, eight folders deep).
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -180,6 +191,8 @@ Installed locally rather than downloaded, so `mvn install` in each sibling has t
 | `vexelray-framework-shell`, `-automation`, `-processor` | the application edge, the driving socket, and the processor that writes the wiring |
 | `vexelray-gui-widget`, `-krono`, `-automation` | the widgets (`Tabs`, `TreeView`, `TextField`, `SplitPane`, `StatusBar`), the clock, the driver |
 | `vexelray-gui-nfd` | the OS's file dialogs |
+| `vexelray-gui-file-icons` | the file-type family icons and their colours, on Open's blocks |
+| `vexelray-technique-mesh`, `vexelray-engine-embedded` (repo `vexelray`) | Open's blocks: polygon meshes through the rasteriser, composited into a viewport the GUI samples |
 | `vex-suite-common` (its `tty` package; the picture decoder excluded) | the console's terminal, shared with MainFrame |
 | `org.netbeans.external:org.eclipse.tm4e.core-0.14.0` + `gson`, `joni`, `snakeyaml-engine` | the TextMate tokenizer and the runtime dependencies it does not declare |
 | `tactroller-atchung`, `tactroller-clipboard` | input onto the bus, and the OS clipboard |

@@ -406,3 +406,35 @@ handed to `translate` unconverted and still means the same thing after a zoom. *
 The units are not a `Tabs` question: `Node.layout()` is reachable from what `Shell` hands out, so it is inside the
 gui surface that bounds v1. Adding an em view later is additive, but deciding what an application reads geometry
 in — and whether `rect()` stays px for applications at all — is cheap only before the freeze.
+
+## The blocks
+
+Open pictures a folder with no build as blocks (`Blocks`, `BlockView`): its files as cubes whose volume is their
+size, standing on its folders' plates. It is the first thing in the suite drawn by `vexelray-technique-mesh`, hosted
+in a GUI region by `vexelray-engine-embedded`'s `SampledTechniqueHost` (into `GuiApp.viewport(w, h, true)`, shown as
+the node's image), and drawn from a `@BeforeFrame` hook on what a `@MainThread` recipe built. That route worked as
+documented, first time. What it cost is below.
+
+### FN-21 · A rasterised scene in a GUI region: no orthographic lens, fixed meshes, and overlays by hand 🔬
+
+Three workarounds, each small, each one every application that draws a scene beside its widgets will write.
+
+- **There is no orthographic `Lens`.** `Lens` is a pinhole's focal length, so "orthographic" is a long lens far
+  away: focal length 24, under five degrees. The camera's fit then has to be refined against the projection,
+  because a fit that centres in the camera's frame leaves a perspective picture low and loose; `BlockView.eye`
+  does six passes. An orthographic lens would make the fit one pass of arithmetic and the picture exact.
+- **Meshes are fixed at realise, and scale is uniform.** `MeshTechnique` refuses a new mesh after its first frame
+  and `Placement` scales the same on every axis, so a picture that changes on every hover is a pool of instances
+  of two unit meshes (a cube, a plate), moved, tinted and hidden. That is fine for cubes, and it is why every folder is
+  square: a plate cannot be stretched. A per-axis scale, with the normal fixed up in the vertex stage, would allow
+  rectangles. A mesh added late would allow anything else.
+- **A node over the picture knows nothing of it.** The file-type icons are nodes floated over the image, so
+  `BlockView.project` restates `MeshShader`'s vertex stage in Java to place them, and `BlockView.hidden` casts a
+  ray against every block on the CPU, because a node is never occluded by the scene. The two agree only because
+  the Java was written from the shader. `PanelTechnique` would put the icons in the scene properly, occluded,
+  but it draws a canvas, and the file icons are an atlas only the GUI's renderer uploads. Positions come back in
+  px and are floated in dp (FN-20's three units again).
+
+*Could:* an orthographic `Lens`; a `MeshTechnique.project(x, y, z)` that answers where a point lands and how deep,
+from the same pushed values the shader reads; and an image source for `PanelTechnique` that a GUI atlas can be.
+**v1:** all additive, in the engine rather than in the framework's frozen surface.

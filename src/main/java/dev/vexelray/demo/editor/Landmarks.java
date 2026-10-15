@@ -29,6 +29,9 @@ final class Landmarks {
     /** What stands in the editor's place in Open: the folder under the pointer, surveyed. */
     static final String PREVIEW = "preview";
 
+    /** The preview's blocks, for a folder with no build to describe: its files as cubes on its folders' plates. */
+    static final String BLOCKS = "preview.blocks";
+
     /** Open's recent roots, one button each. */
     static final String RECENT = "navigator.recent";
 

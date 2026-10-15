@@ -135,6 +135,10 @@ final class Ui {
         return navigator;
     }
 
+    Preview preview() {
+        return preview;
+    }
+
     /** Show or hide the navigator. Hidden is the split dragged shut, so the width it had comes back with it. */
     void showNavigator(boolean show) {
         if (show == navigatorShown) {

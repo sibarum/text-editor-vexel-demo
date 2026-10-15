@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.framework.api.Configuration;
+import dev.vexelray.framework.api.MainThread;
 import dev.vexelray.framework.api.Provides;
 import dev.vexelray.framework.core.Launch;
 import dev.vexelray.framework.shell.Appearance;
@@ -8,6 +9,7 @@ import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.Windows;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.krono.KronoGui;
@@ -35,6 +37,16 @@ final class Recipes {
     @Provides
     Appearance look() {
         return Appearance.of(Look.THEME, Length.em(TextEditor.MIN_W_EM), Length.em(TextEditor.MIN_H_EM));
+    }
+
+    /**
+     * Open's blocks given the device: the one recipe here that is main-thread, because what it builds draws with
+     * Vulkan. Built at the window phase, drawn from its own frame hook, closed at shutdown before the device.
+     */
+    @Provides
+    @MainThread
+    BlockView.Binding blocks(GuiApp app, Ui ui) {
+        return ui.preview().blocks().bind(app);
     }
 
     /**

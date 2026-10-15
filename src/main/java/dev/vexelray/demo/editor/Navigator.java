@@ -4,6 +4,7 @@ import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.CursorShape;
 import dev.vexelray.gui.core.input.InteractionState;
+import dev.vexelray.gui.core.input.MenuSink;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -91,6 +92,14 @@ final class Navigator {
                 });
         heading.node().font(Type.UI).wordWrap(false);
         gui.landmark(Landmarks.FOLDER, heading.node());
+        // The root is a folder like any row, so its name has a folder's menu; with no root there is nothing to offer.
+        gui.onContextMenu(heading.node(), menu -> {
+            Path base = source.base();
+            if (base != null) {
+                folderMenu(base, menu);
+                menu.item("Copy path", () -> gui.clipboard().set(base.toString()));
+            }
+        });
 
         tree = new TreeView<>(gui, source).motion(motion.arrival);
         // The tree sits in the card rather than in a well of its own. Its border is the tree's to repaint on every
@@ -114,10 +123,14 @@ final class Navigator {
         tree.action(TreeView.Action.<Path>of("»", "Make this the root", (p, job) -> pick(p))
                 .shownWhen(Files::isDirectory));
         tree.onContextMenu((p, menu) -> {
-            boolean vexplore = Suite.hasVexplore();
-            menu.separator()
-                    .item(Suite.vexploreLabel(vexplore), vexplore, () -> Suite.showInVexplore(p, gui.offload()))
-                    .item("Copy path", () -> gui.clipboard().set(p.toString()));
+            if (Files.isDirectory(p)) {
+                folderMenu(p, menu);
+            } else {
+                boolean vexplore = Suite.hasVexplore();
+                menu.separator()
+                        .item(Suite.vexploreLabel(vexplore), vexplore, () -> Suite.showInVexplore(p, gui.offload()));
+            }
+            menu.item("Copy path", () -> gui.clipboard().set(p.toString()));
         });
         editPane = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
@@ -182,8 +195,10 @@ final class Navigator {
         picker.onClick(this::pick);
         picker.onActivate(this::pick);
         picker.action(TreeView.Action.<Path>of("»", "Make this the root", (p, job) -> pick(p)));
-        picker.onContextMenu((p, menu) -> menu.separator()
-                .item("Copy path", () -> gui.clipboard().set(p.toString())));
+        picker.onContextMenu((p, menu) -> {
+            folderMenu(p, menu);
+            menu.item("Copy path", () -> gui.clipboard().set(p.toString()));
+        });
         openPane = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
                 .gap(Type.TIGHT)
@@ -202,6 +217,18 @@ final class Navigator {
                 .border(Type.RULE, gui.theme().color(Look.RIM))
                 .alignItems(AlignItems.STRETCH)
                 .children(heading.node(), editPane, openPane);
+    }
+
+    /**
+     * What a folder's menu offers wherever the folder appears (a row in either tree, the root's name): the suite's
+     * other two applications on it. Each is greyed out, saying so, when it is not installed.
+     */
+    private void folderMenu(Path folder, MenuSink menu) {
+        boolean vexplore = Suite.hasVexplore();
+        boolean mainFrame = Suite.hasMainFrame();
+        menu.separator()
+                .item(Suite.vexploreLabel(vexplore), vexplore, () -> Suite.showInVexplore(folder, io))
+                .item(Suite.mainFrameLabel(mainFrame), mainFrame, () -> Suite.openInMainFrame(folder, io));
     }
 
     /**
