@@ -12,6 +12,7 @@ import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.krono.KronoGui;
 import dev.vexelray.gui.widget.TitleBar;
+import dev.vexelray.text.FontSet;
 import sibarum.concordance.index.JarCache;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
@@ -35,6 +36,19 @@ final class Recipes {
     Appearance look() {
         return Appearance.of(Look.THEME, Length.em(TextEditor.MIN_W_EM), Length.em(TextEditor.MIN_H_EM));
     }
+
+    /**
+     * The fonts, as this project's own build bakes them (the {@code <families>} in pom.xml): Noto Sans in its four
+     * faces, for the formatted view's bold and italic, and Noto Sans Mono, each borrowing what it lacks from the
+     * other as the standard set's do.
+     */
+    @Provides
+    FontSet fonts() {
+        return FontSet.fromClassPath(FONTS).withFallback("sans", "mono");
+    }
+
+    /** Where the build writes the fonts' manifest, on the class path. */
+    static final String FONTS = "/dev/vexelray/demo/editor/fonts/fonts.json";
 
     /** The session's shape: which documents, which in front, which folder. */
     @Provides

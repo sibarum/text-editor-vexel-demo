@@ -8,7 +8,6 @@ import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.FocusRing;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.text.Span;
-import dev.vexelray.text.FontSet;
 import sibarum.atchung.Subscription;
 
 import java.util.ArrayList;
@@ -95,7 +94,7 @@ final class Formatted {
     }
 
     private Node heading(Markdown.Block b) {
-        Node title = prose(b.body(), HEADINGS[Math.min(b.level(), 6) - 1]).bold().textColor(color(Role.INK));
+        Node title = prose(b.body(), HEADINGS[Math.min(b.level(), 6) - 1]).bold();
         if (b.level() > 2) {
             return b.level() == 6 ? title.textColor(color(Role.DIM)) : title;
         }
@@ -153,7 +152,7 @@ final class Formatted {
             for (int c = 0; c < columns; c++) {
                 Node cell = prose(c < row.size() ? row.get(c) : Markdown.Inline.EMPTY, BODY)
                         .padding(Type.TIGHT, Type.GAP);
-                line.append(r == 0 ? cell.bold().textColor(color(Role.INK)) : cell);
+                line.append(r == 0 ? cell.bold() : cell);
             }
             grid.append(line);
             if (r < rows.size() - 1) {
@@ -167,11 +166,10 @@ final class Formatted {
     private Node prose(Markdown.Inline text, Length size) {
         List<Span> spans = new ArrayList<>();
         for (Markdown.Style s : text.styles()) {
-            // Weight and slope as well as colour: the atlas bakes one face today, and the day it bakes a bold and an
-            // italic the faces arrive here with no change.
+            // Set in the faces themselves: the editor bakes Noto Sans Bold, Italic and Bold Italic (Recipes.fonts).
             spans.add(switch (s.mark()) {
-                case BOLD -> new Span(s.start(), s.end(), color(Role.INK), null, false, 700, null);
-                case ITALIC -> new Span(s.start(), s.end(), color(Look.EMPHASIS), null, false, 0, FontSet.Slope.ITALIC);
+                case BOLD -> Span.bold(s.start(), s.end());
+                case ITALIC -> Span.italic(s.start(), s.end());
                 case CODE -> new Span(s.start(), s.end(), color(Role.INK), color(Role.WELL), false);
                 case LINK -> new Span(s.start(), s.end(), color(Role.ACCENT), null, true);
                 case STRIKE -> Span.foreground(s.start(), s.end(), color(Role.FAINT));
@@ -180,7 +178,7 @@ final class Formatted {
         return gui.text(text.text())
                 .width(Length.FILL)
                 .textSize(size)
-                .textColor(color(Look.PROSE))
+                .textColor(color(Role.INK))
                 .wordWrap(true)
                 .spans(spans);
     }

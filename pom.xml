@@ -263,6 +263,43 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <!--
+              This application's fonts, which it carries and no other application does: Noto Sans in Regular, Bold,
+              Italic and Bold Italic (the formatted view's emphasis and headings), and Noto Sans Mono Regular, from
+              fonts/ (the official notofonts releases, OFL). Every glyph each face maps, one atlas per face, listed in
+              fonts.json beside them and read by Recipes.fonts. Baked once and committed: the build skips a face whose
+              outputs are newer than its font, and prints each face's cost and the total.
+            -->
+            <plugin>
+                <groupId>dev.vexelray</groupId>
+                <artifactId>vexelray-msdf-maven-plugin</artifactId>
+                <version>${vexelray.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-fonts</id>
+                        <goals>
+                            <goal>generate-atlas</goal>
+                        </goals>
+                        <configuration>
+                            <outputDir>${project.basedir}/src/main/resources/dev/vexelray/demo/editor/fonts</outputDir>
+                            <families>
+                                <family>
+                                    <name>sans</name>
+                                    <sources><source>${project.basedir}/fonts</source></sources>
+                                    <match>Noto Sans</match>
+                                    <styles>regular bold italic bold-italic</styles>
+                                </family>
+                                <family>
+                                    <name>mono</name>
+                                    <sources><source>${project.basedir}/fonts</source></sources>
+                                    <match>Noto Sans Mono</match>
+                                    <styles>regular</styles>
+                                </family>
+                            </families>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- The edition's own sources (TextEditorApp): src/edition-debug, or src/edition-release under -Pnative-release. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>

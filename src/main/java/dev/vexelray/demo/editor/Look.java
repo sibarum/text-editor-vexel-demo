@@ -120,21 +120,6 @@ final class Look {
         return Oklab.polar(level.l(), 0.070, p.accent().hueDegrees()).toColor();
     };
 
-    /**
-     * Prose in the formatted view: the ink a step softer, so that strong text, set in the full ink, stands out from
-     * it. The atlas has one weight and one slope, so a bold face alone would not show.
-     */
-    static final Role PROSE = p -> {
-        Oklab ink = Oklab.of(p.text(0));
-        return ink.atLightness(ink.l() - 0.11).toColor();
-    };
-
-    /**
-     * Emphasis in the formatted view: a warm gold at the accent's lightness, a second voice beside the accent's links
-     * rather than another shade of them — the framework template's choice for its Markdown, for the same reason.
-     */
-    static final Role EMPHASIS = p -> Oklab.polar(0.8200, 0.1100, 85.00).toColor();
-
     /** A scrollbar thumb: level 5 ({@code #313a47}), where the framework's GRIP is a loud level 10. */
     static final Role THUMB = p -> p.surface(5);
 
