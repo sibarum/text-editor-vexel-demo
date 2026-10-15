@@ -6,13 +6,11 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.text.Document;
 import dev.vexelray.gui.core.text.Whitespace;
-import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.TextField;
 import sibarum.concordance.index.Source;
 import sibarum.atchung.Subscription;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -42,9 +40,8 @@ final class Buffer implements AutoCloseable {
 
     final long id;
     final TextField field;
-    /** What the tab shows: where the file is, over the field. */
+    /** What the tab shows: the field, on the card. */
     final Node page;
-    private final Breadcrumb<Path> crumbs;
     private final Highlighter highlighter;
     private final Outline outline;
     private final Subscription dirtyWatch;
@@ -59,8 +56,6 @@ final class Buffer implements AutoCloseable {
     private volatile boolean unsavedWrite;
     /** The text the highlighter was last asked about, so a span-only change does not ask again. */
     private volatile String highlighted;
-    /** The path and folder the breadcrumb was last drawn for, so an unchanged one is not rebuilt. */
-    private volatile List<Path> placed;
 
     /**
      * @param dirty told whether the document differs from what is on disk, each time that changes
@@ -69,7 +64,7 @@ final class Buffer implements AutoCloseable {
      *                pathless; null for a file
      */
     Buffer(Gui gui, long id, Path path, TextFile.Loaded content, boolean wrap,
-           Consumer<Boolean> dirty, Consumer<Position> caret, Consumer<Path> reveal, Source library) {
+           Consumer<Boolean> dirty, Consumer<Position> caret, Source library) {
         this.id = id;
         this.path = library == null ? path : null;
         this.library = library;
@@ -93,15 +88,10 @@ final class Buffer implements AutoCloseable {
         field.node().width(Length.FILL).height(Length.FILL).textSize(Type.CODE)
                 .background(gui.theme().color(Look.CARD));
         this.ringWatch = Look.ring(gui, field.node());
-        this.crumbs = new Breadcrumb<Path>(gui, p -> {
-            Path name = p.getFileName();
-            return name == null ? p.toString() : name.toString();
-        }).maxSegments(10).onNavigate(reveal);
-        crumbs.node().padding(Length.ZERO, Type.TIGHT);
         this.page = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .background(gui.theme().color(Look.CARD))
-                .children(crumbs.node(), field.node());
+                .children(field.node());
         this.highlighter = new Highlighter(gui, field);
         // A new outline can change the scope under a caret that has not moved, so it says where the caret is again.
         this.outline = new Outline(gui, field, this::path, () -> caret.accept(position()));
@@ -227,39 +217,6 @@ final class Buffer implements AutoCloseable {
     /** What this document declares, from its text as it is now. Empty for one that is not Java. */
     List<sibarum.concordance.index.Symbol> declarations() {
         return outline.declarations();
-    }
-
-    /**
-     * Point the breadcrumb at where this file is: from the navigator's folder down when the file is inside it, the
-     * folder itself left out, and from the root of the drive otherwise. Nothing for a file never saved.
-     */
-    void place(Path folder) {
-        Path file = path;
-        List<Path> key = java.util.Arrays.asList(file, folder);
-        if (key.equals(placed)) {
-            return;
-        }
-        placed = key;
-        crumbs.path(chain(file, folder));
-    }
-
-    static List<Path> chain(Path file, Path folder) {
-        if (file == null) {
-            return List.of();
-        }
-        Path abs = file.toAbsolutePath().normalize();
-        Path base = folder == null ? null : folder.toAbsolutePath().normalize();
-        boolean inside = base != null && abs.startsWith(base) && !abs.equals(base);
-        Path at = inside ? base : abs.getRoot();
-        List<Path> chain = new ArrayList<>();
-        if (!inside) {
-            chain.add(at);
-        }
-        for (Path part : at.relativize(abs)) {
-            at = at.resolve(part);
-            chain.add(at);
-        }
-        return chain;
     }
 
     void wordWrap(boolean wrap) {

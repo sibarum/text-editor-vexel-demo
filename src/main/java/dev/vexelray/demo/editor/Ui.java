@@ -73,12 +73,10 @@ final class Ui {
         }
 
         navigator = new Navigator(gui, motion);
-        workspace = new Workspace(gui, motion, model,
-                p -> {
-                    status.text(Landmarks.STATUS_SCOPE, p.scope());
-                    status.text(Landmarks.STATUS_POSITION, "Ln " + p.line() + ", Col " + p.column());
-                },
-                navigator::reveal);
+        workspace = new Workspace(gui, motion, model, p -> {
+            status.text(Landmarks.STATUS_SCOPE, p.scope());
+            status.text(Landmarks.STATUS_POSITION, "Ln " + p.line() + ", Col " + p.column());
+        });
 
         // In Open the editor steps aside for a picture of the folder being considered: the two share the place
         // beside the navigator, one showing at a time, and the tabs keep everything they had while hidden.

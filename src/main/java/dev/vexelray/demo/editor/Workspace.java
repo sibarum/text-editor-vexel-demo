@@ -4,10 +4,13 @@ import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.InteractionState;
+import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.layout.NodeLayout;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.icons.Icon;
 import dev.vexelray.gui.widget.Cue;
+import dev.vexelray.gui.widget.IconButton;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.text.TextLayout;
 import sibarum.concordance.index.Source;
@@ -46,8 +49,9 @@ final class Workspace {
     private final Motion motion;
     private final Color accent;
     private final Tabs tabs;
+    /** The Run button over the tabs; what it offers is {@link Actions}'. */
+    private final IconButton run;
     private final Node card;
-    private final Consumer<Path> reveal;
     private final AtomicLong ids = new AtomicLong();
     private final Consumer<Buffer.Position> caret;
 
@@ -79,27 +83,33 @@ final class Workspace {
     private volatile boolean wrap = true;
 
     /**
-     * @param caret  told where the caret is in the document in front
-     * @param reveal asked to show a folder a breadcrumb was clicked on
+     * @param caret told where the caret is in the document in front
      */
-    Workspace(Gui gui, Motion motion, Model model, Consumer<Buffer.Position> caret, Consumer<Path> reveal) {
+    Workspace(Gui gui, Motion motion, Model model, Consumer<Buffer.Position> caret) {
         this.gui = gui;
         this.motion = motion;
         this.accent = gui.theme().color(Role.ACCENT);
         this.model = model;
         this.caret = caret;
-        this.reveal = reveal;
         this.tabs = new Tabs(gui).closable(false).transition(Tabs.slide(motion.change)).skin(this::paintHeader);
         tabs.node().width(Length.FILL).height(Length.FILL);
         // The bar and the pages are both CHROME already, which is this design's card; the card itself is the
         // rounded edge round the two.
+        // Over the tabs, a row of commands that act on the document in front and its project: Run, for now.
+        this.run = new IconButton(gui, Icon.PLAY, "Run").tip("Run");
+        gui.landmark(Landmarks.RUN, run.node());
+        Node tools = gui.row()
+                .width(Length.FILL)
+                .padding(Length.dp(2), Type.TIGHT)
+                .alignItems(AlignItems.CENTER)
+                .children(run.node());
         this.card = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .background(gui.theme().color(Look.CARD))
                 .corner(Type.CORNER)
                 .border(Type.RULE, gui.theme().color(Look.RIM))
                 .clip(true)
-                .children(tabs.node());
+                .children(tools, tabs.node());
         gui.landmark(Landmarks.TABS, tabs.node());
         // Delivered on a worker, after the fact: resolve what is in front now rather than trusting the index,
         // which a close between the click and this may have moved.
@@ -114,6 +124,10 @@ final class Workspace {
 
     Node node() {
         return card;
+    }
+
+    IconButton runButton() {
+        return run;
     }
 
     Tabs tabs() {
@@ -150,8 +164,7 @@ final class Workspace {
                         caret.accept(position);
                     }
                 },
-                reveal, library);
-        buffer.place(model.doc().folder());
+                library);
         Doc.Entry entry = new Doc.Entry(id, path, false, buffer.language(),
                 library == null ? null : buffer.name());
         Buffer replaced = null;
@@ -322,10 +335,6 @@ final class Workspace {
             Node header = headers.get(e.id());
             if (header != null) {
                 header.text(e.title());
-            }
-            Buffer b = byId.get(e.id());
-            if (b != null) {
-                b.place(doc.folder());
             }
         }
     }

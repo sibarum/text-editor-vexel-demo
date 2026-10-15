@@ -40,6 +40,15 @@ final class Landmarks {
     static final String STATUS_LANGUAGE = "status.language";
     static final String STATUS_POSITION = "status.position";
 
+    /** The Run button over the tabs, which opens the menu of what can be run here. */
+    static final String RUN = "run";
+
+    /** The console window's tab bar and its pages: one run each. The console is {@code window console}. */
+    static final String CONSOLE_TABS = "console.tabs";
+
+    /** The console's settings button, which says when finished runs close. */
+    static final String CONSOLE_SETTINGS = "console.settings";
+
     private Landmarks() {
     }
 }

@@ -145,61 +145,85 @@ final class Look {
 
     // ---------------------------------------------------------------- theme
 
+    /** The editor's look: see {@link #theme}. */
+    static final Theme THEME = theme(PALETTE);
+
+    // -------------------------------------------------------------- console
+
+    /**
+     * The console's page: a neutral grey, no hue at all, a good deal lighter than the editor's near-black. The console
+     * is where a program's output is read, and the editor's palette there would make it look like one more document;
+     * grey says at a glance that this is the other window, and the output's own colours still read on it.
+     */
+    private static final Oklab CONSOLE_PAGE = Oklab.polar(0.2600, 0.0, 0.0);
+
+    /** The console's ink: the editor's lightness, with its hue taken out. */
+    private static final Oklab CONSOLE_INK = Oklab.polar(0.9400, 0.0, 0.0);
+
+    /** The console's whole palette: the editor's, on the grey, so the accent and the steps between surfaces carry over. */
+    static final Palette CONSOLE_PALETTE =
+            new Palette(CONSOLE_PAGE, STEP / 2, CONSOLE_INK, FADE, ACCENT, ACTION, DANGER, DEPTH, SHADOW_ALPHA);
+
+    /** The console window's look: {@link #THEME}'s, on {@link #CONSOLE_PALETTE}. */
+    static final Theme CONSOLE = theme(CONSOLE_PALETTE);
+
     /**
      * Lit surfaces off, letterpress off: the design is flat. Selection, grip and line are overridden by identity --
      * {@link Theme}'s own advice for special-casing a role -- which reaches every widget that names them.
      */
-    static final Theme THEME = new Theme() {
-        private final Theme base = Theme.of(PALETTE, Shading.ON_DARK, Relief.STANDARD, false, false);
+    private static Theme theme(Palette palette) {
+        return new Theme() {
+            private final Theme base = Theme.of(palette, Shading.ON_DARK, Relief.STANDARD, false, false);
 
-        @Override
-        public Palette palette() {
-            return base.palette();
-        }
-
-        @Override
-        public Shading shading() {
-            return base.shading();
-        }
-
-        @Override
-        public Relief relief() {
-            return base.relief();
-        }
-
-        @Override
-        public boolean lit() {
-            return base.lit();
-        }
-
-        @Override
-        public boolean letterpress() {
-            return base.letterpress();
-        }
-
-        @Override
-        public Color color(Role role) {
-            return base.color(mapped(role));
-        }
-
-        @Override
-        public Color color(Role role, InteractionState state) {
-            return base.color(mapped(role), state);
-        }
-
-        private Role mapped(Role role) {
-            if (role == Role.SELECTION) {
-                return SELECTED;
+            @Override
+            public Palette palette() {
+                return base.palette();
             }
-            if (role == Role.GRIP) {
-                return THUMB;
+
+            @Override
+            public Shading shading() {
+                return base.shading();
             }
-            if (role == Role.LINE) {
-                return RIM;
+
+            @Override
+            public Relief relief() {
+                return base.relief();
             }
-            return role;
-        }
-    };
+
+            @Override
+            public boolean lit() {
+                return base.lit();
+            }
+
+            @Override
+            public boolean letterpress() {
+                return base.letterpress();
+            }
+
+            @Override
+            public Color color(Role role) {
+                return base.color(mapped(role));
+            }
+
+            @Override
+            public Color color(Role role, InteractionState state) {
+                return base.color(mapped(role), state);
+            }
+
+            private Role mapped(Role role) {
+                if (role == Role.SELECTION) {
+                    return SELECTED;
+                }
+                if (role == Role.GRIP) {
+                    return THUMB;
+                }
+                if (role == Role.LINE) {
+                    return RIM;
+                }
+                return role;
+            }
+        };
+    }
 
     private Look() {
     }

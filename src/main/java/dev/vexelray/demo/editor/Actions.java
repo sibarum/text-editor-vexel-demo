@@ -2,6 +2,10 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.input.ClickEvent;
+import dev.vexelray.gui.core.input.MenuItem;
+import dev.vexelray.gui.core.layout.NodeLayout;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.nfd.FileDialog;
 import sibarum.concordance.index.Index;
@@ -11,6 +15,7 @@ import sibarum.concordance.index.Symbol;
 import sibarum.probe.Log;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
+import sibarum.tactroller.api.MouseButton;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -47,6 +52,7 @@ final class Actions {
     private final Navigator nav;
     private final ProjectIndex concordance;
     private final Session session;
+    private final Console console;
     private final Executor io;
     /** The root last asked for — set as it is asked for, where the navigator's own folder arrives a listing later. */
     private volatile Path root;
@@ -61,7 +67,7 @@ final class Actions {
     private static final List<FileDialog.Filter> TEXT = List.of(FileDialog.Filter.of("Text files",
             Highlighter.knownExtensions().stream().sorted().toArray(String[]::new)));
 
-    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session, Dialogs dialogs) {
+    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session, Dialogs dialogs, Console console) {
         this.gui = gui;
         this.dialogs = dialogs;
         this.model = model;
@@ -70,11 +76,13 @@ final class Actions {
         this.nav = ui.navigator();
         this.concordance = concordance;
         this.session = session;
+        this.console = console;
         this.io = gui.offload();
         // From the navigator the keyboard stays in the navigator, so walking it with the arrows keeps walking.
         nav.onOpenFile(file -> open(file, false));
         nav.onOpenFolder(this::switchRoot);
         nav.onOpening((proceed, cancel) -> settleUnsaved(ws.all(), proceed, cancel));
+        ws.runButton().onPress(this::runMenu);
         ws.tabs().onContextMenu((index, menu) -> {
             List<Buffer> all = ws.all();
             if (index < 0 || index >= all.size()) {
@@ -110,6 +118,7 @@ final class Actions {
         gui.shortcut(Key.B, ui::toggleNavigator, Modifier.CONTROL);
         gui.shortcut(Key.E, nav::focus, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.Z, this::toggleWrap, Modifier.ALT);
+        gui.shortcut(Key.F5, this::runMenu);
         // The field's own Ctrl+Enter follows a hyperlink under the caret, and the editor gives its fields none;
         // without a link it fell through to inserting a newline, which this claim now outranks.
         gui.shortcut(Key.ENTER, this::goToDeclaration, Modifier.CONTROL);
@@ -396,6 +405,42 @@ final class Actions {
         Buffer first = buffers.getFirst();
         List<Buffer> rest = buffers.subList(1, buffers.size());
         save(first, () -> saveAll(rest, done, failed), failed);
+    }
+
+    // ------------------------------------------------------------------ running
+
+    /**
+     * The Run button, and F5: what can be run for the folder and the document in front ({@link Runs}), as a menu under
+     * the button. Worked out on the offload lane, since it reads the disk.
+     */
+    void runMenu() {
+        Buffer b = ws.front();
+        Path project = model.doc().folder();
+        Path file = b == null ? null : b.path();
+        String text = b == null ? null : b.field.text();
+        io.execute(() -> {
+            List<MenuItem> items = new ArrayList<>();
+            for (Runs.Run r : Runs.offered(project, file, text)) {
+                items.add(r == null ? MenuItem.SEPARATOR : MenuItem.of(r.label(), () -> run(r)));
+            }
+            if (items.isEmpty()) {
+                items.add(MenuItem.disabled("Nothing to run here"));
+            }
+            Node button = ws.runButton().node();
+            NodeLayout at = button.layout();
+            float x = at.present() ? at.rect().x() : 0f;
+            float y = at.present() ? at.rect().y() + at.rect().h() : 0f;
+            gui.menus().present(new ClickEvent(button.id(), MouseButton.LEFT, x, y), items);
+        });
+    }
+
+    /**
+     * Run {@code run} in the console, once every document that has a file and unsaved work has been saved: what runs
+     * is what is on disk, so it has to be what is on screen. A save that fails runs nothing.
+     */
+    void run(Runs.Run run) {
+        List<Buffer> unsaved = ws.all().stream().filter(b -> b.dirty() && b.path() != null && !b.readOnly()).toList();
+        saveAll(unsaved, () -> console.run(run), () -> { });
     }
 
     // ------------------------------------------------------------------ closing

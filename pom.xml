@@ -22,6 +22,7 @@
         <vexelray.version>0.1.1-SNAPSHOT</vexelray.version>
         <tactroller.version>1.1-SNAPSHOT</tactroller.version>
         <concordance.version>0.1.1-SNAPSHOT</concordance.version>
+        <vex-suite-common.version>0.1.1-SNAPSHOT</vex-suite-common.version>
         <junit.version>5.11.4</junit.version>
 
         <app.mainClass>dev.vexelray.demo.editor.TextEditor</app.mainClass>
@@ -141,6 +142,22 @@
             <groupId>sibarum.concordance</groupId>
             <artifactId>concordance-index</artifactId>
             <version>${concordance.version}</version>
+        </dependency>
+
+        <!-- The console's terminal: the pseudoconsole a run's program is started on, the VT screen its output is read
+             into, and the screen drawn as a node (the tty package), shared with MainFrame. The suite's picture
+             decoder comes with it and is excluded, since nothing here shows a picture. Installed to the local .m2 by
+             `mvn install` in the sibling vex-suite-common repo. -->
+        <dependency>
+            <groupId>dev.sibarum</groupId>
+            <artifactId>vex-suite-common</artifactId>
+            <version>${vex-suite-common.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>dev.vexelray.codec</groupId>
+                    <artifactId>vexelray-codec-image</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

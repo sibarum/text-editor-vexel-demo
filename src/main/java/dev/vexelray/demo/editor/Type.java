@@ -38,8 +38,11 @@ final class Type {
     /** A control's label. */
     static final Length LABEL = Length.rem(0.8125f);
 
+    /** The text being edited, in root ems: what the console's output is drawn at too, as a picture in pixels. */
+    static final float CODE_REM = 0.875f;
+
     /** The text being edited. */
-    static final Length CODE = Length.rem(0.875f);
+    static final Length CODE = Length.rem(CODE_REM);
 
     /** A note, a subtitle, a hint. */
     static final Length SMALL = Length.rem(0.6875f);

@@ -6,6 +6,7 @@ import dev.vexelray.framework.core.Launch;
 import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
+import dev.vexelray.framework.shell.Windows;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
@@ -69,30 +70,43 @@ final class Recipes {
     }
 
     /**
+     * The console, where the Run menu's runs are shown: a window of its own, declared now so its tree is built beside
+     * the main one, and opened by the first run. Its {@code tick} is the frame's, and it is {@code AutoCloseable}, so
+     * whatever is still running ends with the application.
+     */
+    @Provides
+    Console console(Windows windows, Settings settings, Dialogs dialogs) {
+        return new Console(windows.named(Console.DECLARED), settings, dialogs);
+    }
+
+    /**
      * Every command, and the chords for them. The tree always has a document in it: an empty Untitled one, until
      * the session or a dialog brings something else.
      */
     @Provides
-    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session, Dialogs dialogs) {
-        Actions actions = new Actions(gui, model, ui, index, session, dialogs);
+    Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session, Dialogs dialogs,
+                    Console console) {
+        Actions actions = new Actions(gui, model, ui, index, session, dialogs, console);
         actions.shortcuts();
         ui.workspace().untitled();
         return actions;
     }
 
     /**
-     * Arm the main window's close gate, let the index keep what it learns, and bring back last time's session. Takes
-     * the {@code Shell} to be last: the window and the clipboard exist, and a tree built headless for a test does not
-     * restore a session or write one, nor save an index. Indexes go beside the settings, one per project root; jars
-     * go to Concordance's cache, which every project on the machine shares.
+     * Arm the main window's close gate, connect the console to the frame loop's wake, let the index keep what it
+     * learns, and bring back last time's session. Takes the {@code Shell} to be last: the window and the clipboard
+     * exist, and a tree built headless for a test does not restore a session or write one, nor save an index.
+     * Indexes go beside the settings, one per project root; jars go to Concordance's cache, which every project on
+     * the machine shares.
      *
      * <p>Returns the session's restore as a value only because a provider must return something; see
      * docs/framework-notes.md, FN-3.
      */
     @Provides
     Restored restore(Shell shell, Actions actions, Session session, Launch launch, Gui gui, Settings settings,
-                     ProjectIndex index) {
+                     ProjectIndex index, Console console) {
         shell.windows().main().onClose(actions::guardClose);
+        shell.wake(console);
         index.persist(settings.path().resolveSibling("index"), JarCache.defaultLocation());
         List<Path> extra = launch.rest().stream().map(Path::of).toList();
         session.restore(actions, extra, gui.offload());

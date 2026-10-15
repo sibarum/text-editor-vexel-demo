@@ -46,6 +46,7 @@ mvn compile exec:exec -Dautomation=0                      # with a driving socke
 | Ctrl+Enter | go to the declaration of the name under the caret (Java), the project's or a library's (shown read-only, decompiled if it has no sources); again for the next one |
 | Ctrl+F | find in the document (Enter / Shift+Enter step, Escape closes) |
 | Ctrl+Z / Ctrl+Y | undo / redo |
+| F5 | the Run menu (see Running things) |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
 
 In the text, the editing is the framework's `TextField` and works the way editors do: double-click selects a
@@ -99,6 +100,40 @@ corrupted on save. Line endings are kept: a CRLF file saves as CRLF. Tabs become
 document is soft-tab only, and the status line says so when it happens. A save writes beside the file and moves
 over it, so a failure leaves the old file whole.
 
+## Running things
+
+The ▶ button over the tabs (or F5) opens a menu of what can be run for the folder in the navigator and the
+document in front (`Runs`):
+
+- **Run *Class*.main()**, when the document is a Java file with a `main` method: through Maven
+  (`mvn -q compile exec:java -Dexec.mainClass=…`, on the test class path for a file under `src/test`) when the file
+  is in a Maven module, so its dependencies are there, and with the JDK's source launcher (`java File.java`)
+  otherwise.
+- For a Maven project (the folder's `pom.xml`, or else the module the document is in): **Compile**, **Clean
+  Install**, **Package** unless the packaging is `pom`, **Execute** (`mvn compile exec:exec`) when the pom configures
+  exec-maven-plugin's `exec` goal, and **Run Recent Build** when `target/` holds the newest executable or runnable
+  jar.
+- On Windows, the programs in the project, four folders deep at most and without the folders the navigator leaves
+  out: executables that really are ones, PowerShell scripts and batch files. A script in front is offered first.
+
+Before anything runs, every document with a file and unsaved work is saved, since what runs is what is on disk.
+
+Runs are shown in the **console**, a window of its own in a neutral grey with one tab per run, the newest in front;
+several can run at once. Its first line is the command and the folder it ran in, and its last says how it ended:
+*Finished*, *Failed* with the exit code, or *Stopped*. On Windows a run has a real console (a pseudoconsole, the
+same terminal MainFrame draws, from vex-suite-common's `tty`), so Maven colours its output and a program that asks a
+question can be answered by typing. Ctrl+C copies a selection and otherwise interrupts the run; a tab's menu has
+Stop, Run again, Copy output and Close. When a run ends its program and console are gone, but the tab keeps the
+output, to scroll, select and copy.
+
+The console has no new-tab button: tabs come from the Run menu. Finished runs close by themselves according to the
+settings button in its title bar: keep the last 1, 3, 5 (the default), 10 or all of them, and close each after 5
+minutes, 30 (the default), 2 hours or never. The tab in front is never closed under you, nor a run still going.
+Closing the console window asks before stopping anything still running, and clears it.
+
+To a script, the button is the landmark `run`, the console is `ottermate --window console` (or `window console`),
+its tabs `console.tabs` and its settings button `console.settings`.
+
 ## How it is put together
 
 | File | What it is |
@@ -106,8 +141,10 @@ over it, so a failure leaves the old file whole.
 | `Recipes.java` | **what the application builds**, one `@Provides` method per part. `TextEditorWiring` is generated from it at compile time, and each part's phase is inferred from what it takes |
 | `Doc.java`, `Model.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value changed only by relative edits |
 | `Ui.java` | the window: title bar, navigator beside the tabs, status line. `show(Doc)` writes everything derived from the session |
-| `Workspace.java` | the tab bar and one `Buffer` per tab, kept in step |
+| `Workspace.java` | the Run button, the tab bar and one `Buffer` per tab, kept in step |
 | `Buffer.java` | one document: its `TextField`, its highlighter, its path and line endings |
+| `Runs.java` | what the Run menu offers for a folder and a document, worked out from what is on disk |
+| `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `Actions.java` | every command, and the questions some of them ask first, through the framework's `Dialogs`; also the main window's close gate |
@@ -141,6 +178,7 @@ Installed locally rather than downloaded, so `mvn install` in each sibling has t
 | `vexelray-framework-shell`, `-automation`, `-processor` | the application edge, the driving socket, and the processor that writes the wiring |
 | `vexelray-gui-widget`, `-krono`, `-automation` | the widgets (`Tabs`, `TreeView`, `TextField`, `SplitPane`, `StatusBar`), the clock, the driver |
 | `vexelray-gui-nfd` | the OS's file dialogs |
+| `vex-suite-common` (its `tty` package; the picture decoder excluded) | the console's terminal, shared with MainFrame |
 | `org.netbeans.external:org.eclipse.tm4e.core-0.14.0` + `gson`, `joni`, `snakeyaml-engine` | the TextMate tokenizer and the runtime dependencies it does not declare |
 | `tactroller-atchung`, `tactroller-clipboard` | input onto the bus, and the OS clipboard |
 | `vexelray-os-*`, `tactroller-*` | picked by an OS-activated profile |
