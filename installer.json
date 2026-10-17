@@ -48,7 +48,8 @@
           { "extension": ".patch", "description": "Patch File", "contentType": "text/x-diff", "icon": "src/main/rc/file-plain-text.ico" },
           { "extension": ".dockerfile", "description": "Dockerfile", "icon": "src/main/rc/file-plain-text.ico" }
         ]
-      }
+      },
+      { "name": "notices", "source": "THIRD-PARTY-NOTICES.txt" }
     ]
   }
 }
