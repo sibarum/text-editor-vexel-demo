@@ -36,7 +36,7 @@ final class Recipes {
     /** The look, and the smallest window this UI is still coherent in. */
     @Provides
     Appearance look() {
-        return Appearance.of(Look.THEME, Length.em(TextEditor.MIN_W_EM), Length.em(TextEditor.MIN_H_EM));
+        return Appearance.of(Look.THEME, Length.rem(TextEditor.MIN_W_EM), Length.rem(TextEditor.MIN_H_EM));
     }
 
     /**
