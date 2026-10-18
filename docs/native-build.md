@@ -5,19 +5,15 @@ mvn -Pnative-release package -DskipTests   # target/text-editor.exe, about 43 MB
 mvn -Pnative package -DskipTests           # target/text-editor-debug.exe: for ottermate
 ```
 
-Two editions of the same code:
+Two builds of the same code:
 
-- **release** is a Windows GUI subsystem program (no console window ever) built without the automation module, so
-  it cannot open a driving socket. `src/edition-release/` (a `TextEditorApp` naming no `AutomationStarter`) is
-  compiled instead of `src/edition-debug/`, and `vexelray-framework-automation` and `vexelray-gui-automation` get
-  scope `test`, so they are on no runtime classpath and the image never sees them. `--automation=0` is still
-  accepted by the launch parser and does nothing. `installer.json` points at this exe.
-- **debug** is a console subsystem program with automation: `text-editor-debug.exe --automation=0` prints
+- **release** is a Windows GUI subsystem program (no console window ever). `installer.json` points at this exe.
+- **debug** is a console subsystem program: `text-editor-debug.exe --automation=0` prints
   `automation: localhost:<port>` on stdout, which `ottermate --launch` reads. A GUI-subsystem exe has no stdout,
   which is why the two cannot be one binary.
 
-The plain JVM build, tests and `exec:exec` are the debug edition (`automation.scope` compile, `edition.src`
-`src/edition-debug/java`; the release profile overrides both properties).
+Both carry the automation sockets, off until the launch (`--automation`, `VEXELRAY_AUTOMATION`) or the title bar's
+plug switches them on; see the README's *Automation*.
 
 Under the GUI subsystem stdout and stderr are closed, and nothing here minds: logging goes to
 `target/logs/text-editor.log` or the user's log directory as before.
@@ -35,7 +31,7 @@ and `rc.exe` are MSVC's and on `PATH`; Git Bash's own `link.exe` is not the link
 - `-J-Djava.io.tmpdir=target/nitmp`: Windows Application Control blocks a new unsigned `.exe` under `%TEMP%`,
   and native-image's own probes are exactly that. `Unable to run 'WindowsDirectives.exe'` means this blocked
   a probe: retry.
-- `/SUBSYSTEM:WINDOWS` (release; the debug edition passes `/SUBSYSTEM:CONSOLE`) and `/ENTRY:mainCRTStartup`: no
+- `/SUBSYSTEM:WINDOWS` (release; the debug build passes `/SUBSYSTEM:CONSOLE`) and `/ENTRY:mainCRTStartup`: no
   console window, and the entry is not optional alongside WINDOWS (the linker would look for `WinMain`).
 - `src/main/rc/editor.rc` is compiled by `rc.exe` to `target/text-editor.res` and linked in: the file's icon, and
   `editor.manifest`, which declares the PerMonitorV2 DPI awareness java.exe declares. Without it the exe is

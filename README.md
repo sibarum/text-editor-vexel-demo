@@ -202,6 +202,33 @@ The grammars under `src/main/resources/grammars` are from microsoft/vscode (MIT,
 them). CSS and YAML are pinned to vscode 1.96.0 for reasons `Highlighter.loadGrammars` gives, and
 `GrammarBundleTest` fails if either is re-synced from main.
 
+## Automation
+
+The editor can be driven and read from outside, by a script, a macro or an agent, through the framework's two loopback
+sockets: **remote control** (the keys, clicks and reads a person has) and **diagnostics** (the flight recorder, the
+log, the Inspector). Both are in every build, the release one too, and both start off.
+
+- **Switched on by hand**: the plug in the title bar opens the switches, one per socket, each with a port (blank for
+  a free one).
+- **Switched on at launch**, for an agent that means to: `--automation=0` (both, on a free port),
+  `--automation.control=<port>`, `--automation.diagnostics=<port>`, or `VEXELRAY_AUTOMATION=0` in the environment.
+- **Not there at all**: `--automation.available=none` (or `control`, or `diagnostics`), or
+  `VEXELRAY_AUTOMATION_AVAILABLE` in the environment. A socket that is not available cannot be switched on by
+  anything, and with neither available the plug is gone.
+
+Whatever turned it on, **the plug's lamps say what each socket is doing**, remote control's (red) left of the plug and
+diagnostics' (blue) right:
+
+| Lamp | Means |
+| --- | --- |
+| none | off, and nothing has connected to it this session |
+| ring | open, and nothing has connected yet |
+| filled ring | open, and something is connected now |
+| ring with a grey dot | open; something was connected and has gone |
+| grey dot | off, after something had connected to it this session |
+
+The plug's tooltip and the switches' window say the same in words, with the port and how many are connected.
+
 ## Taking a screenshot
 
 Screenshots are `ottermate`'s: it photographs the running window on the application's own device.
@@ -243,7 +270,7 @@ more under automation. This application logs as `editor.files`, `editor.highligh
 
 ## Native build and installer
 
-`mvn -Pnative-release package` builds `target/text-editor.exe` (GUI subsystem, no automation; what ships) and `mvn -Pnative package` builds `target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
+`mvn -Pnative-release package` builds `target/text-editor.exe` (GUI subsystem; what ships) and `mvn -Pnative package` builds `target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
 prompt); see [docs/native-build.md](docs/native-build.md). `installer.json` describes the per-user installer
 for it (`vexelray-installer`), with `text-editor` added to `PATH`: `text-editor <folder or files...>` opens a new
 window, a folder as the navigator's root and files as tabs. It also registers the editor for plain-text and
