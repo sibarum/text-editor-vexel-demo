@@ -237,6 +237,15 @@
       "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
     },
     {
+      "glob": "dev/vexelray/demo/editor/fonts/fonts.json"
+    },
+    {
+      "glob": "dev/vexelray/demo/editor/fonts/*/*.json"
+    },
+    {
+      "glob": "dev/vexelray/demo/editor/fonts/*/*.rgba"
+    },
+    {
       "glob": "grammars/JSON.tmLanguage.json"
     },
     {
