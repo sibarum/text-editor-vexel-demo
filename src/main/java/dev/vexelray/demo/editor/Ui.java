@@ -34,6 +34,8 @@ final class Ui {
 
     /** The navigator's width on a first run. */
     private static final Length NAVIGATOR = Length.rem(16);
+    /** The hairline painted down the middle of the divider, the gap between the two cards. */
+    private static final Length DIVIDER_LINE = Length.dp(2);
 
     private final TitleBar titleBar;
     private final StatusBar status;
@@ -49,6 +51,8 @@ final class Ui {
 
     private volatile Consumer<ClickEvent> preferences;
     private volatile boolean navigatorShown = true;
+    /** A window on files alone: the navigator and its divider gone rather than dragged shut. See {@link #plain()}. */
+    private volatile boolean plain;
     private volatile float navigatorDp;
 
     Ui(Gui gui, Motion motion, Model model, TitleBar titleBar, Scratches scratches) {
@@ -111,7 +115,7 @@ final class Ui {
                 // The gap between the two cards is the divider: all of it is the target, a hairline is painted
                 // down its middle, and the line fades to the accent on hover and holds it for the whole drag.
                 .gutter(Type.GAP)
-                .line(Length.dp(2))
+                .line(DIVIDER_LINE)
                 .motion(motion.change)
                 .size(NAVIGATOR);
         split.node().width(Length.FILL).height(Length.FILL);
@@ -179,17 +183,50 @@ final class Ui {
         return preview;
     }
 
-    /** Show or hide the navigator. Hidden is the split dragged shut, so the width it had comes back with it. */
-    void showNavigator(boolean show) {
-        if (show == navigatorShown) {
+    /**
+     * Show or hide the navigator. Hidden is the split dragged shut, so the width it had comes back with it. Either way
+     * the window stops being {@link #plain()}, which is how a folder arriving brings the navigator back.
+     */
+    synchronized void showNavigator(boolean show) {
+        if (show == navigatorShown && !plain) {
             return;
+        }
+        if (plain) {
+            plain = false;
+            navigator.node().visible(true);
+            split.gutter(Type.GAP).line(DIVIDER_LINE);
         }
         navigatorShown = show;
         split.size(show ? Length.dp(Math.max(navigatorDp, 120f)) : Length.ZERO);
     }
 
-    void toggleNavigator() {
-        showNavigator(!navigatorShown);
+    synchronized void toggleNavigator() {
+        showNavigator(!navigatorShown());
+    }
+
+    /**
+     * A plain window: the tabs and nothing beside them, for a window opened on files alone ({@code vex notes.md}).
+     * Not the split dragged shut, which leaves the gap between the cards and a divider to drag open again, but the
+     * navigator out of the layout and the divider with no width, so the editor has the whole of the window.
+     *
+     * <p>The navigator's width is not touched, since only the end of a drag records one, so it comes back at the width
+     * it had when {@link #showNavigator} ends this: a folder opened by any route, Ctrl+B, or the scratches.
+     */
+    synchronized void plain() {
+        plain = true;
+        navigatorShown = false;
+        navigator.node().visible(false);
+        split.size(Length.ZERO).gutter(Length.ZERO).line(Length.ZERO);
+    }
+
+    /** Whether the navigator is on screen: shown, and the window not {@link #plain()}. */
+    boolean navigatorShown() {
+        return navigatorShown && !plain;
+    }
+
+    /** Whether the window is {@link #plain()}, the navigator out of the layout altogether. */
+    boolean isPlain() {
+        return plain;
     }
 
     /** Write everything derived from the session. One method taking the whole value, so no two fields can disagree. */

@@ -368,6 +368,15 @@ final class Actions {
         }
     }
 
+    /**
+     * Make this a plain window, the tabs without the navigator: a launch on files alone, somebody's "edit this". More
+     * files opened keep it plain; a folder made the root, by whatever route, brings the navigator back through
+     * {@link #showFolder}, and so do Ctrl+B and the scratches.
+     */
+    void plain() {
+        ui.plain();
+    }
+
     /** Put the navigator in Open, to pick a root. */
     void chooseRoot() {
         nav.mode(Navigator.Mode.OPEN);

@@ -23,8 +23,15 @@ With paths, to open them (a folder becomes the navigator's root):
 mvn compile exec:exec "-Dapp.args=C:/work/project C:/work/project/notes.md"
 ```
 
-The window comes back where you left it, with the folder and the files you had open, the one in front still in
-front. Unsaved work is never remembered — closing the window asks about it first.
+Files alone, with no folder among them, make a **plain window**: the tabs and nothing beside them, the navigator
+gone and the editor the whole width. Opening more files keeps it plain. A folder opened in it — the folder dialog
+(Ctrl+Shift+O) — brings the navigator back on that folder, at the width it had, with the files still open beside
+it; so does Ctrl+B, or Alt+N for the scratches.
+
+Started with no paths, the window comes back where you left it, with the folder and the files you had open, the one
+in front still in front. One started with paths opens just those and remembers nothing, a folder opened in it later
+included, so it never overwrites that session. Unsaved work is never remembered — closing the window asks about it
+first.
 
 ```
 mvn test                                                  # the model, files, grammars, and the real tree headless
@@ -42,7 +49,7 @@ mvn -Plarge-file-bench test                               # the large-file bench
 | Ctrl+S / Ctrl+Shift+S | save / save as |
 | Ctrl+W | close the tab (asks if it is unsaved) |
 | Ctrl+Tab, Ctrl+PageDown / Ctrl+Shift+Tab, Ctrl+PageUp | next / previous tab |
-| Ctrl+B | show or hide the navigator |
+| Ctrl+B | show or hide the navigator (in a plain window, show it) |
 | Ctrl+Shift+E | put the keyboard in the navigator |
 | Alt+Z | word wrap on or off |
 | Ctrl+Shift+V | a Markdown document formatted, or back to its source (the font button over the tabs, there only for Markdown, does the same) |
@@ -310,7 +317,7 @@ more under automation. This application logs as `editor.files`, `editor.highligh
 `mvn -Pnative-release package` builds `target/text-editor.exe` (GUI subsystem; what ships) and `mvn -Pnative package` builds `target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
 prompt); see [docs/native-build.md](docs/native-build.md). `installer.json` describes the per-user installer
 for it (`vexelray-installer`), with `text-editor` added to `PATH`: `text-editor <folder or files...>` opens a new
-window, a folder as the navigator's root and files as tabs. It also registers the editor for plain-text and
+window, a folder as the navigator's root and files as tabs (files alone, a plain window). It also registers the editor for plain-text and
 highlighted file types (`.txt`, `.log`, `.md`, `.json`, `.xml`, `.yaml`, sources, ...): always under **Open with**,
 and the default only where no other program has claimed the type. Types Windows runs (`.js`, `.ps1`, `.bat`,
 `.cmd`, ...) are highlighted but never associated; the installer refuses them.

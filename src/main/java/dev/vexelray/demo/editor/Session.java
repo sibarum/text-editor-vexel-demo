@@ -150,9 +150,17 @@ final class Session {
      * user's, or Vexplore's, one new window per spawn): it opens just those, never arms, and so never writes. Two
      * windows would otherwise overwrite each other's session, and a one-file window would drag the last project's
      * tabs in.
+     *
+     * <p><b>Files alone make a plain window</b> ({@link Actions#plain}): the tabs and no navigator, since there is no
+     * project to show. It is decided here, before the first file is read, so the navigator is never seen to go. The
+     * window stays one that never writes when a folder is opened in it later and the navigator comes back: the
+     * session is the window started with no paths, which may well be open beside it.
      */
     void restore(Actions actions, List<Path> extra, Executor io) {
         boolean ephemeral = !extra.isEmpty();
+        if (ephemeral && extra.stream().noneMatch(Files::isDirectory)) {
+            actions.plain();
+        }
         String folder = ephemeral ? "" : settings.getString(FOLDER, "");
         List<String> files = ephemeral ? List.of() : settings.getList(FILES);
         String front = ephemeral ? "" : settings.getString(FRONT, "");

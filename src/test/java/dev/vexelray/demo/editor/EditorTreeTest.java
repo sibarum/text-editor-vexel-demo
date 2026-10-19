@@ -375,6 +375,55 @@ class EditorTreeTest {
         assertTrue(asked.isEmpty());
     }
 
+    @Test
+    void aLaunchOnAFileIsPlainUntilAFolderIsOpened() throws Exception {
+        Path script = Files.writeString(dir.resolve("env.ps1"), "$env:A = 1\n");
+        Path more = Files.writeString(dir.resolve("more.txt"), "more");
+        Path project = Files.createDirectories(dir.resolve("project"));
+        Ui ui = wiring.ui();
+        Actions actions = wiring.actions();
+
+        wiring.session().restore(actions, java.util.List.of(script), Runnable::run);
+        assertTrue(ui.isPlain());
+        assertFalse(ui.navigatorShown());
+        assertEquals(java.util.List.of("env.ps1"), tabNames());
+
+        actions.load(more);
+        eventually("more", () -> tabNames().equals(java.util.List.of("env.ps1", "more.txt")));
+        assertTrue(ui.isPlain(), "another file keeps the window plain");
+
+        // The folder dialog's route; the first root of a window joins the tabs it has rather than replacing them.
+        actions.switchRoot(project);
+        eventually("the navigator on the folder",
+                () -> ui.navigatorShown() && project.toAbsolutePath().normalize().equals(ui.navigator().folder()));
+        assertFalse(ui.isPlain());
+        assertEquals(java.util.List.of("env.ps1", "more.txt"), tabNames());
+    }
+
+    @Test
+    void aLaunchWithAFolderIsNotPlain() throws Exception {
+        Path project = Files.createDirectories(dir.resolve("project"));
+        Path file = Files.writeString(project.resolve("a.txt"), "a");
+        Ui ui = wiring.ui();
+        wiring.session().restore(wiring.actions(), java.util.List.of(project, file), Runnable::run);
+        assertFalse(ui.isPlain());
+        eventually("the navigator on the folder",
+                () -> ui.navigatorShown() && project.toAbsolutePath().normalize().equals(ui.navigator().folder()));
+    }
+
+    @Test
+    void ctrlBInAPlainWindowShowsTheNavigatorAndHidesItAsUsual() {
+        Ui ui = wiring.ui();
+        wiring.actions().plain();
+        assertFalse(ui.navigatorShown());
+        ui.toggleNavigator();
+        assertTrue(ui.navigatorShown());
+        assertFalse(ui.isPlain());
+        ui.toggleNavigator();
+        assertFalse(ui.navigatorShown());
+        assertFalse(ui.isPlain(), "Ctrl+B hides it as a split dragged shut, not as a plain window");
+    }
+
     private static String name(Buffer b) {
         return b == null || b.path() == null ? null : String.valueOf(b.path().getFileName());
     }
