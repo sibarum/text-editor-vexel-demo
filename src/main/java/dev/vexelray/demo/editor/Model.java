@@ -61,6 +61,11 @@ final class Model {
         change(d -> d.withEntry(id, e -> e.withPath(path, language).withDirty(false)));
     }
 
+    /** The document's file has moved to {@code path}: its tab follows it, saved or not as it was. */
+    void moved(long id, Path path, String language) {
+        change(d -> d.withEntry(id, e -> e.withPath(path, language)));
+    }
+
     void folder(Path folder) {
         change(d -> d.withFolder(folder));
     }

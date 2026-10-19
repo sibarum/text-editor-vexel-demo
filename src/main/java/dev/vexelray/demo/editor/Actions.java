@@ -85,6 +85,7 @@ final class Actions {
         nav.onOpenFile(file -> open(file, false));
         nav.onOpenFolder(this::switchRoot);
         nav.onNewScratch(this::newScratch);
+        nav.onRelocated(this::relocated);
         // A scratch made and closed with nothing written to it goes again: a deletion, so not on the closing thread.
         ws.onClosed(file -> {
             if (scratches.holds(file)) {
@@ -169,6 +170,29 @@ final class Actions {
             nav.scratchMade(made);
             model.say("New scratch " + made.getFileName());
         });
+    }
+
+    /**
+     * {@code from}, a file or a folder, moved or was renamed to {@code to} in the scratches tree: every tab open on it,
+     * or on anything under it, follows it there. Unsaved work stays unsaved, and is saved to the new place.
+     */
+    void relocated(Path from, Path to) {
+        Path a = from.toAbsolutePath().normalize();
+        Path b = to.toAbsolutePath().normalize();
+        for (Buffer buffer : ws.all()) {
+            Path p = buffer.path();
+            if (p == null) {
+                continue;
+            }
+            Path at = p.toAbsolutePath().normalize();
+            if (at.startsWith(a)) {
+                Path now = b.resolve(a.relativize(at));
+                buffer.savedAs(now);
+                model.moved(buffer.id, now, buffer.language());
+            }
+        }
+        ws.syncFormatted();
+        model.say((a.getParent().equals(b.getParent()) ? "Renamed " : "Moved ") + b.getFileName());
     }
 
     /** Alt+N: the scratches over the navigator's files, or the files again. The navigator is shown for it. */

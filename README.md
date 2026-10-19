@@ -107,9 +107,14 @@ document with unsaved work offers *Keep as scratch* beside Save and Don't save.
 
 Alt+N lays the scratches over the navigator without leaving the root: the panel is edged in the accent and its
 heading says *Scratches*, a file picked there opens in a tab as any other does, and Alt+N again (or the heading)
-puts the root's files back. Over the tree is *New scratch*; a row's menu has *New scratch here* and *New folder
-here*, and a folder's has *Open in Vexplore*, where scratches are moved and renamed. Once there is at least one
-scratch, Open lists **Scratches** under Recent, to make the folder the root like any project.
+puts the root's files back. Over the tree is *New scratch*; a row's menu has *New scratch here*, *New folder
+here* and *Rename…*, and a folder's has *Open in Vexplore* too. The scratches are organised in that tree: drag a
+scratch or a folder onto a folder, or between the rows of one, to move it there (or Ctrl+X, then Ctrl+V on the
+folder), and *Rename…* opens a name field above the tree, Enter to rename and Escape to leave it. A move or a
+rename is refused before it happens when the name is taken, and Ctrl+Z puts it back. A tab open on the file, or
+on anything in a moved folder, follows it, unsaved work and all, and a new extension gives it its new language.
+Once there is at least one scratch, Open lists **Scratches** under Recent, to make the folder the root like any
+project.
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -173,7 +178,7 @@ its tabs `console.tabs` and its settings button `console.settings`.
 | `Runs.java` | what the Run menu offers for a folder and a document, worked out from what is on disk |
 | `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
-| `Scratches.java` | the scratches' folder: making a scratch, and taking one away that was never written to |
+| `Scratches.java` | the scratches' folder: making a scratch, moving and renaming one, and taking one away that was never written to |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `Actions.java` | every command, and the questions some of them ask first, through the framework's `Dialogs`; also the main window's close gate |
 | `Session.java` | what is remembered between runs, and bringing it back |

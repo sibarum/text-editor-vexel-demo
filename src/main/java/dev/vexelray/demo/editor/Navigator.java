@@ -2,9 +2,14 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.drop.DropEffect;
+import dev.vexelray.gui.core.edit.Change;
+import dev.vexelray.gui.core.edit.History;
+import dev.vexelray.gui.core.input.ClaimScope;
 import dev.vexelray.gui.core.input.CursorShape;
 import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.input.MenuSink;
+import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -12,9 +17,13 @@ import dev.vexelray.gui.core.style.Theme;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
+import dev.vexelray.gui.widget.Placement;
+import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
+import sibarum.tactroller.api.Key;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -43,6 +52,11 @@ import java.util.function.Consumer;
  * session stay as they are. The way back is Alt+N again, or the heading, which says Scratches while it is up.
  * Open offers the same folder as a root of its own, once there is something in it.
  *
+ * <p>The scratches tree is the one tree here that changes the disk. A row dragged onto a folder, or between the rows
+ * of one, moves there, and Rename on a row's menu opens a name field above the tree. Both are performed through the
+ * window's undo history, so Ctrl+Z puts them back, and both are told to {@link #onRelocated}, so a tab open on what
+ * moved follows it.
+ *
  * <p>There is one tree per mode for the life of the window, and changing folder re-points a source and refreshes
  * its tree. The refresh lists the new folder, which is I/O, so it runs on the offload lane rather than wherever the
  * request came from.
@@ -66,6 +80,13 @@ final class Navigator {
     private final TreeView<Path> picker;
     private final TreeView<Path> scratchTree;
     private final Node scratchPane;
+    /**
+     * Rename's field, above the scratches tree while a row is being renamed. A field of the pane rather than of the
+     * row or a dialog, since the framework has neither an inline edit nor a question that takes text (FN-22).
+     */
+    private final TextField renameField;
+    /** The scratch or folder the name field is for, or null while it is put away. */
+    private volatile Path renaming;
     /** Open's way to the scratches as a root, shown once there is at least one. */
     private final Button scratchesButton;
     private final Button heading;
@@ -81,6 +102,7 @@ final class Navigator {
     private volatile Consumer<Path> openFile = p -> { };
     private volatile Consumer<Path> openFolder = p -> { };
     private volatile Consumer<Path> newScratch = p -> { };
+    private volatile BiConsumer<Path, Path> relocated = (from, to) -> { };
     /** The root's name, for the heading: what it says again when Scratches goes. */
     private volatile String rootLabel = "No folder";
     private volatile Consumer<Mode> modeChanged = m -> { };
@@ -255,10 +277,16 @@ final class Navigator {
                 scratchTree.expand(p);
             }
         });
+        // Moving is a drag, onto a folder or between the rows of one (Ctrl+X and Ctrl+V too, which the tree gives
+        // every reorderable tree). The window's history performs it, so it undoes; the framework's Window sets that
+        // as the GUI's drop history. A drop also focuses the tree, so the next Ctrl+Z is the window's and not the
+        // last-typed document's, whose field claims Ctrl+Z only while it has the keyboard.
+        scratchTree.reorderable(this::scratchMove);
         scratchTree.onContextMenu((p, menu) -> {
             Path folder = Files.isDirectory(p) ? p : p.getParent();
             menu.item("New scratch here", () -> newScratch.accept(folder))
-                    .item("New folder here", () -> io.execute(() -> newFolder(folder)));
+                    .item("New folder here", () -> io.execute(() -> newFolder(folder)))
+                    .item("Rename…", () -> beginRename(scratchSource.top(p)));
             if (Files.isDirectory(p)) {
                 folderMenu(p, menu);
             } else {
@@ -270,13 +298,20 @@ final class Navigator {
         });
         Button fresh = new Button(gui, "New scratch").kind(Button.Kind.GHOST).onPress(() -> newScratch.accept(null));
         gui.landmark(Landmarks.NEW_SCRATCH, fresh.node());
+        // Enter renames, Escape puts the field away. Its typing has a history of its own, kept out of the window's
+        // where the renames themselves go; and an own history that is empty lets Ctrl+Z through (TextField.undo), so
+        // the rename just made undoes even from the field.
+        renameField = new TextField(gui, "").history(new History()).onSubmit(this::submitRename);
+        renameField.node().width(Length.FILL).font(Type.UI).visible(false);
+        gui.claim(renameField.node(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, this::endRename);
+        gui.landmark(Landmarks.RENAME_SCRATCH, renameField.node());
         scratchPane = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
                 .gap(Type.TIGHT)
                 .alignItems(AlignItems.STRETCH)
                 .visible(false)
                 .children(fresh.node(), gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
-                        scratchTree.node());
+                        renameField.node(), scratchTree.node());
 
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
@@ -416,6 +451,10 @@ final class Navigator {
         editPane.visible(value == Mode.EDIT);
         openPane.visible(open);
         scratchPane.visible(scratch);
+        if (!scratch && renaming != null) {
+            renaming = null;   // a rename left unfinished when the scratches went is a rename not made
+            renameField.node().visible(false);
+        }
         if (open) {
             io.execute(() -> {
                 scratchesButton.node().visible(scratches.any());
@@ -467,6 +506,131 @@ final class Navigator {
         List<Path> chain = scratchSource.chainTo(made);
         if (!chain.isEmpty()) {
             scratchTree.revealPath(chain, null);
+        }
+    }
+
+    /**
+     * What dropping {@code moved} at {@code where} in the scratches tree does: the move into the folder that is,
+     * or null where it would do nothing or could not be done. Asked once a frame on the GUI thread while a row is
+     * carried, so it decides and does not move anything. Package-private, so a test can make the drop's change.
+     */
+    Change scratchMove(Path moved, Placement<Path> where, DropEffect effect) {
+        if (effect != DropEffect.MOVE) {
+            return null;   // a copy of a note is a second note, which nothing has asked for
+        }
+        Path folder;
+        if (where.isRoot()) {
+            folder = scratches.dir();
+        } else if (where.relation() == Placement.Relation.INTO) {
+            folder = where.reference();   // a merged row's item is the deepest of its run: what it opens onto
+        } else {
+            folder = scratchSource.top(where.reference()).getParent();   // between rows: the folder they are in
+        }
+        Path subject = scratchSource.top(moved);
+        Path to = scratches.into(subject, folder);
+        return to == null ? null : relocation(subject, to);
+    }
+
+    /**
+     * Moving {@code from} to {@code to} as an undoable change, whose reverse is the move back. The move itself is
+     * one rename on the disk, made where the history applies it, since a change has to say whether it happened; the
+     * listing and the tabs that follow it go to the offload lane. An undo after the files have changed some other
+     * way (in Vexplore, say) is refused by its check rather than moving something that is no longer what it was.
+     */
+    private Change relocation(Path from, Path to) {
+        return new Change() {
+            @Override
+            public Change apply() {
+                try {
+                    scratches.relocate(from, to);
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                io.execute(() -> relocated(from, to));
+                return relocation(to, from);
+            }
+
+            @Override
+            public Check check() {
+                return Files.exists(from) && !Files.exists(to) ? Check.OK : Check.CONFLICT;
+            }
+        };
+    }
+
+    /** {@code from} is {@code to} now: tell whoever has it open, and show it where it went. For the offload lane. */
+    private void relocated(Path from, Path to) {
+        relocated.accept(from, to);
+        if (source.holds(from) || source.holds(to)) {
+            tree.refresh();   // the scratches are the root as well
+        }
+        if (mode == Mode.SCRATCHES) {
+            listAndSelect(to);
+        } else {
+            listScratches();
+        }
+    }
+
+    /** Be told when a scratch or a folder of them has moved or been renamed, from where to where. On the offload lane. */
+    void onRelocated(BiConsumer<Path, Path> handler) {
+        this.relocated = handler == null ? (from, to) -> { } : handler;
+    }
+
+    /**
+     * Rename on a scratch row's menu: the name field, holding {@code file}'s name with all but its extension
+     * selected, so typing replaces the part that is usually meant. Package-private, for a test.
+     */
+    void beginRename(Path file) {
+        if (file == null || !scratches.holds(file) || scratches.is(file)) {
+            return;
+        }
+        renaming = file;
+        String name = String.valueOf(file.getFileName());
+        int dot = name.lastIndexOf('.');
+        renameField.text(name).select(0, dot > 0 && !Files.isDirectory(file) ? dot : name.length());
+        renameField.node().visible(true);
+        gui.focus(renameField.node());
+    }
+
+    /**
+     * Enter in the name field: rename what it is for, through the window's history. A name that cannot be had — blank,
+     * taken, another folder's — leaves the field up, ringed, to be changed. Package-private, for a test.
+     */
+    void submitRename(String name) {
+        Path file = renaming;
+        if (file == null) {
+            return;
+        }
+        io.execute(() -> {
+            Path to = scratches.renamed(file, name);
+            if (to == null || !perform(relocation(file, to))) {
+                motion.cues.play(renameField.node(), Cue.ring(gui.theme().color(Role.DANGER), 1));
+                return;
+            }
+            endRename();
+        });
+    }
+
+    /** Put the name field away, and the keyboard back in the tree. */
+    private void endRename() {
+        renaming = null;
+        renameField.node().visible(false);
+        if (mode == Mode.SCRATCHES) {
+            scratchTree.focus();
+        }
+    }
+
+    /** Do {@code change} in the window's history, as a drop is done; false if it could not be done. */
+    private boolean perform(Change change) {
+        History history = gui.dropHistory();
+        try {
+            if (history != null) {
+                history.perform(change);
+            } else {
+                change.apply();   // a tree with no window around it: done, with nothing to undo it
+            }
+            return true;
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 

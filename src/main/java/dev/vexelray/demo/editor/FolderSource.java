@@ -155,6 +155,24 @@ final class FolderSource implements TreeView.Source<Path> {
         return chain;
     }
 
+    /**
+     * The top of the run of folders {@code item}'s row stands for: {@code item} itself for any row but a merged one,
+     * whose item is the deepest of its run. A row labelled "a/b" is {@code a} to anything that moves it, as it is to
+     * the eye; moving {@code b} alone would leave an empty {@code a} behind. From what the last listing worked out,
+     * so it touches no disk.
+     */
+    Path top(Path item) {
+        String chain = merged.get(item);
+        if (chain == null) {
+            return item;
+        }
+        Path at = item;
+        for (int i = chain.split(MERGE).length; i > 1 && at.getParent() != null; i--) {
+            at = at.getParent();
+        }
+        return at;
+    }
+
     /** Whether {@code file} is somewhere under the base, and so has a way down to it. Path arithmetic only. */
     boolean holds(Path file) {
         return under(base, file);

@@ -438,3 +438,35 @@ Three workarounds, each small, each one every application that draws a scene bes
 *Could:* an orthographic `Lens`; a `MeshTechnique.project(x, y, z)` that answers where a point lands and how deep,
 from the same pushed values the shader reads; and an image source for `PanelTechnique` that a GUI atlas can be.
 **v1:** all additive, in the engine rather than in the framework's frozen surface.
+
+## Organising scratches
+
+The scratches tree (Alt+N) moves files by drag and drop and renames them from a row's menu, both through the
+window's undo history. `TreeView.reorderable` did the drag as documented: the framework's `Window` already makes its
+history the GUI's `dropHistory`, a drop focuses the tree so Ctrl+Z is the window's and not the last document's, and
+cut and paste (Ctrl+X, Ctrl+V) came with it. The finding is about the rename.
+
+### FN-22 · Nothing asks for a line of text: no inline edit on a row, no prompt `Modal` 🔬
+
+Rename wants a name typed where the row is, or in a small question over the window. `TreeView` has no inline edit
+(its `Action` doc names Rename as a thing an application might put on a row, and stops there), and `Modal` is a
+title, a message and buttons, with nowhere to type. `Dialogs.ask` takes only a `Modal`. Vexplore met the same
+gap and put a name field on its own action card.
+
+So the editor does what Vexplore did rather than fake either widget: Rename opens a plain single-line `TextField`
+in the scratches pane, above the tree, holding the name with the stem selected. Enter renames, Escape (a `FOCUSED`
+claim) puts it away, and a name that cannot be had rings the field and leaves it up. It works, but it is away from
+the row it renames, so the eye has to go up to it and back. And the field needed an explicit `History` of its own,
+or its typing would have gone into the window's history beside the renames.
+
+A second, smaller cost: a `Change` is applied under `History`'s monitor, on the GUI thread for a drop, and its doc
+asks for bounded model work there. A move on disk cannot be a flag that something else watches, because the change
+has to return its reverse, and so has to know the move happened. `Navigator.relocation` does the one rename on the
+disk in `apply()` and sends the listing and the tabs to the offload lane. One rename is fast. A slow disk or a
+network folder would hold the frame for it.
+
+*Could:* `TreeView.edit(item, Consumer<String> committed)`, an in-place field over the row's label with Enter,
+Escape and focus-loss handled, which every file tree will want. And `Modal.input(label, initial)` or a
+`Dialogs.askText`, for the question that takes a line. For the disk: a `Change` that can apply asynchronously,
+recorded once it lands. **v1:** `TreeView.edit` and a text prompt are additive. `Dialogs` is a shell interface
+applications implement (tests do), so a new method on it needs a default to stay additive.

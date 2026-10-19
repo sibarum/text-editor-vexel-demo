@@ -19,8 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * project of its own in Open, once there is at least one, and laid over the files of whatever root is open, on
  * Alt+N, for a quick look without leaving it.
  *
- * <p>A scratch is an ordinary file once it exists: it saves with Ctrl+S, highlights by its extension, and can be
- * moved or renamed in Vexplore like any other. Nothing here reads or writes its text.
+ * <p>A scratch is an ordinary file once it exists: it saves with Ctrl+S and highlights by its extension. Scratches
+ * and their folders can be moved and renamed in the scratches tree itself ({@link #into}, {@link #renamed},
+ * {@link #relocate}), or in Vexplore like any other file. Nothing here reads or writes their text.
  *
  * <p>Every method that touches the disk is for the offload lane.
  */
@@ -153,6 +154,68 @@ final class Scratches {
         if (file != null) {
             fresh.remove(file.toAbsolutePath().normalize());
         }
+    }
+
+    /**
+     * Where {@code moved}, a scratch or a folder of them, would be once put in {@code folder}: under the same name,
+     * and null when that is no move to make — either outside the scratches, the folder it is in already, a folder
+     * put into itself or anything under it, or a name already taken there. Path arithmetic and one look at the disk,
+     * since a drag asks once a frame.
+     */
+    Path into(Path moved, Path folder) {
+        if (moved == null || folder == null || !holds(moved) || is(moved) || !holds(folder)) {
+            return null;
+        }
+        Path from = moved.toAbsolutePath().normalize();
+        Path in = folder.toAbsolutePath().normalize();
+        if (in.equals(from.getParent()) || in.startsWith(from)) {
+            return null;
+        }
+        Path to = in.resolve(from.getFileName());
+        return !Files.isDirectory(in) || Files.exists(to) ? null : to;
+    }
+
+    /**
+     * Where {@code file}, a scratch or a folder of them, would be once called {@code name}, in the folder it is in;
+     * null for a name that is blank, is no change, names another folder ({@code ..}, a separator), or is taken.
+     *
+     * <p>A change of case alone is refused as taken on a disk that ignores case, since it then finds the file itself
+     * under the new name. That is the lesser surprise than a rename that silently does nothing.
+     */
+    Path renamed(Path file, String name) {
+        if (file == null || !holds(file) || is(file) || name == null) {
+            return null;
+        }
+        String n = name.strip();
+        if (n.isEmpty() || n.equals(".") || n.equals("..") || n.contains("/") || n.contains("\\")) {
+            return null;
+        }
+        Path from = file.toAbsolutePath().normalize();
+        Path to;
+        try {
+            to = from.resolveSibling(n).normalize();
+        } catch (RuntimeException invalid) {
+            return null;   // a character the platform will not have in a name
+        }
+        if (to.equals(from) || !from.getParent().equals(to.getParent()) || Files.exists(to)) {
+            return null;
+        }
+        return to;
+    }
+
+    /**
+     * Move {@code from} to {@code to}, both among the scratches, never over anything already there. A scratch filed
+     * away or given a name is one somebody means to keep, so it, and anything under it, stops being fresh: closed
+     * empty, it stays.
+     */
+    void relocate(Path from, Path to) throws IOException {
+        Path a = from.toAbsolutePath().normalize();
+        Path b = to.toAbsolutePath().normalize();
+        if (!holds(a) || is(a) || !holds(b) || is(b)) {
+            throw new IOException("not among the scratches: " + a + " -> " + b);
+        }
+        Files.move(a, b);
+        fresh.removeIf(p -> p.startsWith(a));
     }
 
     /** {@code stem + ext} in {@code folder}, or {@code -2}, {@code -3}... until one is free; made if {@code make}. */

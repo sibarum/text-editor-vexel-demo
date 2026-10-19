@@ -44,6 +44,9 @@ final class Landmarks {
     /** The New scratch button over the scratches' tree. */
     static final String NEW_SCRATCH = "navigator.new-scratch";
 
+    /** The name field Rename opens over the scratches' tree: Enter renames, Escape puts it away. */
+    static final String RENAME_SCRATCH = "navigator.rename-scratch";
+
     /** The status line, and its four slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";
     static final String STATUS_MESSAGE = "status.message";
