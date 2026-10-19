@@ -102,9 +102,10 @@ final class Workspace {
         // Over the tabs, a row of commands that act on the document in front and its project: Run, for now.
         this.run = new IconButton(gui, Icon.PLAY, "Run").tip("Run");
         gui.landmark(Landmarks.RUN, run.node());
-        // Lit while the document in front is shown formatted, and only pressable when it is Markdown.
-        this.formatted = new IconButton(gui, Icon.EYE, "Formatted").tip("Formatted (Ctrl+Shift+V)")
-                .toggle(true).enabled(false);
+        // Lit while the document in front is shown formatted, and only there at all when it is Markdown.
+        this.formatted = new IconButton(gui, Icon.FONTS, "Formatted").tip("Formatted (Ctrl+Shift+V)")
+                .toggle(true);
+        formatted.node().visible(false);
         gui.landmark(Landmarks.FORMATTED, formatted.node());
         Node tools = gui.row()
                 .width(Length.FILL)
@@ -152,10 +153,11 @@ final class Workspace {
         return b.showingFormatted() ? "Formatted view" : "Source view";
     }
 
-    /** Make the Formatted button say how the document in front is shown, and whether it can be shown otherwise. */
+    /** Make the Formatted button say how the document in front is shown, and show it only when that is Markdown. */
     void syncFormatted() {
         Buffer b = front();
-        formatted.enabled(b != null && b.formattable()).on(b != null && b.showingFormatted());
+        formatted.on(b != null && b.showingFormatted());
+        formatted.node().visible(b != null && b.formattable());
     }
 
     Node node() {
