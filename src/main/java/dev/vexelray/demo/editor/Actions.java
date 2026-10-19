@@ -6,6 +6,7 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.ClickEvent;
 import dev.vexelray.gui.core.input.MenuItem;
 import dev.vexelray.gui.core.layout.NodeLayout;
+import dev.vexelray.gui.icons.Icon;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.nfd.FileDialog;
 import sibarum.concordance.index.Index;
@@ -54,6 +55,7 @@ final class Actions {
     private final Session session;
     private final Console console;
     private final Scratches scratches;
+    private final Preferences prefs;
     private final Executor io;
     /** The root last asked for — set as it is asked for, where the navigator's own folder arrives a listing later. */
     private volatile Path root;
@@ -69,8 +71,9 @@ final class Actions {
             Highlighter.knownExtensions().stream().sorted().toArray(String[]::new)));
 
     Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session, Dialogs dialogs, Console console,
-            Scratches scratches) {
+            Scratches scratches, Preferences prefs) {
         this.gui = gui;
+        this.prefs = prefs;
         this.dialogs = dialogs;
         this.model = model;
         this.ui = ui;
@@ -81,6 +84,8 @@ final class Actions {
         this.console = console;
         this.scratches = scratches;
         this.io = gui.offload();
+        ws.wordWrap(prefs.wrap());
+        ui.onPreferences(e -> gui.menus().present(e, preferencesMenu()));
         // From the navigator the keyboard stays in the navigator, so walking it with the arrows keeps walking.
         nav.onOpenFile(file -> open(file, false));
         nav.onOpenFolder(this::switchRoot);
@@ -258,9 +263,9 @@ final class Actions {
     }
 
     /**
-     * Point the navigator at {@code folder}, and index it if it is a Maven project. The tabs stay as they are: this
-     * is the session's restore and the command line, which say which tabs themselves. A root the user picks goes
-     * through {@link #switchRoot}.
+     * Point the navigator at {@code folder}, take up its own preferences if it keeps any in {@code .vex}, and index
+     * it if it is a Maven project and indexing is on. The tabs stay as they are: this is the session's restore and
+     * the command line, which say which tabs themselves. A root the user picks goes through {@link #switchRoot}.
      */
     void showFolder(Path folder) {
         if (folder != null && !Files.isDirectory(folder)) {
@@ -268,9 +273,11 @@ final class Actions {
             return;
         }
         root = folder == null ? null : folder.toAbsolutePath().normalize();
+        prefs.root(root);
+        ws.wordWrap(prefs.wrap());
         nav.show(folder, () -> {
             model.folder(nav.folder());
-            concordance.folder(nav.folder());
+            concordance.folder(prefs.index() ? nav.folder() : null);
         });
         ui.showNavigator(true);
     }
@@ -682,6 +689,8 @@ final class Actions {
         if (targets.isEmpty()) {
             model.say(concordance.indexing()
                     ? "No declaration of " + word.text() + " in this file; the project is still being indexed"
+                    : concordance.current() == null && !prefs.index()
+                    ? "No declaration of " + word.text() + " in this file; indexing is off in Preferences"
                     : concordance.current() == null
                     ? "No declaration of " + word.text() + " in this file"
                     : "No declaration of " + word.text() + " in this project");
@@ -823,8 +832,92 @@ final class Actions {
 
     // ------------------------------------------------------------------ view
 
+    /** Alt+Z, and the preferences menu: word wrap, remembered where the root's preferences are kept. */
     void toggleWrap() {
-        model.say(ws.toggleWrap() ? "Word wrap on" : "Word wrap off");
+        boolean on = !ws.wrap();
+        ws.wordWrap(on);
+        io.execute(() -> prefs.wrap(on));
+        model.say((on ? "Word wrap on" : "Word wrap off") + scope());
+    }
+
+    // ----------------------------------------------------------- preferences
+
+    /**
+     * The preferences button's menu. The theme is the editor's and takes effect at the next start; word wrap and
+     * indexing apply now, to the root's own {@code .vex} preferences when it keeps them and to the editor's otherwise.
+     */
+    List<MenuItem> preferencesMenu() {
+        Preferences.Shade next = prefs.theme();
+        Preferences.Shade now = Look.light(gui.theme().palette()) ? Preferences.Shade.LIGHT : Preferences.Shade.DARK;
+        Path at = prefs.root();
+        List<MenuItem> items = new ArrayList<>();
+        items.add(MenuItem.disabled(next == now ? "Theme" : "Theme (from the next start)"));
+        items.add(check(next == Preferences.Shade.DARK, "Dark", () -> theme(Preferences.Shade.DARK)));
+        items.add(check(next == Preferences.Shade.LIGHT, "Light", () -> theme(Preferences.Shade.LIGHT)));
+        items.add(MenuItem.SEPARATOR);
+        items.add(MenuItem.disabled(at != null && prefs.projectScoped() ? "Editor, for this project" : "Editor"));
+        items.add(check(ws.wrap(), "Word wrap", this::toggleWrap));
+        items.add(check(prefs.index(), "Index Maven projects", this::toggleIndex));
+        items.add(MenuItem.SEPARATOR);
+        items.add(check(prefs.projectScoped(), at == null ? "Keep for this project (no folder open)"
+                : "Keep for this project, in " + Preferences.DIR, at != null, this::toggleProjectScoped));
+        items.add(check(prefs.gitignore(), "Add " + Preferences.DIR + " to .gitignore", true, this::toggleGitignore));
+        return items;
+    }
+
+    private static MenuItem check(boolean on, String label, Runnable action) {
+        return check(on, label, true, action);
+    }
+
+    private static MenuItem check(boolean on, String label, boolean enabled, Runnable action) {
+        return new MenuItem(null, label, action, enabled, on ? Icon.CHECK : null);
+    }
+
+    private void theme(Preferences.Shade shade) {
+        io.execute(() -> prefs.theme(shade));
+        boolean light = Look.light(gui.theme().palette());
+        boolean same = light == (shade == Preferences.Shade.LIGHT);
+        String name = shade == Preferences.Shade.LIGHT ? "Light" : "Dark";
+        model.say(same ? name + " theme" : name + " theme from the next start of " + TextEditor.TITLE);
+    }
+
+    /** Indexing on or off: on indexes the root now if it is a Maven project, off drops the index there is. */
+    void toggleIndex() {
+        boolean on = !prefs.index();
+        io.execute(() -> {
+            prefs.index(on);
+            concordance.folder(on ? nav.folder() : null);
+        });
+        model.say((on ? "Indexing Maven projects" : "Not indexing Maven projects") + scope());
+    }
+
+    private void toggleProjectScoped() {
+        boolean keep = !prefs.projectScoped();
+        io.execute(() -> {
+            if (!prefs.keepForProject(keep)) {
+                model.say("Could not " + (keep ? "write" : "take away") + " " + Preferences.DIR + "/"
+                        + Preferences.FILE + "; the log says why");
+                ui.alert();
+                return;
+            }
+            // Leaving the project's: the editor's own values take over, and may differ.
+            ws.wordWrap(prefs.wrap());
+            concordance.folder(prefs.index() ? nav.folder() : null);
+            model.say(keep ? "Preferences kept for this project, in " + Preferences.DIR + "/" + Preferences.FILE
+                    : "This project uses the editor's preferences again");
+        });
+    }
+
+    private void toggleGitignore() {
+        boolean on = !prefs.gitignore();
+        io.execute(() -> prefs.gitignore(on));
+        model.say(on ? "A project's " + Preferences.DIR + " folder goes in its .gitignore"
+                : "A project's " + Preferences.DIR + " folder is left out of its .gitignore");
+    }
+
+    /** Where a preference just changed is kept, for the status line. */
+    private String scope() {
+        return prefs.projectScoped() ? ", for this project" : "";
     }
 
     /** Ctrl+Shift+V, and the Formatted button: a Markdown document formatted, or back to its source. */

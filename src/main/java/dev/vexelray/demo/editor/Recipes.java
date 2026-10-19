@@ -33,10 +33,20 @@ import java.util.List;
 @Configuration
 final class Recipes {
 
-    /** The look, and the smallest window this UI is still coherent in. */
+    /**
+     * The look the preferences ask for, and the smallest window this UI is still coherent in. Read here, before the
+     * window is built, because a colour is resolved when a widget is made: a theme chosen later waits for the next start.
+     */
     @Provides
-    Appearance look() {
-        return Appearance.of(Look.THEME, Length.rem(TextEditor.MIN_W_EM), Length.rem(TextEditor.MIN_H_EM));
+    Appearance look(Settings settings) {
+        return Appearance.of(Look.of(Preferences.theme(settings)),
+                Length.rem(TextEditor.MIN_W_EM), Length.rem(TextEditor.MIN_H_EM));
+    }
+
+    /** The theme, word wrap and indexing: the editor's own, or a root's own in its {@code .vex}. */
+    @Provides
+    Preferences preferences(Settings settings) {
+        return new Preferences(settings);
     }
 
     /**
@@ -120,8 +130,8 @@ final class Recipes {
      */
     @Provides
     Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session, Dialogs dialogs,
-                    Console console, Scratches scratches) {
-        Actions actions = new Actions(gui, model, ui, index, session, dialogs, console, scratches);
+                    Console console, Scratches scratches, Preferences prefs) {
+        Actions actions = new Actions(gui, model, ui, index, session, dialogs, console, scratches, prefs);
         actions.shortcuts();
         ui.workspace().untitled();
         return actions;

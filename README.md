@@ -122,6 +122,22 @@ the navigator opens as itself); it is greyed out as *Vexplore not installed* whe
 means it has unsaved changes. Closing anything with unsaved work asks — Save, Don't save, Cancel — and a save that
 fails, or a Save As that is cancelled, cancels whatever was waiting on it, quitting included.
 
+**Preferences** are behind the gear in the title bar, beside the project's name:
+
+- **Theme**: Dark (the default) or Light, a soft off-white page with darker code colours, for bright or artificial
+  light. Vex is the only application in the suite with a light theme. The look is chosen when the window is built,
+  so a change takes effect at the next start, and the menu says so until then.
+- **Word wrap** (also Alt+Z) and **Index Maven projects**. With indexing off, opening a Maven project builds no
+  index, and Ctrl+Enter looks only in the file in front.
+- **Keep for this project, in .vex**: the root's word wrap and indexing are kept in `<root>/.vex/preferences.properties`,
+  started from the values in force, and used whenever that folder is the root; every other folder keeps the
+  editor's own (in `~/.text-editor/settings.properties`). Unticking it takes the file away again. The theme is
+  always the editor's.
+- **Add .vex to .gitignore** (on by default): making a `.vex` folder in a git working tree adds `.vex/` to the root's
+  `.gitignore`, creating it if need be, unless a line already ignores it.
+
+To a script, the gear is the landmark `preferences`.
+
 Sixteen formats are highlighted, by extension or by name (`Dockerfile`, `.bashrc`): Java, Python, JavaScript,
 JSON and JSONC, Markdown, HTML, CSS, XML, YAML, INI and `.properties`, shell, PowerShell, batch, diff and
 Dockerfile. A recognised format is shown in the mono face; anything else is plain text in the UI face.
@@ -182,6 +198,7 @@ its tabs `console.tabs` and its settings button `console.settings`.
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `Actions.java` | every command, and the questions some of them ask first, through the framework's `Dialogs`; also the main window's close gate |
 | `Session.java` | what is remembered between runs, and bringing it back |
+| `Preferences.java` | the theme, word wrap and indexing: the editor's own, or a root's own in its `.vex` |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |
 | `TextFile.java` | the policy between bytes on disk and text in a field |

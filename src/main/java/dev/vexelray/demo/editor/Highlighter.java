@@ -79,6 +79,43 @@ final class Highlighter {
             Map.entry("meta.diff",          Color.rgb(0x8aa9f0)),
             Map.entry("punctuation",        Color.rgb(0x8b95a1)));
 
+    /**
+     * {@link #SCOPE_COLORS} for the light page ({@code Look.LIGHT_THEME}): the same scopes and the same families --
+     * keywords blue, types teal, numbers amber, strings green -- each taken dark enough to read on off-white.
+     * Chosen rather than measured: the design has no light mockup.
+     */
+    private static final List<Map.Entry<String, Color>> LIGHT_SCOPE_COLORS = List.of(
+            Map.entry("comment",            Color.rgb(0x6a737d)),
+            Map.entry("string",             Color.rgb(0x2f7d32)),
+            Map.entry("constant.numeric",   Color.rgb(0xb35900)),
+            Map.entry("constant.language",  Color.rgb(0xb35900)),
+            Map.entry("constant.other",     Color.rgb(0xb35900)),
+            Map.entry("support.constant",   Color.rgb(0xb35900)),
+            Map.entry("keyword",            Color.rgb(0x3b5bdb)),
+            Map.entry("storage",            Color.rgb(0x3b5bdb)),
+            Map.entry("entity.name.function", Color.rgb(0x8a5a00)),
+            Map.entry("entity.name.type",   Color.rgb(0x0b7285)),
+            Map.entry("support.type",       Color.rgb(0x0b7285)),
+            Map.entry("support.class",      Color.rgb(0x0b7285)),
+            Map.entry("variable.parameter", Color.rgb(0x7c4a1e)),
+            Map.entry("variable.other",     Color.rgb(0x3d4752)),
+            Map.entry("entity.name.section", Color.rgb(0x3b5bdb)),
+            Map.entry("entity.name.tag",    Color.rgb(0xc2255c)),
+            Map.entry("entity.other.attribute-name", Color.rgb(0x1971c2)),
+            Map.entry("support.function",   Color.rgb(0x0b7285)),
+            Map.entry("markup.heading",     Color.rgb(0x3b5bdb)),
+            Map.entry("markup.bold",        Color.rgb(0x8a5a00)),
+            Map.entry("markup.italic",      Color.rgb(0x3b5bdb)),
+            Map.entry("markup.inline.raw",  Color.rgb(0x0b7285)),
+            Map.entry("markup.fenced_code", Color.rgb(0x0b7285)),
+            Map.entry("markup.underline.link", Color.rgb(0x087f5b)),
+            Map.entry("markup.quote",       Color.rgb(0x6a737d)),
+            Map.entry("markup.inserted",    Color.rgb(0x2f7d32)),
+            Map.entry("markup.deleted",     Color.rgb(0xc2255c)),
+            Map.entry("markup.changed",     Color.rgb(0x8a5a00)),
+            Map.entry("meta.diff",          Color.rgb(0x3b5bdb)),
+            Map.entry("punctuation",        Color.rgb(0x5c6670)));
+
     /** Extension -> TextMate scope name, for the bundled grammars. */
     private static final Map<String, String> EXT_TO_SCOPE = Map.ofEntries(
             Map.entry("java", "source.java"),
@@ -159,9 +196,13 @@ final class Highlighter {
     private volatile String language = "Plain text";
     private volatile boolean closed;
 
+    /** The code colours for the look the window was built with: {@link #SCOPE_COLORS}, or the light ones. */
+    private final List<Map.Entry<String, Color>> colors;
+
     Highlighter(Gui gui, TextField editor) {
         this.gui = gui;
         this.editor = editor;
+        this.colors = Look.light(gui.theme().palette()) ? LIGHT_SCOPE_COLORS : SCOPE_COLORS;
     }
 
     /** A registry holding every bundled grammar. Package-private so a test can load the same set. */
@@ -269,7 +310,7 @@ final class Highlighter {
             IGrammar g = grammar;
             List<Span> spans;
             try {
-                spans = g == null ? List.of() : tokenize(g, text);
+                spans = g == null ? List.of() : tokenize(g, text, colors);
             } catch (RuntimeException e) {
                 // A tokenizer failure means no colours, never a broken editor.
                 LOG.warn("highlighting failed; showing plain text", e);
@@ -294,18 +335,23 @@ final class Highlighter {
      * only one is being typed into, so the wait is felt only while a session restores.
      */
     static List<Span> tokenize(IGrammar grammar, String text) {
+        return tokenize(grammar, text, SCOPE_COLORS);
+    }
+
+    /** {@link #tokenize(IGrammar, String)} in {@code colors}, the light page's or the dark one's. */
+    private static List<Span> tokenize(IGrammar grammar, String text, List<Map.Entry<String, Color>> colors) {
         if (text.length() > MAX_HIGHLIGHT_CHARS) {
             return List.of();
         }
         synchronized (TOKENIZING) {
-            return tokenizeLines(grammar, text);
+            return tokenizeLines(grammar, text, colors);
         }
     }
 
     /** See {@link #tokenize}: the registry's shared state is guarded as one thing, because it is one thing. */
     private static final Object TOKENIZING = new Object();
 
-    private static List<Span> tokenizeLines(IGrammar grammar, String text) {
+    private static List<Span> tokenizeLines(IGrammar grammar, String text, List<Map.Entry<String, Color>> colors) {
         List<Span> spans = new ArrayList<>();
         IStateStack state = null;
         int lineStart = 0;
@@ -323,7 +369,7 @@ final class Highlighter {
             ITokenizeLineResult<IToken[]> result = grammar.tokenizeLine(line, state, LINE_TIME_LIMIT);
             state = result.getRuleStack();
             for (IToken token : result.getTokens()) {
-                Color color = colorFor(token.getScopes());
+                Color color = colorFor(token.getScopes(), colors);
                 int start = lineStart + Math.min(token.getStartIndex(), line.length());
                 int end = lineStart + Math.min(token.getEndIndex(), line.length());
                 if (color != null && end > start) {
@@ -336,10 +382,10 @@ final class Highlighter {
     }
 
     /** Most specific scope wins: scan scopes innermost-first, rules in declared priority order. */
-    private static Color colorFor(List<String> scopes) {
+    private static Color colorFor(List<String> scopes, List<Map.Entry<String, Color>> colors) {
         for (int i = scopes.size() - 1; i >= 0; i--) {
             String scope = scopes.get(i);
-            for (Map.Entry<String, Color> rule : SCOPE_COLORS) {
+            for (Map.Entry<String, Color> rule : colors) {
                 if (scope.startsWith(rule.getKey())) {
                     return rule.getValue();
                 }

@@ -28,6 +28,8 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 
 - [ ] Find across the open folder, with results as a list that opens at the line.
 - [ ] Reopen a recently closed tab (Ctrl+Shift+T).
+- [ ] Switch between Dark and Light without a restart, once the framework can restyle a built tree (vexelray-gui
+      todo, *A theme swapped at runtime*). Today the choice is read at launch.
 - [ ] Order and choose a name's declarations by nearness: concordance's `Search` over a `Plan` (the open tabs
       first, then the project, then the libraries they import) with `NameGroups`, in place of Ctrl+Enter's fixed
       project-then-libraries walk, which can be hundreds long for a common name.

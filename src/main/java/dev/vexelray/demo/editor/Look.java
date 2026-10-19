@@ -35,6 +35,13 @@ import sibarum.atchung.Subscription;
  *
  * <p>Two things in the design are not where the framework's roles put them, and are overridden by name in
  * {@link #THEME} rather than absorbed: a selected row is tinted with the accent, and a scrollbar thumb is quiet.
+ *
+ * <h2>Light, for Vex alone</h2>
+ *
+ * <p>{@link #LIGHT_THEME} is the same construction on a soft off-white page, for reading under bright or artificial
+ * light. It is a preference ({@link Preferences.Shade}), Dark is the default, and it is this application's only: the
+ * rest of the suite stays dark. Every role below is a step on the palette's ladders or a turn of its accent's hue, so
+ * it carries over as it is; the light anchors are the only new decisions, and no mockup measured them.
  */
 final class Look {
 
@@ -75,6 +82,32 @@ final class Look {
 
     static final Palette PALETTE =
             new Palette(PAGE, STEP, INK, FADE, ACCENT, ACTION, DANGER, DEPTH, SHADOW_ALPHA);
+
+    // ---------------------------------------------------------- light anchors
+
+    /** The light page: off-white rather than white, at the dark page's hue, so a long read does not glare. */
+    private static final Oklab LIGHT_PAGE = Oklab.polar(0.9750, 0.0060, -95.0);
+
+    /** The light ink: a deep blue-grey at the dark ink's hue, short of black for the reason the page is short of white. */
+    private static final Oklab LIGHT_INK = Oklab.polar(0.2400, 0.0180, -117.2);
+
+    /** The teal accent, dark enough to read as a caret and a mark on the light page. */
+    private static final Oklab LIGHT_ACCENT = Oklab.polar(0.5600, 0.1000, -153.0);
+
+    /** The fill of a filled control, under the accent, so {@code Palette.contrastTo} puts the page on it. */
+    private static final Oklab LIGHT_ACTION = Oklab.polar(0.5000, 0.0900, -153.0);
+
+    /** Destructive, on a light page. */
+    private static final Oklab LIGHT_DANGER = Oklab.polar(0.5400, 0.1600, 22.0);
+
+    /** Shadows on a light page: a hint rather than a well. */
+    private static final Oklab LIGHT_DEPTH = Oklab.polar(0.3000, 0.0080, -95.0);
+
+    /** Steps run towards the ink, so on a light page each is a little darker: a card, then the current line. */
+    private static final double LIGHT_STEP = 0.026;
+
+    static final Palette LIGHT_PALETTE = new Palette(LIGHT_PAGE, LIGHT_STEP, LIGHT_INK, 0.300, LIGHT_ACCENT,
+            LIGHT_ACTION, LIGHT_DANGER, LIGHT_DEPTH, 0.16);
 
     // ------------------------------------------------------------ own roles
 
@@ -125,11 +158,15 @@ final class Look {
     static final Role THUMB = p -> p.surface(5);
 
     /**
-     * The ring round a focused document or tree: the accent's hue at under half its chroma and well under its
-     * lightness, a few steps above {@link #RIM}. The full accent round a whole card pulled the eye off the text, and
-     * so did 0.48 / 0.055; this still says where the keys go.
+     * The ring round a focused document or tree: the accent's hue at under half its chroma, three tenths of the way
+     * from the page to the ink (0.38 on the dark page), a few steps past {@link #RIM}. The full accent round a whole
+     * card pulled the eye off the text, and so did 0.48 / 0.055; this still says where the keys go. Measured from
+     * the page rather than fixed, so the light page's ring is as quiet as the dark one's.
      */
-    static final Role FOCUS = p -> Oklab.polar(0.3800, 0.0400, p.accent().hueDegrees()).toColor();
+    static final Role FOCUS = p -> {
+        double l = p.page().l() + 0.30 * (p.ink().l() - p.page().l());
+        return Oklab.polar(l, 0.0400, p.accent().hueDegrees()).toColor();
+    };
 
     /**
      * Repaints {@code node}'s ring in {@link #FOCUS} rather than ACCENT. TextField and TreeView repaint their own
@@ -149,6 +186,19 @@ final class Look {
 
     /** The editor's look: see {@link #theme}. */
     static final Theme THEME = theme(PALETTE);
+
+    /** The editor's look on {@link #LIGHT_PALETTE}: the same roles and overrides, shaded for a light page. */
+    static final Theme LIGHT_THEME = theme(LIGHT_PALETTE);
+
+    /** The look for {@code shade}. */
+    static Theme of(Preferences.Shade shade) {
+        return shade == Preferences.Shade.LIGHT ? LIGHT_THEME : THEME;
+    }
+
+    /** Whether {@code palette} is a light one: its page is lighter than its ink. */
+    static boolean light(Palette palette) {
+        return palette.page().l() > palette.ink().l();
+    }
 
     // -------------------------------------------------------------- console
 
@@ -175,7 +225,8 @@ final class Look {
      */
     private static Theme theme(Palette palette) {
         return new Theme() {
-            private final Theme base = Theme.of(palette, Shading.ON_DARK, Relief.STANDARD, false, false);
+            private final Theme base = Theme.of(palette, light(palette) ? Shading.ON_LIGHT : Shading.ON_DARK,
+                    Relief.STANDARD, false, false);
 
             @Override
             public Palette palette() {

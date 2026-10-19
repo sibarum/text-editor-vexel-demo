@@ -348,8 +348,9 @@ final class Preview {
         if (i >= LANGUAGES) {
             return theme.color(Look.RIM);
         }
-        Oklab accent = Look.PALETTE.accent();
-        return Oklab.polar(0.74 - 0.04 * (i % 2), 0.10, accent.hueDegrees() + 52.0 * i).toColor();
+        Oklab accent = theme.palette().accent();
+        double lightness = Look.light(theme.palette()) ? 0.62 : 0.74;
+        return Oklab.polar(lightness - 0.04 * (i % 2), 0.10, accent.hueDegrees() + 52.0 * i).toColor();
     }
 
     /** Rows of a name, a bar against the largest, and a number: as many rows as are ever shown, filled or hidden. */

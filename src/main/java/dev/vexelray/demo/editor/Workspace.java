@@ -359,14 +359,17 @@ final class Workspace {
         gui.focus(next.focusTarget());
     }
 
+    /** Whether documents are word-wrapped. */
+    boolean wrap() {
+        return wrap;
+    }
+
     /** Word wrap, for every document open now and opened later. */
-    boolean toggleWrap() {
-        boolean next = !wrap;
-        wrap = next;
+    void wordWrap(boolean on) {
+        wrap = on;
         for (Buffer b : all()) {
-            b.wordWrap(next);
+            b.wordWrap(on);
         }
-        return next;
     }
 
     /**

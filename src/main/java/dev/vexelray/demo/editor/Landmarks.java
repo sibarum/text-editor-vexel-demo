@@ -61,6 +61,9 @@ final class Landmarks {
     /** The Formatted button beside Run, which shows a Markdown document formatted in place of its source. */
     static final String FORMATTED = "formatted";
 
+    /** The preferences button in the main window's title bar: theme, word wrap, indexing, and where they are kept. */
+    static final String PREFERENCES = "preferences";
+
     /** The console window's tab bar and its pages: one run each. The console is {@code window console}. */
     static final String CONSOLE_TABS = "console.tabs";
 

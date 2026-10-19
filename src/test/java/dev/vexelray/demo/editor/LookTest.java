@@ -72,6 +72,23 @@ class LookTest {
         assertNear("#63d5e1", Look.THEME.color(Role.ACCENT), 0.01, "accent");
     }
 
+    /** The light look: the same relationships the other way up, and the dark ring where it was measured. */
+    @Test
+    void theLightLookIsTheSameConstructionInverted() {
+        float page = luminance(Look.LIGHT_THEME.color(Role.PAGE));
+        float card = luminance(Look.LIGHT_THEME.color(Look.CARD));
+        float panel = luminance(Look.LIGHT_THEME.color(Role.PANEL));
+        float ink = luminance(Look.LIGHT_THEME.color(Role.INK));
+        float dim = luminance(Look.LIGHT_THEME.color(Role.DIM));
+        assertTrue(page - ink > 0.6f, "the ink should be far darker than the light page");
+        assertTrue(page > card && card > panel, "surfaces step towards the ink: darker on a light page");
+        assertTrue(dim > ink, "dim text is nearer the page");
+        assertTrue(Look.light(Look.LIGHT_PALETTE));
+        assertTrue(!Look.light(Look.PALETTE));
+        double ring = Oklab.of(Look.THEME.color(Look.FOCUS)).l();
+        assertTrue(Math.abs(ring - 0.38) < 0.005, "the dark page's focus ring is where it was tuned: " + ring);
+    }
+
     private static void assertNear(String hex, Color derived, double tolerance, String what) {
         Oklab want = Oklab.of(Hex.parse(hex).orElseThrow());
         Oklab got = Oklab.of(derived);

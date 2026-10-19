@@ -3,16 +3,24 @@ package dev.vexelray.demo.editor;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.WindowRegion;
+import dev.vexelray.gui.core.input.ClickEvent;
+import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.LayoutEnums.Direction;
+import dev.vexelray.gui.core.layout.LayoutEnums.Justify;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.icons.Icon;
+import dev.vexelray.gui.icons.IconView;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.SplitPane;
 import dev.vexelray.gui.widget.StatusBar;
 import dev.vexelray.gui.widget.TitleBar;
+import dev.vexelray.gui.widget.Tooltip;
 
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /**
  * The window: the title bar, the navigator beside the tabs, and a status line under both.
@@ -39,6 +47,7 @@ final class Ui {
     /** What the window is open on, beside the application's name in the title bar. */
     private final Node project;
 
+    private volatile Consumer<ClickEvent> preferences;
     private volatile boolean navigatorShown = true;
     private volatile float navigatorDp;
 
@@ -57,7 +66,8 @@ final class Ui {
                 .textColor(gui.theme().color(Role.DIM))
                 .wordWrap(false);
         titleBar.addLeading(gui.box().width(Type.RULE).height(Length.dp(14)).background(gui.theme().color(Look.RIM)))
-                .addLeading(project);
+                .addLeading(project)
+                .addLeading(preferencesButton(gui));
         // The design's bar is the page, not chrome: the cards are what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
 
@@ -122,6 +132,34 @@ final class Ui {
         gui.root().direction(Direction.COLUMN)
                 .background(gui.theme().color(Role.PAGE))
                 .children(titleBar.node(), body, status.node());
+    }
+
+    /**
+     * The title bar's preferences button, as the console's settings button is drawn. What it opens is
+     * {@link #onPreferences}'s: the menu is the actions', which know the root and what changing each one does.
+     */
+    private Node preferencesButton(Gui gui) {
+        Node b = gui.row().role("preferences").width(Length.dp(36)).height(Length.dp(32))
+                .justify(Justify.CENTER).alignItems(AlignItems.CENTER)
+                .background(gui.theme().color(Role.NONE)).scroll(false, false)
+                .windowRegion(WindowRegion.INTERACTIVE)
+                .children(IconView.of(gui, Icon.SETTINGS).size(Length.dp(16)).tint(Role.DIM).node());
+        gui.onClick(b, (ClickEvent e) -> {
+            Consumer<ClickEvent> open = preferences;
+            if (open != null) {
+                open.accept(e);
+            }
+        });
+        gui.onState(b, state -> b.background(
+                gui.theme().color(state == InteractionState.NORMAL ? Role.NONE : Role.RAISED)));
+        new Tooltip(gui).attach(b, "Preferences");
+        gui.landmark(Landmarks.PREFERENCES, b);
+        return b;
+    }
+
+    /** What the preferences button does when clicked: present the menu at the click. */
+    void onPreferences(Consumer<ClickEvent> open) {
+        preferences = open;
     }
 
     /** Draw the eye to the status line: something was refused or failed, and the message there says what. */

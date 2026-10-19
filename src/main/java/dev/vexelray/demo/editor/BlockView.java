@@ -81,7 +81,7 @@ final class BlockView {
         Theme theme = gui.theme();
         this.dark = FileIconView.dark(theme);
         this.background = theme.color(Look.PICKING);
-        this.hue = Look.PALETTE.accent().hueDegrees();
+        this.hue = theme.palette().accent().hueDegrees();
         node = gui.box()
                 .width(Length.FILL)
                 .height(Length.grow(1))
