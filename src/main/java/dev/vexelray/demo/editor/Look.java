@@ -5,6 +5,7 @@ import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.FocusRing;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
 import dev.vexelray.gui.core.style.Relief;
@@ -124,10 +125,11 @@ final class Look {
     static final Role THUMB = p -> p.surface(5);
 
     /**
-     * The ring round a focused document or tree: the accent's hue at half its chroma and well under its lightness.
-     * The full accent round a whole card pulled the eye off the text; this still says where the keys go.
+     * The ring round a focused document or tree: the accent's hue at under half its chroma and well under its
+     * lightness, a few steps above {@link #RIM}. The full accent round a whole card pulled the eye off the text, and
+     * so did 0.48 / 0.055; this still says where the keys go.
      */
-    static final Role FOCUS = p -> Oklab.polar(0.4800, 0.0550, p.accent().hueDegrees()).toColor();
+    static final Role FOCUS = p -> Oklab.polar(0.3800, 0.0400, p.accent().hueDegrees()).toColor();
 
     /**
      * Repaints {@code node}'s ring in {@link #FOCUS} rather than ACCENT. TextField and TreeView repaint their own
@@ -198,6 +200,15 @@ final class Look {
             @Override
             public boolean letterpress() {
                 return base.letterpress();
+            }
+
+            /**
+             * The framework's ring is the full accent, 0.125 rem wide, round whatever has focus; round a whole card
+             * that is the loudest thing on screen. This one is {@link #FOCUS}, as wide as the card's own border.
+             */
+            @Override
+            public FocusRing focusRing() {
+                return FocusRing.STANDARD.color(FOCUS).width(Length.rem(0.1f));
             }
 
             @Override
