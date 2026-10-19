@@ -83,6 +83,8 @@ final class Workspace {
     private float shownX = Float.NaN;
 
     private volatile boolean wrap = true;
+    /** Told the file of every tab that closes (null for one without), after it has gone. */
+    private volatile Consumer<Path> closed = p -> { };
 
     /**
      * @param caret told where the caret is in the document in front
@@ -264,9 +266,15 @@ final class Workspace {
         }
         gone.close();
         model.closed(id);
+        closed.accept(gone.path());
         if (empty) {
             untitled();
         }
+    }
+
+    /** Be told the file of every tab that closes, or null for one that had none. Runs on the closing thread. */
+    void onClosed(Consumer<Path> handler) {
+        this.closed = handler == null ? p -> { } : handler;
     }
 
     /** The document in front, or null. */

@@ -35,6 +35,15 @@ final class Landmarks {
     /** Open's recent roots, one button each. */
     static final String RECENT = "navigator.recent";
 
+    /** Open's button that makes the scratches the root; shown once there is at least one scratch. */
+    static final String OPEN_SCRATCHES = "navigator.open-scratches";
+
+    /** The scratches laid over the navigator (Alt+N): their tree, where a file opens in a tab. */
+    static final String SCRATCHES = "navigator.scratches";
+
+    /** The New scratch button over the scratches' tree. */
+    static final String NEW_SCRATCH = "navigator.new-scratch";
+
     /** The status line, and its four slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";
     static final String STATUS_MESSAGE = "status.message";

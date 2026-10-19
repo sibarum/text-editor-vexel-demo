@@ -14,6 +14,7 @@ import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.TreeView;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -37,6 +38,11 @@ import java.util.function.Consumer;
  * arrow keys only move, so walking the folders does not change the root at every step. Whichever folder the pointer
  * is on, or the keys have reached, is handed to {@link #onPreview}, which pictures it where the editor stands.
  *
+ * <p>A third mode, <b>Scratches</b>, lays the scratches folder ({@link Scratches}) over the root's files for a moment,
+ * on Alt+N: a file picked there opens in a tab as one from the root's tree would, and the root, its tabs and the
+ * session stay as they are. The way back is Alt+N again, or the heading, which says Scratches while it is up.
+ * Open offers the same folder as a root of its own, once there is something in it.
+ *
  * <p>There is one tree per mode for the life of the window, and changing folder re-points a source and refreshes
  * its tree. The refresh lists the new folder, which is I/O, so it runs on the offload lane rather than wherever the
  * request came from.
@@ -44,7 +50,7 @@ import java.util.function.Consumer;
 final class Navigator {
 
     /** What the card is showing. */
-    enum Mode { EDIT, OPEN }
+    enum Mode { EDIT, OPEN, SCRATCHES }
 
     /** How many recent roots Open lists. One fewer than {@link Doc#RECENT}, which may hold the current root. */
     private static final int RECENT_SHOWN = Doc.RECENT - 1;
@@ -54,8 +60,14 @@ final class Navigator {
     private final Executor io;
     private final FolderSource source = new FolderSource(null);
     private final RootSource roots = new RootSource();
+    private final Scratches scratches;
+    private final FolderSource scratchSource = new FolderSource(null);
     private final TreeView<Path> tree;
     private final TreeView<Path> picker;
+    private final TreeView<Path> scratchTree;
+    private final Node scratchPane;
+    /** Open's way to the scratches as a root, shown once there is at least one. */
+    private final Button scratchesButton;
     private final Button heading;
     private final Node editPane;
     private final Node openPane;
@@ -68,16 +80,20 @@ final class Navigator {
     private volatile Mode mode = Mode.EDIT;
     private volatile Consumer<Path> openFile = p -> { };
     private volatile Consumer<Path> openFolder = p -> { };
+    private volatile Consumer<Path> newScratch = p -> { };
+    /** The root's name, for the heading: what it says again when Scratches goes. */
+    private volatile String rootLabel = "No folder";
     private volatile Consumer<Mode> modeChanged = m -> { };
     private volatile Consumer<Path> previewing = p -> { };
     private volatile BiConsumer<Runnable, Runnable> opening = (proceed, cancel) -> proceed.run();
     private volatile Path recentHover;
     private volatile Path treeHover;
 
-    Navigator(Gui gui, Motion motion) {
+    Navigator(Gui gui, Motion motion, Scratches scratches) {
         this.gui = gui;
         this.motion = motion;
         this.io = gui.offload();
+        this.scratches = scratches;
 
         // The root's name is what switches between Edit and Open: the thing to change is the thing to press. A chip,
         // outlined and so plainly pressable, that stays pressed while Open is up, so the way back is the same name
@@ -168,6 +184,22 @@ final class Navigator {
         }
         gui.landmark(Landmarks.RECENT, recent);
 
+        // The scratches, as a root like any other: a project of their own, offered once there is one to open.
+        scratchesButton = new Button(gui, Scratches.NAME).kind(Button.Kind.GHOST)
+                .onPress(() -> pick(scratches.dir()));
+        scratchesButton.node().visible(false);
+        gui.onState(scratchesButton.node(), state -> {
+            Path p = scratches.dir();
+            if (state != InteractionState.NORMAL) {
+                recentHover = p;
+            } else if (Objects.equals(recentHover, p)) {
+                recentHover = null;
+            }
+            repicture();
+        });
+        gui.landmark(Landmarks.OPEN_SCRATCHES, scratchesButton.node());
+        recent.append(scratchesButton.node());
+
         // The way up: the top folder's ancestors, each a button that lists the folders from there. Moving up does
         // not change the root, it only widens what can be picked; the root stays unfolded and selected below.
         ancestry = new Breadcrumb<Path>(gui, Navigator::crumbLabel).font(Type.UI).maxSegments(2)
@@ -207,6 +239,45 @@ final class Navigator {
                 .children(recent, gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
                         ancestry.node(), picker.node());
 
+        // Scratches: the scratches folder's files, as the root's are shown in Edit, and a way to start another.
+        scratchTree = new TreeView<>(gui, scratchSource).motion(motion.arrival);
+        scratchTree.node().width(Length.FILL).height(Length.grow(1))
+                .background(gui.theme().color(Role.NONE));
+        Look.ring(gui, scratchTree.node());
+        gui.landmark(Landmarks.SCRATCHES, scratchTree.node());
+        scratchTree.onSelect(p -> {
+            if (Files.isRegularFile(p)) {
+                openFile.accept(p);
+            }
+        });
+        scratchTree.onActivate(p -> {
+            if (Files.isDirectory(p)) {
+                scratchTree.expand(p);
+            }
+        });
+        scratchTree.onContextMenu((p, menu) -> {
+            Path folder = Files.isDirectory(p) ? p : p.getParent();
+            menu.item("New scratch here", () -> newScratch.accept(folder))
+                    .item("New folder here", () -> io.execute(() -> newFolder(folder)));
+            if (Files.isDirectory(p)) {
+                folderMenu(p, menu);
+            } else {
+                boolean vexplore = Suite.hasVexplore();
+                menu.separator()
+                        .item(Suite.vexploreLabel(vexplore), vexplore, () -> Suite.showInVexplore(p, io));
+            }
+            menu.item("Copy path", () -> gui.clipboard().set(p.toString()));
+        });
+        Button fresh = new Button(gui, "New scratch").kind(Button.Kind.GHOST).onPress(() -> newScratch.accept(null));
+        gui.landmark(Landmarks.NEW_SCRATCH, fresh.node());
+        scratchPane = gui.column()
+                .width(Length.FILL).height(Length.grow(1))
+                .gap(Type.TIGHT)
+                .alignItems(AlignItems.STRETCH)
+                .visible(false)
+                .children(fresh.node(), gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
+                        scratchTree.node());
+
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .gap(Type.TIGHT)
@@ -216,7 +287,7 @@ final class Navigator {
                 .corner(Type.CORNER)
                 .border(Type.RULE, gui.theme().color(Look.RIM))
                 .alignItems(AlignItems.STRETCH)
-                .children(heading.node(), editPane, openPane);
+                .children(heading.node(), editPane, openPane, scratchPane);
     }
 
     /**
@@ -291,6 +362,11 @@ final class Navigator {
         this.openFolder = handler;
     }
 
+    /** Be asked for a new scratch, in the folder given, or in the scratches folder for null. Runs on a worker. */
+    void onNewScratch(Consumer<Path> handler) {
+        this.newScratch = handler == null ? p -> { } : handler;
+    }
+
     /** The folder shown, or null for none. */
     Path folder() {
         return source.base();
@@ -315,26 +391,82 @@ final class Navigator {
      * above the root, which is I/O, so that part runs on the offload lane.
      */
     void mode(Mode value) {
+        Mode was = mode;
         mode = value;
         boolean open = value == Mode.OPEN;
-        heading.show(open);
+        boolean scratch = value == Mode.SCRATCHES;
+        heading.show(open || scratch);
+        heading.label(scratch ? Scratches.NAME : rootLabel);
         // Open is a different place, and looks it: the card steeps in the accent and wears it as its edge, the name
         // stays pressed, and a sweep runs down the card as it changes, so the switch is seen even by an eye that was
-        // on the document.
+        // on the document. Scratches is only laid over the root, with the editor still beside it: the edge and the
+        // sweep, not the steeping.
         Theme theme = gui.theme();
         root.background(theme.color(open ? Look.PICKING : Look.CARD))
-                .border(Type.RULE, theme.color(open ? Look.PICKING_RIM : Look.RIM));
+                .border(Type.RULE, theme.color(open || scratch ? Look.PICKING_RIM : Look.RIM));
         modeChanged.accept(value);
         if (open) {
             recentHover = null;
             treeHover = null;
             repicture();
+        }
+        if ((open || scratch) && was != value) {
             motion.cues.play(root, Cue.scanline(theme.color(Role.ACCENT)));
         }
-        editPane.visible(!open);
+        editPane.visible(value == Mode.EDIT);
         openPane.visible(open);
+        scratchPane.visible(scratch);
         if (open) {
-            io.execute(() -> listRoots(RootSource.above(source.base())));
+            io.execute(() -> {
+                scratchesButton.node().visible(scratches.any());
+                listRoots(RootSource.above(source.base()));
+            });
+        }
+        if (scratch) {
+            io.execute(this::listScratches);
+        }
+    }
+
+    /** Alt+N: lay the scratches over the root's files, or take them away again. */
+    void toggleScratches() {
+        mode(mode == Mode.SCRATCHES ? Mode.EDIT : Mode.SCRATCHES);
+    }
+
+    /** Point the scratches tree at the folder, made if this is its first look, and list it. For the offload lane. */
+    private void listScratches() {
+        try {
+            scratches.ensure();
+        } catch (IOException | RuntimeException e) {
+            // listed as empty, as any unreadable folder is
+        }
+        scratchSource.base(scratches.dir());
+        scratchTree.refresh();
+    }
+
+    /**
+     * {@code file} is a new scratch: list it, and unfold the way to it and select it, when the scratches are what is
+     * showing. For the offload lane.
+     */
+    void scratchMade(Path file) {
+        if (mode == Mode.SCRATCHES) {
+            listAndSelect(file);
+        }
+    }
+
+    /** "New folder here" in the scratches tree. For the offload lane. */
+    private void newFolder(Path parent) {
+        try {
+            listAndSelect(scratches.folder(parent));
+        } catch (IOException | RuntimeException e) {
+            // nothing made; the tree shows what is there
+        }
+    }
+
+    private void listAndSelect(Path made) {
+        listScratches();
+        List<Path> chain = scratchSource.chainTo(made);
+        if (!chain.isEmpty()) {
+            scratchTree.revealPath(chain, null);
         }
     }
 
@@ -391,6 +523,13 @@ final class Navigator {
 
     /** Make {@code folder} the root, and go back to its files. Picking the root it already is just goes back. */
     void pick(Path folder) {
+        if (scratches.is(folder)) {
+            try {
+                scratches.ensure();   // offered only once it is there, but it can go between the offer and the click
+            } catch (IOException | RuntimeException e) {
+                return;
+            }
+        }
         if (!Files.isDirectory(folder)) {
             return;
         }
@@ -405,7 +544,9 @@ final class Navigator {
      * back to; as many as there is room for are shown.
      */
     void recent(List<Path> recent, Path current) {
-        List<Path> shown = recent.stream().filter(p -> !Objects.equals(p, current)).limit(RECENT_SHOWN).toList();
+        // The scratches have a button of their own, so they are not one of the recent roots as well.
+        List<Path> shown = recent.stream().filter(p -> !Objects.equals(p, current) && !scratches.is(p))
+                .limit(RECENT_SHOWN).toList();
         for (int i = 0; i < RECENT_SHOWN; i++) {
             Path p = i < shown.size() ? shown.get(i) : null;
             recentPaths.set(i, p);
@@ -435,7 +576,11 @@ final class Navigator {
             tree.refresh();
             Path shown = source.base();
             Path name = shown == null ? null : shown.getFileName();
-            heading.label(shown == null ? "No folder" : String.valueOf(name == null ? shown : name));
+            rootLabel = shown == null ? "No folder" : scratches.is(shown) ? Scratches.NAME
+                    : String.valueOf(name == null ? shown : name);
+            if (mode != Mode.SCRATCHES) {
+                heading.label(rootLabel);
+            }
             tree.node().visible(shown != null);
             // A root arriving from anywhere (the folder dialog, the command line) is somewhere to edit; Open was
             // for finding one.
@@ -456,7 +601,7 @@ final class Navigator {
         if (!source.holds(file)) {
             return false;
         }
-        if (mode == Mode.OPEN) {
+        if (mode != Mode.EDIT) {
             mode(Mode.EDIT);
         }
         // The way down depends on which folders are merged into one row, which is a listing per level: offloaded.
@@ -479,10 +624,10 @@ final class Navigator {
 
     /** Put the keyboard in whichever tree is showing. */
     void focus() {
-        if (mode == Mode.OPEN) {
-            picker.focus();
-        } else {
-            tree.focus();
+        switch (mode) {
+            case OPEN -> picker.focus();
+            case SCRATCHES -> scratchTree.focus();
+            case EDIT -> tree.focus();
         }
     }
 }

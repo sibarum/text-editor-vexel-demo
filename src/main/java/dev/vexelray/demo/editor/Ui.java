@@ -35,16 +35,18 @@ final class Ui {
     private final SplitPane split;
     private final Motion motion;
     private final Color danger;
+    private final Scratches scratches;
     /** What the window is open on, beside the application's name in the title bar. */
     private final Node project;
 
     private volatile boolean navigatorShown = true;
     private volatile float navigatorDp;
 
-    Ui(Gui gui, Motion motion, Model model, TitleBar titleBar) {
+    Ui(Gui gui, Motion motion, Model model, TitleBar titleBar, Scratches scratches) {
         this.titleBar = titleBar;
         this.motion = motion;
         this.danger = gui.theme().color(Role.DANGER);
+        this.scratches = scratches;
 
         // The bar's caption is the application's name, and what it is open on stands beside it after a rule. The
         // caption's own ink is the bar's (DIM, at the bar's size), so the design's bright name is not reachable.
@@ -72,7 +74,7 @@ final class Ui {
             gui.landmark(slot, status.slot(slot));
         }
 
-        navigator = new Navigator(gui, motion);
+        navigator = new Navigator(gui, motion, scratches);
         workspace = new Workspace(gui, motion, model, p -> {
             status.text(Landmarks.STATUS_SCOPE, p.scope());
             status.text(Landmarks.STATUS_POSITION, "Ln " + p.line() + ", Col " + p.column());
@@ -157,7 +159,9 @@ final class Ui {
         Doc.Entry front = doc.front();
         Path folder = doc.folder();
         Path name = folder == null ? null : folder.getFileName();
-        project.text(folder != null ? String.valueOf(name == null ? folder : name)
+        String root = folder == null ? null
+                : scratches.is(folder) ? Scratches.NAME : String.valueOf(name == null ? folder : name);
+        project.text(root != null ? root
                 : front == null ? "" : front.title());
         status.text(Landmarks.STATUS_MESSAGE, doc.status());
         status.text(Landmarks.STATUS_LANGUAGE, front == null ? "" : front.language());

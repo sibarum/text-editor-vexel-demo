@@ -37,6 +37,7 @@ mvn -Plarge-file-bench test                               # the large-file bench
 | Keys | Does |
 | --- | --- |
 | Ctrl+N | new document |
+| Ctrl+Shift+N / Alt+N | new scratch / the scratches over the navigator, or back (see Scratches) |
 | Ctrl+O / Ctrl+Shift+O | open a file / open a folder in the navigator |
 | Ctrl+S / Ctrl+Shift+S | save / save as |
 | Ctrl+W | close the tab (asks if it is unsaved) |
@@ -96,6 +97,19 @@ their family, as the suite's file icons are, and the larger blocks whose tops ca
 view is a long lens from above at three quarters, close to orthographic, so sizes compare across the picture. It
 is drawn with the engine's polygon meshes (`BlockView`, through `vexelray-technique-mesh`), only when the folder
 or the size of the panel changes. The walk is bounded too (`Blocks`: 1,500 files, eight folders deep).
+
+**Scratches** are files that belong to no project: a note, a pasted log, a snippet being worked out, not to be
+deleted and with nowhere in particular to save it. They live in the editor's own folder, beside its settings
+(`~/.text-editor/scratches`, or under `-Dtext-editor.home`). Ctrl+Shift+N makes one, named for the minute
+(`2026-10-19-1432.md`; Markdown, so it has the Formatted view) and open in front; it is an ordinary file from
+then on and Ctrl+S saves it. One closed with nothing ever written to it is taken away again. Closing an Untitled
+document with unsaved work offers *Keep as scratch* beside Save and Don't save.
+
+Alt+N lays the scratches over the navigator without leaving the root: the panel is edged in the accent and its
+heading says *Scratches*, a file picked there opens in a tab as any other does, and Alt+N again (or the heading)
+puts the root's files back. Over the tree is *New scratch*; a row's menu has *New scratch here* and *New folder
+here*, and a folder's has *Open in Vexplore*, where scratches are moved and renamed. Once there is at least one
+scratch, Open lists **Scratches** under Recent, to make the folder the root like any project.
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -159,6 +173,7 @@ its tabs `console.tabs` and its settings button `console.settings`.
 | `Runs.java` | what the Run menu offers for a folder and a document, worked out from what is on disk |
 | `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
+| `Scratches.java` | the scratches' folder: making a scratch, and taking one away that was never written to |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `Actions.java` | every command, and the questions some of them ask first, through the framework's `Dialogs`; also the main window's close gate |
 | `Session.java` | what is remembered between runs, and bringing it back |

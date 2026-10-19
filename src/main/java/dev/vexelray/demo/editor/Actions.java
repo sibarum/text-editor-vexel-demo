@@ -53,6 +53,7 @@ final class Actions {
     private final ProjectIndex concordance;
     private final Session session;
     private final Console console;
+    private final Scratches scratches;
     private final Executor io;
     /** The root last asked for — set as it is asked for, where the navigator's own folder arrives a listing later. */
     private volatile Path root;
@@ -67,7 +68,8 @@ final class Actions {
     private static final List<FileDialog.Filter> TEXT = List.of(FileDialog.Filter.of("Text files",
             Highlighter.knownExtensions().stream().sorted().toArray(String[]::new)));
 
-    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session, Dialogs dialogs, Console console) {
+    Actions(Gui gui, Model model, Ui ui, ProjectIndex concordance, Session session, Dialogs dialogs, Console console,
+            Scratches scratches) {
         this.gui = gui;
         this.dialogs = dialogs;
         this.model = model;
@@ -77,10 +79,18 @@ final class Actions {
         this.concordance = concordance;
         this.session = session;
         this.console = console;
+        this.scratches = scratches;
         this.io = gui.offload();
         // From the navigator the keyboard stays in the navigator, so walking it with the arrows keeps walking.
         nav.onOpenFile(file -> open(file, false));
         nav.onOpenFolder(this::switchRoot);
+        nav.onNewScratch(this::newScratch);
+        // A scratch made and closed with nothing written to it goes again: a deletion, so not on the closing thread.
+        ws.onClosed(file -> {
+            if (scratches.holds(file)) {
+                io.execute(() -> scratches.closed(file));
+            }
+        });
         nav.onOpening((proceed, cancel) -> settleUnsaved(ws.all(), proceed, cancel));
         ws.runButton().onPress(this::runMenu);
         ws.formattedButton().onPress(this::toggleFormatted);
@@ -107,6 +117,8 @@ final class Actions {
     /** Every chord, as a {@code GLOBAL} claim: a focused field still owns the keys it claims for itself. */
     void shortcuts() {
         gui.shortcut(Key.N, this::newFile, Modifier.CONTROL);
+        gui.shortcut(Key.N, () -> newScratch(null), Modifier.CONTROL, Modifier.SHIFT);
+        gui.shortcut(Key.N, this::toggleScratches, Modifier.ALT);
         gui.shortcut(Key.O, this::open, Modifier.CONTROL);
         gui.shortcut(Key.O, this::openFolder, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.S, this::save, Modifier.CONTROL);
@@ -135,6 +147,36 @@ final class Actions {
 
     void open() {
         dialogs.openFile(startDir(), List.of(), this::open, () -> { });
+    }
+
+    /**
+     * Ctrl+Shift+N, and the scratches' own New: a new, empty scratch in {@code folder} (the scratches folder for null),
+     * open in front. The file is made at once, so Ctrl+S just saves it; closed with nothing written, it goes again.
+     */
+    void newScratch(Path folder) {
+        io.execute(() -> {
+            Path made;
+            try {
+                made = scratches.create(folder);
+            } catch (IOException | RuntimeException e) {
+                LOG.warn("could not make a scratch in {}", scratches.dir(), e);
+                model.say("Could not make a scratch");
+                ui.alert();
+                tell("Could not make a scratch", String.valueOf(e.getMessage()));
+                return;
+            }
+            load(made, true);
+            nav.scratchMade(made);
+            model.say("New scratch " + made.getFileName());
+        });
+    }
+
+    /** Alt+N: the scratches over the navigator's files, or the files again. The navigator is shown for it. */
+    void toggleScratches() {
+        nav.toggleScratches();
+        if (nav.mode() == Navigator.Mode.SCRATCHES) {
+            ui.showNavigator(true);
+        }
     }
 
     /** Ctrl+Shift+O: the folder dialog, as the way to a new root, so unsaved work is settled before it as Open settles it. */
@@ -385,6 +427,7 @@ final class Actions {
                 return;
             }
             Path saved0 = target.toAbsolutePath().normalize();
+            scratches.written(saved0);
             b.savedAs(saved0);
             ws.syncFormatted();
             model.saved(b.id, saved0, b.language());
@@ -462,10 +505,34 @@ final class Actions {
             return;
         }
         String name = b.name() == null ? "Untitled" : b.name();
-        dialogs.ask(Modal.of("Unsaved changes", "Save the changes to " + name + " before closing it?")
-                .defaultButton("Save", () -> save(b, () -> ws.close(b.id), () -> { }))
+        Modal question = Modal.of("Unsaved changes", "Save the changes to " + name + " before closing it?")
+                .defaultButton("Save", () -> save(b, () -> ws.close(b.id), () -> { }));
+        // A document that was never saved anywhere may belong nowhere: it can be kept without deciding where.
+        if (b.path() == null && b.library() == null) {
+            question.button("Keep as scratch", () -> keepAsScratch(b, () -> ws.close(b.id)));
+        }
+        dialogs.ask(question
                 .button("Don't save", () -> ws.close(b.id))
                 .cancelButton("Cancel", () -> { }));
+    }
+
+    /** Save {@code b}, an Untitled document, as a new scratch, then {@code then}; nothing happens if it cannot be. */
+    private void keepAsScratch(Buffer b, Runnable then) {
+        io.execute(() -> {
+            Path target;
+            try {
+                target = scratches.name();
+            } catch (IOException | RuntimeException e) {
+                LOG.warn("could not make the scratches folder {}", scratches.dir(), e);
+                model.say("Could not keep it as a scratch");
+                ui.alert();
+                return;
+            }
+            write(b, target, () -> {
+                model.say("Kept as scratch " + target.getFileName());
+                then.run();
+            }, () -> { });
+        });
     }
 
     /** Close every one of {@code buffers}, asking once about all the unsaved ones together. */

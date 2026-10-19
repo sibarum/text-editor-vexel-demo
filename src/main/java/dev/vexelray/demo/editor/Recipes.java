@@ -81,12 +81,21 @@ final class Recipes {
     }
 
     /**
+     * The scratches' folder, beside the settings ({@code ~/.text-editor/scratches}), as the index is: the editor's own
+     * place, which {@code AppHome} keeps the same on every platform and a test can move with {@code text-editor.home}.
+     */
+    @Provides
+    Scratches scratches(Settings settings) {
+        return new Scratches(settings.path().resolveSibling("scratches"));
+    }
+
+    /**
      * The window's contents. Needs the {@code Gui}, its clock and its title bar, and no window, so a test can build it headless.
      * Every change to the session redraws what is derived from it and is remembered for next time.
      */
     @Provides
-    Ui ui(Gui gui, KronoGui krono, Model model, TitleBar titleBar, Session session) {
-        Ui ui = new Ui(gui, new Motion(krono), model, titleBar);
+    Ui ui(Gui gui, KronoGui krono, Model model, TitleBar titleBar, Session session, Scratches scratches) {
+        Ui ui = new Ui(gui, new Motion(krono), model, titleBar, scratches);
         model.onChange(doc -> {
             ui.show(doc);
             session.remember();
@@ -111,8 +120,8 @@ final class Recipes {
      */
     @Provides
     Actions actions(Gui gui, Model model, Ui ui, ProjectIndex index, Session session, Dialogs dialogs,
-                    Console console) {
-        Actions actions = new Actions(gui, model, ui, index, session, dialogs, console);
+                    Console console, Scratches scratches) {
+        Actions actions = new Actions(gui, model, ui, index, session, dialogs, console, scratches);
         actions.shortcuts();
         ui.workspace().untitled();
         return actions;
