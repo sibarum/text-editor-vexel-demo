@@ -189,6 +189,7 @@
                 <directory>src/main/rc</directory>
                 <includes>
                     <include>editor.ico</include>
+                    <include>editor-background.ico</include>
                 </includes>
             </resource>
         </resources>
