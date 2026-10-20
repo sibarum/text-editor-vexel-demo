@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
-import dev.sibarum.suite.tty.ConPty;
+import dev.sibarum.suite.tty.Pty;
+import dev.sibarum.suite.tty.PtyPlatform;
 import dev.sibarum.suite.tty.Pump;
 import dev.sibarum.suite.tty.Terminal;
 import dev.sibarum.suite.tty.TerminalScreen;
@@ -15,8 +16,6 @@ import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
@@ -24,9 +23,9 @@ import java.util.Locale;
  * left of it once it has ended — the output, still scrollable, selectable and copyable, with the program, its
  * pseudoconsole and its pipes all gone.
  *
- * <p>On Windows the program runs on a pseudoconsole, through {@code cmd.exe}, so it sees a real console: Maven
- * colours its output and draws its progress, and Ctrl+C reaches it as the interrupt. Elsewhere it runs through
- * {@code sh} on pipes, which is a program that sees no terminal but whose output is still shown.
+ * <p>The program runs on a pseudo-terminal, through the platform's shell ({@code cmd.exe} on Windows, {@code sh}
+ * on Linux: {@link PtyPlatform#runLine}), so it sees a real terminal: Maven colours its output and draws its
+ * progress, and Ctrl+C reaches it as the interrupt.
  *
  * <p>While it runs, what is typed goes to it: a program that asks a question can be answered. Ctrl+C copies when
  * something is selected and interrupts otherwise; Ctrl+Shift+C always copies.
@@ -46,10 +45,8 @@ final class Job implements AutoCloseable {
     private final Terminal term;
     private final TerminalScreen screen;
     private final Runnable changed;
-    /** Exactly one of these is the program: the pseudoconsole on Windows, the process elsewhere. */
-    private final ConPty pty;
-    private final Process process;
-    private final OutputStream stdin;
+    /** The program, on its pseudo-terminal. */
+    private final Pty pty;
     private final long started = System.nanoTime();
     private volatile long ended;
     private volatile State state = State.RUNNING;
@@ -70,8 +67,6 @@ final class Job implements AutoCloseable {
         this.run = run;
         this.gui = gui;
         this.changed = changed;
-        ConPty p = null;
-        Process proc = null;
         Terminal.Host host = new Terminal.Host() {
             @Override
             public void reply(String s) {
@@ -86,30 +81,18 @@ final class Job implements AutoCloseable {
         this.term = new Terminal(cols, rows, host);
         // What is about to run, and where, as the first line: what the console shows can be run again by hand.
         term.feed("\u001b[2m> " + run.line() + "\r\n  in " + run.dir() + "\u001b[0m\r\n\r\n");
-        if (Runs.WINDOWS) {
-            try {
-                // /s and the outer quotes: cmd takes the line between them as it is, quotes and all. The cursor is
-                // inherited, or the pseudoconsole would clear the screen and take the line above with it.
-                p = ConPty.start("cmd.exe /d /s /c \"" + run.line() + "\"", cols, rows, run.dir().toString(), true);
-            } catch (RuntimeException e) {
-                throw new IOException(e.getMessage(), e);
-            }
-        } else {
-            proc = new ProcessBuilder("/bin/sh", "-c", run.line())
-                    .directory(run.dir().toFile()).redirectErrorStream(true).start();
+        try {
+            // The cursor is inherited, or a Windows pseudoconsole would clear the screen and take the line above
+            // with it.
+            this.pty = Pty.start(PtyPlatform.current().runLine(run.line()), cols, rows, run.dir().toString(), true);
+        } catch (RuntimeException e) {
+            throw new IOException(e.getMessage(), e);
         }
-        this.pty = p;
-        this.process = proc;
-        this.stdin = proc == null ? null : proc.getOutputStream();
         this.screen = new TerminalScreen(gui, glyphs, Type.MONO, term, fontPx, changed)
                 .colors(background, foreground);
-        if (pty != null) {
-            ConPty console = pty;
-            screen.onFit(console::resize);
-        }
+        screen.onFit(pty::resize);
         wire();
-        Pump.Source source = pty != null ? Pump.of(pty) : lineEnds(Pump.of(proc.getInputStream()));
-        Pump.start(source, term, screen::invalidate, this::finished, "run-" + id);
+        Pump.start(Pump.of(pty), term, screen::invalidate, this::finished, "run-" + id);
     }
 
     Node node() {
@@ -199,36 +182,15 @@ final class Job implements AutoCloseable {
     }
 
     private void end() {
-        if (pty != null) {
-            pty.close();
-        }
-        if (process != null) {
-            process.descendants().forEach(ProcessHandle::destroyForcibly);
-            process.destroyForcibly();
-        }
+        pty.close();
     }
 
     // -- the end ----------------------------------------------------------------------------------------------
 
     /** The output has ended: the program is gone. Its exit code and time go under its output, and the console closes. */
     private void finished() {
-        int code;
-        try {
-            code = pty != null ? pty.waitFor() : process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            code = -1;
-        }
-        if (pty != null) {
-            pty.close();
-        }
-        if (stdin != null) {
-            try {
-                stdin.close();
-            } catch (IOException ignored) {
-                // nothing is listening any more, which is the point
-            }
-        }
+        int code = pty.waitFor();
+        pty.close();
         long now = System.nanoTime();
         String took = duration(now - started);
         State end = stopping ? State.STOPPED : code == 0 ? State.SUCCEEDED : State.FAILED;
@@ -320,39 +282,6 @@ final class Job implements AutoCloseable {
         if (!running()) {
             return;
         }
-        if (pty != null) {
-            pty.write(s);
-        } else if (stdin != null) {
-            try {
-                // A pipe has no line discipline: Enter is a line end, and Ctrl+C is nothing it can carry.
-                stdin.write(s.replace('\r', '\n').getBytes(StandardCharsets.UTF_8));
-                stdin.flush();
-            } catch (IOException e) {
-                LOG.debug("{} took no more input", run.line(), e);
-            }
-        }
-    }
-
-    /** Output from a pipe ends its lines with a bare line feed, where a terminal wants a return before it. */
-    private static Pump.Source lineEnds(Pump.Source from) {
-        return new Pump.Source() {
-            private byte[] raw = new byte[0];
-
-            @Override
-            public int read(byte[] buf) throws IOException {
-                if (raw.length < buf.length / 2) {
-                    raw = new byte[buf.length / 2];
-                }
-                int n = from.read(raw);
-                int o = 0;
-                for (int i = 0; i < n; i++) {
-                    if (raw[i] == '\n') {
-                        buf[o++] = '\r';
-                    }
-                    buf[o++] = raw[i];
-                }
-                return n <= 0 ? n : o;
-            }
-        };
+        pty.write(s);
     }
 }
