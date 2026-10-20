@@ -382,6 +382,48 @@
     </build>
 
     <profiles>
+        <!--
+          This application's own icons, switched on by the folder, as vexelray-framework-template's app-icons profile:
+          art in src/main/icons/small (a 16-unit grid, for 24 px and under) or src/main/icons/large (a 64-unit grid,
+          above), one file per icon named for it (make-root.svg is MAKE_ROOT). The build bakes it into TextEditorIcon,
+          a set that extends the suite's dev.vexelray.gui.icons.Icon: its grids, none of its names, and every place an
+          Icon goes. See vexelray-gui/vexelray-gui-icons/README.md, "An application's own icons".
+        -->
+        <profile>
+            <id>app-icons</id>
+            <activation><file><exists>${basedir}/src/main/icons</exists></file></activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>dev.vexelray.gui</groupId>
+                        <artifactId>vexelray-gui-icons-maven-plugin</artifactId>
+                        <version>${vexelray-gui.version}</version>
+                        <executions>
+                            <execution>
+                                <goals><goal>bake</goal></goals>
+                                <configuration>
+                                    <extends>dev.vexelray.gui.icons.Icon</extends>
+                                    <packageName>dev.vexelray.demo.editor</packageName>
+                                    <enumName>TextEditorIcon</enumName>
+                                    <directories>
+                                        <directory>
+                                            <path>src/main/icons/small</path>
+                                            <size>small</size>
+                                            <optional>true</optional>
+                                        </directory>
+                                        <directory>
+                                            <path>src/main/icons/large</path>
+                                            <size>large</size>
+                                            <optional>true</optional>
+                                        </directory>
+                                    </directories>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!-- Build-time platform selection: exactly one activates from the host OS, adding VexelRay's
              matching provider module and tactroller's input backend (both found by ServiceLoader). -->
         <profile>

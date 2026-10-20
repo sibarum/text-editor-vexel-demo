@@ -14,6 +14,7 @@ import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.style.Theme;
+import dev.vexelray.gui.icons.Icon;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
@@ -156,9 +157,9 @@ final class Navigator {
                 tree.expand(p);
             }
         });
-        tree.action(TreeView.Action.<Path>of("›", "Open", (p, job) -> openFile.accept(p))
+        tree.action(TreeView.Action.<Path>of(Icon.CHEVRON_RIGHT, "Open", (p, job) -> openFile.accept(p))
                 .enabledWhen(Files::isRegularFile));
-        tree.action(TreeView.Action.<Path>of("»", "Make this the root", (p, job) -> pick(p))
+        tree.action(TreeView.Action.<Path>of(TextEditorIcon.MAKE_ROOT, "Make this the root", (p, job) -> pick(p))
                 .shownWhen(Files::isDirectory));
         tree.onContextMenu((p, menu) -> {
             if (Files.isDirectory(p)) {
@@ -248,7 +249,7 @@ final class Navigator {
         picker.onSelect(p -> repicture());
         picker.onClick(this::pick);
         picker.onActivate(this::pick);
-        picker.action(TreeView.Action.<Path>of("»", "Make this the root", (p, job) -> pick(p)));
+        picker.action(TreeView.Action.<Path>of(TextEditorIcon.MAKE_ROOT, "Make this the root", (p, job) -> pick(p)));
         picker.onContextMenu((p, menu) -> {
             folderMenu(p, menu);
             menu.item("Copy path", () -> gui.clipboard().set(p.toString()));
