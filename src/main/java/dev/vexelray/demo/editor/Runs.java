@@ -1,7 +1,8 @@
 package dev.vexelray.demo.editor;
 
+import dev.sibarum.suite.tty.PtyPlatform;
+
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -39,7 +40,8 @@ final class Runs {
     record Run(String label, String line, Path dir) {
     }
 
-    static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    /** What counts as a program here, how to run one, and how to quote: the platform's to say, not this class's. */
+    private static final PtyPlatform PLATFORM = PtyPlatform.current();
 
     /** How deep the walk for programs goes, and how many it offers. */
     static final int DEPTH = 4;
@@ -80,7 +82,7 @@ final class Runs {
             separate(runs);
             runs.addAll(maven(pom));
         }
-        if (WINDOWS && project != null && Files.isDirectory(project)) {
+        if (project != null && Files.isDirectory(project)) {
             List<Run> programs = programs(project, file);
             if (!programs.isEmpty()) {
                 separate(runs);
@@ -163,14 +165,14 @@ final class Runs {
         return runs;
     }
 
-    /** The newest program in {@code target}: an executable on Windows, or a jar that names its main class. */
+    /** The newest program in {@code target}: one of this platform's programs, or a jar that names its main class. */
     static Run recentBuild(Path target) {
         if (!Files.isDirectory(target)) {
             return null;
         }
         try (Stream<Path> files = Files.list(target)) {
             return files.filter(Files::isRegularFile)
-                    .filter(p -> (WINDOWS && isExecutable(p)) || isRunnableJar(p))
+                    .filter(p -> PLATFORM.programLine(p).isPresent() || isRunnableJar(p))
                     .max(Comparator.comparing(Runs::modified))
                     .map(p -> new Run("Run Recent Build (" + p.getFileName() + ")", programLine(p), target.getParent()))
                     .orElse(null);
@@ -229,68 +231,33 @@ final class Runs {
                 if (depth + 1 < DEPTH && !FolderSource.HIDDEN.contains(name) && !name.startsWith(".")) {
                     walk(p, depth + 1, found, visited);
                 }
-            } else if (kind(p) != null) {
+            } else if (PLATFORM.programLine(p).isPresent()) {
                 found.add(p);
             }
         }
     }
 
-    /** What kind of program {@code p} is on Windows (exe, ps1, bat), or null for none. */
-    static String kind(Path p) {
-        if (!WINDOWS) {
-            return null;
-        }
-        String name = String.valueOf(p.getFileName()).toLowerCase(Locale.ROOT);
-        if (name.endsWith(".ps1")) {
-            return "ps1";
-        }
-        if (name.endsWith(".bat") || name.endsWith(".cmd")) {
-            return "bat";
-        }
-        return name.endsWith(".exe") && isExecutable(p) ? "exe" : null;
-    }
-
     /** Running program {@code p} as {@code label}, in {@code dir}; null when it is not one this runs. */
     private static Run program(Path p, Path dir, String label) {
-        if (kind(p) == null && !String.valueOf(p.getFileName()).endsWith(".jar")) {
+        if (PLATFORM.programLine(p).isEmpty() && !String.valueOf(p.getFileName()).endsWith(".jar")) {
             return null;
         }
         return new Run(label, programLine(p), dir);
     }
 
-    /** The shell line that runs program {@code p}. */
+    /** The shell line that runs program {@code p}: a jar through {@code java}, anything else as the platform runs it. */
     static String programLine(Path p) {
-        String path = quote(p.toAbsolutePath().toString());
-        String name = String.valueOf(p.getFileName()).toLowerCase(Locale.ROOT);
-        if (name.endsWith(".jar")) {
-            return "java -jar " + path;
+        if (String.valueOf(p.getFileName()).toLowerCase(Locale.ROOT).endsWith(".jar")) {
+            return "java -jar " + quote(p.toAbsolutePath().toString());
         }
-        if (name.endsWith(".ps1")) {
-            return "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File " + path;
-        }
-        return path;
-    }
-
-    /** A Windows executable is a PE file, and every PE file starts {@code MZ}. */
-    static boolean isExecutable(Path p) {
-        if (!String.valueOf(p.getFileName()).toLowerCase(Locale.ROOT).endsWith(".exe")) {
-            return false;
-        }
-        try (InputStream in = Files.newInputStream(p)) {
-            return in.read() == 'M' && in.read() == 'Z';
-        } catch (IOException e) {
-            return false;
-        }
+        return PLATFORM.programLine(p).orElse(quote(p.toAbsolutePath().toString()));
     }
 
     // -- plumbing ---------------------------------------------------------------------------------------------
 
     /** {@code s} as one word for the platform's shell. */
     static String quote(String s) {
-        if (WINDOWS) {
-            return s.matches("[\\w.:\\\\/=-]+") ? s : "\"" + s + "\"";
-        }
-        return s.matches("[\\w.:/=-]+") ? s : "'" + s.replace("'", "'\\''") + "'";
+        return PLATFORM.quote(s);
     }
 
     private static boolean isUnder(Path file, Path dir) {
