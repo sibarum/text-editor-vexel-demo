@@ -3,7 +3,7 @@
   "name": "Vex",
   "publisher": "sibarum",
   "description": "A tabbed text editor with a file navigator, on the VexelRay stack.",
-  "version": "0.1.1",
+  "version": "0.1.2-SNAPSHOT",
 
   "repo": "sibarum/vexelray-dist",
   "branch": "main",
