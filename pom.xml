@@ -563,6 +563,28 @@
                 </plugins>
             </build>
         </profile>
+        <!-- Linux: mvn -Pnative-linux package -DskipTests  ->  target-linux/text-editor. No linker options and no
+             rc.exe; a Linux executable has no subsystem and no icon of its own. -->
+        <profile>
+            <id>native-linux</id>
+            <properties>
+                <native.imageName>text-editor</native.imageName>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <buildArgs combine.self="override">
+                                <buildArg>--no-fallback</buildArg>
+                            </buildArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!--
           The large-file benchmark: mvn -Plarge-file-bench test
           Runs LargeFileBench alone, which is otherwise skipped, and writes target/large-file-bench.md. It generates
