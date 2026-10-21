@@ -32,7 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
 final class FolderSource implements TreeView.Source<Path> {
 
     /** Directories nobody opens a file in, left out of the listing so a project's tree is the project. */
-    static final Set<String> HIDDEN = Set.of(".git", ".svn", ".hg", ".idea", "node_modules", "target", "__pycache__");
+    static final Set<String> HIDDEN = Set.of(".git", ".svn", ".hg", ".idea", "node_modules", "target", "target-linux",
+            "__pycache__");
 
     private static final Comparator<Path> ORDER = Comparator
             .comparing((Path p) -> !Files.isDirectory(p))
