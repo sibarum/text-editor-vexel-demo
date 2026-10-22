@@ -9,7 +9,8 @@ input, the clipboard, window memory, the frame loop, the dialogs, the command li
 framework's, and every file here is about editing text. It replaces an earlier editor in this repository that was
 deleted rather than repaired; the grammars, the file-loading policy and the highlighting tables were carried over
 from its history, and the rest was written fresh. [docs/framework-notes.md](docs/framework-notes.md) is what
-rebuilding it found out about the framework.
+rebuilding it found out about the framework, and [docs/retrospective.md](docs/retrospective.md) is the pass over those
+notes at the end of each milestone.
 
 ## Run it
 
