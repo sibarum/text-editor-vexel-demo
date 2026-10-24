@@ -57,6 +57,7 @@
     "binaries": [
       {
         "name": "text-editor",
+        "appId": "dev.vexelray.demo.text-editor-vexel-demo",
         "source": "target-linux/text-editor",
         "icon": "src/main/rc/editor.ico",
         "addToPath": true,
