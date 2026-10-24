@@ -49,6 +49,11 @@
           { "extension": ".dockerfile", "description": "Dockerfile", "icon": "src/main/rc/file-plain-text.ico" }
         ]
       },
+      {
+        "name": "text-editor-ffmpeg-record",
+        "source": "target/text-editor-ffmpeg-record-windows-x86_64.zip",
+        "dir": "ffmpeg-record"
+      },
       { "name": "notices", "source": "THIRD-PARTY-NOTICES.txt" }
     ]
   },
@@ -91,6 +96,11 @@
           { "extension": ".patch", "description": "Patch File", "contentType": "text/x-diff", "icon": "src/main/rc/file-plain-text.ico" },
           { "extension": ".dockerfile", "description": "Dockerfile", "icon": "src/main/rc/file-plain-text.ico" }
         ]
+      },
+      {
+        "name": "text-editor-ffmpeg-record",
+        "source": "target-linux/text-editor-ffmpeg-record-linux-x86_64.tar.gz",
+        "dir": "ffmpeg-record"
       },
       { "name": "notices", "source": "THIRD-PARTY-NOTICES.txt" }
     ]
