@@ -40,7 +40,7 @@ public final class TextEditor {
     static final String APP = "text-editor";
 
     /** The window's title. */
-    static final String TITLE = "Vex";
+    static final String TITLE = "VexelRay IDE";
 
     /** Window size on a first run, in the engine's logical coordinates. */
     static final int W = 1180;

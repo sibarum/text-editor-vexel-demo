@@ -1,4 +1,4 @@
-# Vex
+# VexelRay IDE
 
 A tabbed text editor with a file navigator, on the VexelRay stack.
 
@@ -133,8 +133,8 @@ fails, or a Save As that is cancelled, cancels whatever was waiting on it, quitt
 **Preferences** are behind the gear in the title bar, beside the project's name:
 
 - **Theme**: Dark (the default) or Light, a soft off-white page with darker code colours, for bright or artificial
-  light. Vex is the only application in the suite with a light theme. The look is chosen when the window is built,
-  so a change takes effect at the next start, and the menu says so until then.
+  light. VexelRay IDE is the only application in the suite with a light theme. The look is chosen when the window
+  is built, so a change takes effect at the next start, and the menu says so until then.
 - **Word wrap** (also Alt+Z) and **Index Maven projects**. With indexing off, opening a Maven project builds no
   index, and Ctrl+Enter looks only in the file in front.
 - **Keep for this project, in .vex**: the root's word wrap and indexing are kept in `<root>/.vex/preferences.properties`,

@@ -1,6 +1,6 @@
 # Retrospective
 
-What each milestone of **Vex** showed when it was read back: the shapes in
+What each milestone of **VexelRay IDE** showed when it was read back: the shapes in
 [framework-notes.md](framework-notes.md) since the last one, what would stop each, what went wrong in how the work
 was done, and what to keep. The notes are written one at a time, as each workaround is written. This file is the pass
 over them, and it is where the framework takes its proposals from.

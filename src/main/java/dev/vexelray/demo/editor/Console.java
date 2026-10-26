@@ -60,7 +60,7 @@ final class Console implements WakeSource, AutoCloseable {
 
     private static final Log LOG = Log.of("editor.run");
 
-    static final NamedWindow DECLARED = NamedWindow.of("console", "Vex Console", 980, 560).theme(Look.CONSOLE);
+    static final NamedWindow DECLARED = NamedWindow.of("console", "VexelRay IDE Console", 980, 560).theme(Look.CONSOLE);
 
     /** Settings: how many finished runs keep their tabs (0 is all of them), and for how many minutes (0 is forever). */
     static final String KEEP = "console.keep";

@@ -36,7 +36,7 @@ import sibarum.atchung.Subscription;
  * <p>Two things in the design are not where the framework's roles put them, and are overridden by name in
  * {@link #THEME} rather than absorbed: a selected row is tinted with the accent, and a scrollbar thumb is quiet.
  *
- * <h2>Light, for Vex alone</h2>
+ * <h2>Light, for VexelRay IDE alone</h2>
  *
  * <p>{@link #LIGHT_THEME} is the same construction on a soft off-white page, for reading under bright or artificial
  * light. It is a preference ({@link Preferences.Shade}), Dark is the default, and it is this application's only: the

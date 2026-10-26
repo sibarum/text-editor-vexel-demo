@@ -35,7 +35,10 @@ final class Preferences {
 
     private static final Log LOG = Log.of("editor.files");
 
-    /** A look Vex can start in. Dark is the default; Light is for bright or artificial light, and is Vex's alone. */
+    /**
+     * A look VexelRay IDE can start in. Dark is the default; Light is for bright or artificial light, and is
+     * VexelRay IDE's alone.
+     */
     enum Shade {
         DARK, LIGHT
     }
