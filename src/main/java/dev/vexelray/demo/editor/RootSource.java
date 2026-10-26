@@ -1,5 +1,7 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.gui.core.IconSource;
+import dev.vexelray.gui.fileicons.FileFamily;
 import dev.vexelray.gui.widget.TreeView;
 
 import java.io.IOException;
@@ -58,6 +60,11 @@ final class RootSource implements TreeView.Source<Path> {
     public String label(Path item) {
         Path name = item.getFileName();
         return name != null ? name.toString() : item.toString();
+    }
+
+    @Override
+    public IconSource icon(Path item) {
+        return FileFamily.FOLDERS;   // every row here is a folder
     }
 
     @Override

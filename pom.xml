@@ -509,6 +509,17 @@
                                     </directories>
                                 </configuration>
                             </execution>
+                            <!-- The Java and Maven icons the navigator's rows wear, copied from vexelray-icons/java: each
+                                 colour of a drawing its own distance field, drawn one over the other (JavaIcon). -->
+                            <execution>
+                                <id>java-icons</id>
+                                <goals><goal>layered</goal></goals>
+                                <configuration>
+                                    <packageName>dev.vexelray.demo.editor</packageName>
+                                    <enumName>JavaIcon</enumName>
+                                    <directory>src/main/icons/java</directory>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                 </plugins>

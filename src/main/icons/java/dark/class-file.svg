@@ -1,0 +1,17 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<clipPath id="s1">
+<path d="M17 5 H40 L53 18 V56 Q53 59 50 59 H17 Q14 59 14 56 V8 Q14 5 17 5 Z"/>
+</clipPath>
+</defs>
+<path d="M17 5 H40 L53 18 V56 Q53 59 50 59 H17 Q14 59 14 56 V8 Q14 5 17 5 Z" fill="#032024" stroke="#16606a" stroke-width="1.1"/>
+<path d="M40 5 V15 Q40 18 43 18 H53 Z" fill="#05464e" stroke="#16606a" stroke-width="1.1" stroke-linejoin="round"/>
+<g transform="translate(33.5 30) scale(.5) translate(-32 -32)">
+<g transform="translate(32 32) scale(.9) translate(-32 -32)">
+<circle cx="32" cy="32" r="23" fill="#2ed4ea"/>
+<path d="M40.5 23.5 A12 12 0 1 0 40.5 40.5" fill="none" stroke="#011316" stroke-width="5.4" stroke-linecap="round"/>
+</g>
+</g>
+<rect x="14" y="44" width="39" height="15" fill="#2ed4ea" clip-path="url(#s1)"/>
+<text x="33.5" y="54.6" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-weight="600" font-size="8.2" letter-spacing=".3" fill="#011316">JAVA</text>
+</svg>

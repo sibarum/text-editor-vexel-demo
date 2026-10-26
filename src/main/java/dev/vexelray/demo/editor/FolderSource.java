@@ -1,8 +1,12 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.gui.core.IconSource;
+import dev.vexelray.gui.fileicons.FileFamily;
 import dev.vexelray.gui.widget.TreeView;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -14,6 +18,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The filesystem under one folder, as a lazy {@link TreeView.Source}: directories first, then files, each
@@ -53,6 +59,12 @@ final class FolderSource implements TreeView.Source<Path> {
      */
     private final Map<Path, String> merged = new ConcurrentHashMap<>();
 
+    /**
+     * The icon of every row listed, keyed by its item: worked out by {@link #children} for the same reason as
+     * {@link #merged}, since knowing a folder from a file, or a record from a class, is a question for the disk.
+     */
+    private final Map<Path, IconSource> icons = new ConcurrentHashMap<>();
+
     FolderSource(Path base) {
         base(base);
     }
@@ -66,6 +78,7 @@ final class FolderSource implements TreeView.Source<Path> {
     void base(Path folder) {
         this.base = folder == null ? null : folder.toAbsolutePath().normalize();
         merged.clear();   // labels of the old folder's runs; the refresh that follows lists the new one's
+        icons.clear();
     }
 
     @Override
@@ -82,6 +95,17 @@ final class FolderSource implements TreeView.Source<Path> {
         }
         Path name = item.getFileName();
         return name != null ? name.toString() : item.toString();
+    }
+
+    /**
+     * The row's icon: a folder, a Maven or Java icon for a project's own files, else the family of the file's
+     * extension. From what the last listing worked out, so it touches no disk; a row it has not seen gets its
+     * extension's family.
+     */
+    @Override
+    public IconSource icon(Path item) {
+        IconSource known = icons.get(item);
+        return known != null ? known : byName(item);
     }
 
     @Override
@@ -117,6 +141,7 @@ final class FolderSource implements TreeView.Source<Path> {
             } else {
                 merged.put(deepest, joined(item.relativize(deepest)));
             }
+            icons.put(deepest, kind(deepest));
             listed.add(deepest);
         }
         return listed;
@@ -232,6 +257,67 @@ final class FolderSource implements TreeView.Source<Path> {
             at = next;
         }
         return at;
+    }
+
+    /**
+     * What declares a Java file's type: the first line that is, after any modifiers and annotations, the keyword
+     * naming its kind. An {@code @interface} is an interface to the eye, and drawn as one.
+     */
+    private static final Pattern DECLARATION = Pattern.compile("(?m)^\\s*(?:(?:public|protected|private|abstract"
+            + "|static|final|sealed|non-sealed|strictfp)\\s+|@(?!interface)[\\w.]+(?:\\([^)]*\\))?\\s+)*"
+            + "(@interface|class|interface|enum|record)\\s+\\w");
+
+    /** As far into a Java file as its declaration is looked for: past the licence, the package and the imports. */
+    private static final int JAVA_HEAD = 16 * 1024;
+
+    /** {@code item}'s icon, reading the disk: whether it is a folder, and what a Java file declares. */
+    private static IconSource kind(Path item) {
+        if (Files.isDirectory(item)) {
+            return FileFamily.FOLDERS;
+        }
+        String name = String.valueOf(item.getFileName());
+        if (name.endsWith(".java") && !name.equals("module-info.java") && !name.equals("package-info.java")) {
+            return switch (declared(item)) {
+                case "@interface", "interface" -> JavaIcon.INTERFACE_FILE;
+                case "enum" -> JavaIcon.ENUM_FILE;
+                case "record" -> JavaIcon.RECORD_FILE;
+                default -> JavaIcon.CLASS_FILE;
+            };
+        }
+        return byName(item);
+    }
+
+    /** {@code item}'s icon by its name alone: the Maven and Java files named for what they are, else the family. */
+    private static IconSource byName(Path item) {
+        String name = String.valueOf(item.getFileName());
+        switch (name) {
+            case "pom.xml":
+                return JavaIcon.POM;
+            case "module-info.java":
+                return JavaIcon.MODULE_INFO;
+            case "package-info.java":
+                return JavaIcon.PACKAGE_INFO;
+            default:
+                break;
+        }
+        if (name.endsWith(".java")) {
+            return JavaIcon.CLASS_FILE;
+        }
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? FileFamily.ofExtension(name.substring(dot + 1)) : FileFamily.UNKNOWN;
+    }
+
+    /**
+     * The keyword declaring the first type in a Java file, or "class" when none is found in its head. Comments are
+     * not parsed, so one beginning a line with "class Foo" would be taken for the declaration; the cost is an icon.
+     */
+    private static String declared(Path file) {
+        try (InputStream in = Files.newInputStream(file)) {
+            Matcher m = DECLARATION.matcher(new String(in.readNBytes(JAVA_HEAD), StandardCharsets.UTF_8));
+            return m.find() ? m.group(1) : "class";
+        } catch (IOException | RuntimeException e) {
+            return "class";
+        }
     }
 
     /** {@code relative}'s names joined by {@link #MERGE}, whatever the platform's own separator is. */

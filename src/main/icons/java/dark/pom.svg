@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<clipPath id="s13">
+<path d="M17 5 H40 L53 18 V56 Q53 59 50 59 H17 Q14 59 14 56 V8 Q14 5 17 5 Z"/>
+</clipPath>
+</defs>
+<path d="M17 5 H40 L53 18 V56 Q53 59 50 59 H17 Q14 59 14 56 V8 Q14 5 17 5 Z" fill="#2a1515" stroke="#774546" stroke-width="1.1"/>
+<path d="M40 5 V15 Q40 18 43 18 H53 Z" fill="#582f31" stroke="#774546" stroke-width="1.1" stroke-linejoin="round"/>
+<g transform="translate(33.5 30) scale(.5) translate(-32 -32)">
+<path d="M32 22 V30 M32 30 H16.5 V38 M32 30 V38 M32 30 H47.5 V38" fill="none" stroke="#98464b" stroke-width="3.6" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="22" y="9" width="20" height="14" rx="4" fill="#ff9fa2"/>
+<rect x="9.5" y="38" width="14" height="13" rx="3.5" fill="#fee4e4"/>
+<rect x="25" y="38" width="14" height="13" rx="3.5" fill="#fee4e4"/>
+<rect x="40.5" y="38" width="14" height="13" rx="3.5" fill="#fee4e4"/>
+</g>
+<rect x="14" y="44" width="39" height="15" fill="#ff9fa2" clip-path="url(#s13)"/>
+<text x="33.5" y="54.6" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-weight="600" font-size="8.2" letter-spacing=".3" fill="#1b0a0a">POM</text>
+</svg>

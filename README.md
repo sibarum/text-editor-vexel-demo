@@ -236,7 +236,7 @@ Installed locally rather than downloaded, so `mvn install` in each sibling has t
 | `vexelray-framework-shell`, `-automation`, `-processor` | the application edge, the driving socket, and the processor that writes the wiring |
 | `vexelray-gui-widget`, `-krono`, `-automation` | the widgets (`Tabs`, `TreeView`, `TextField`, `SplitPane`, `StatusBar`), the clock, the driver |
 | `vexelray-gui-nfd` | the OS's file dialogs |
-| `vexelray-gui-file-icons` | the file-type family icons and their colours, on Open's blocks |
+| `vexelray-gui-file-icons` | the file-type family icons and their colours, on the navigator's rows and Open's blocks |
 | `vexelray-technique-mesh`, `vexelray-engine-embedded` (repo `vexelray`) | Open's blocks: polygon meshes through the rasteriser, composited into a viewport the GUI samples |
 | `vex-suite-common` (its `tty` package; the picture decoder excluded) | the console's terminal, shared with MainFrame |
 | `org.netbeans.external:org.eclipse.tm4e.core-0.14.0` + `gson`, `joni`, `snakeyaml-engine` | the TextMate tokenizer and the runtime dependencies it does not declare |
