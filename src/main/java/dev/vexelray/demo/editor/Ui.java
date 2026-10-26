@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.framework.api.BeforeFrame;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.WindowRegion;
@@ -54,8 +55,12 @@ final class Ui {
     /** A window on files alone: the navigator and its divider gone rather than dragged shut. See {@link #plain()}. */
     private volatile boolean plain;
     private volatile float navigatorDp;
+    private final Gui gui;
+    /** Whether the window was in front at the last frame. Touched only by {@link #frame}. */
+    private boolean inFront = true;
 
     Ui(Gui gui, Motion motion, Model model, TitleBar titleBar, Scratches scratches) {
+        this.gui = gui;
         this.titleBar = titleBar;
         this.motion = motion;
         this.danger = gui.theme().color(Role.DANGER);
@@ -177,6 +182,19 @@ final class Ui {
 
     Navigator navigator() {
         return navigator;
+    }
+
+    /**
+     * Once a frame, on the main thread: the window coming back to the front refreshes the navigator, since the user
+     * was most likely somewhere that changes files. A window's activation asks for a frame itself, so this sees it.
+     */
+    @BeforeFrame
+    void frame() {
+        boolean front = gui.focusState().windowActive();
+        if (front && !inFront) {
+            navigator.refresh();
+        }
+        inFront = front;
     }
 
     Preview preview() {

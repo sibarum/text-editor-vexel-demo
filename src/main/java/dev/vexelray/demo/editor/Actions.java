@@ -91,6 +91,8 @@ final class Actions {
         nav.onOpenFolder(this::switchRoot);
         nav.onNewScratch(this::newScratch);
         nav.onRelocated(this::relocated);
+        // A build or a script writes files the tree has not listed; its end is when they are all there.
+        console.onEnded(nav::refresh);
         // A scratch made and closed with nothing written to it goes again: a deletion, so not on the closing thread.
         ws.onClosed(file -> {
             if (scratches.holds(file)) {
@@ -471,6 +473,7 @@ final class Actions {
             b.savedAs(saved0);
             ws.syncFormatted();
             model.saved(b.id, saved0, b.language());
+            nav.refresh();   // a Save As, or a save into a folder made since, is a file the tree has not listed
             model.say("Saved " + target.getFileName());
             saved.run();
         });

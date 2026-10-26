@@ -90,6 +90,7 @@ final class Console implements WakeSource, AutoCloseable {
     /** The jobs whose end the bar has been told of, by id. Touched only by {@link #tick}. */
     private final java.util.Set<Long> told = new java.util.HashSet<>();
     private volatile Runnable wake = () -> { };
+    private volatile Runnable onEnded = () -> { };
     private volatile boolean shown;
 
     Console(Window window, Settings settings, Dialogs dialogs) {
@@ -178,6 +179,11 @@ final class Console implements WakeSource, AutoCloseable {
         prune();
     }
 
+    /** Be told when a run has ended, once per run, so what it wrote to the disk can be looked for. On the main thread. */
+    void onEnded(Runnable handler) {
+        this.onEnded = handler == null ? () -> { } : handler;
+    }
+
     @Override
     public void onWake(Runnable wake) {
         this.wake = wake;
@@ -203,6 +209,7 @@ final class Console implements WakeSource, AutoCloseable {
         }
         if (ended) {
             prune();
+            onEnded.run();
         }
     }
 

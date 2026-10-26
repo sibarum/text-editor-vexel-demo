@@ -759,6 +759,29 @@ final class Navigator {
     }
 
     /**
+     * Bring the trees into line with the disk, after something may have written to it: a save, a run that ended,
+     * the window coming back from wherever else the user was. Nothing the user arranged moves: the trees keep
+     * their rows, which folders are open, the selection and the scroll ({@code TreeView.refresh}), and only what
+     * appeared or went is added or taken away. Only opened folders are re-read, and the listing is offloaded.
+     *
+     * <p>A renamed folder is a row gone and another come, so it comes back closed. A selected row that went takes
+     * the selection to the nearest folder above it still there, which is the tree's rule and not a lie.
+     */
+    void refresh() {
+        io.execute(() -> {
+            if (source.base() != null) {
+                tree.refresh();
+            }
+            if (scratchSource.base() != null) {
+                scratchTree.refresh();
+            }
+            if (mode == Mode.OPEN && roots.top() != null) {
+                picker.refresh();
+            }
+        });
+    }
+
+    /**
      * Unfold the tree down to {@code file} and select its row. A file outside the folder is left alone: there is
      * no way down to it from here, and moving the root under the user is not what a reveal asks for.
      */
