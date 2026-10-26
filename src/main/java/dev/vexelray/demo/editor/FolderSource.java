@@ -287,9 +287,15 @@ final class FolderSource implements TreeView.Source<Path> {
         return byName(item);
     }
 
-    /** {@code item}'s icon by its name alone: the Maven and Java files named for what they are, else the family. */
     private static IconSource byName(Path item) {
-        String name = String.valueOf(item.getFileName());
+        return byName(String.valueOf(item.getFileName()));
+    }
+
+    /**
+     * A file's icon by its name alone: the Maven and Java files named for what they are, else the family of its
+     * extension. A Java file is a class to anything that has not read it.
+     */
+    static IconSource byName(String name) {
         switch (name) {
             case "pom.xml":
                 return JavaIcon.POM;

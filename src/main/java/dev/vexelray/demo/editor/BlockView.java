@@ -4,13 +4,15 @@ import dev.vexelray.canvas.Color;
 import dev.vexelray.engine.embedded.SampledTechniqueHost;
 import dev.vexelray.framework.api.BeforeFrame;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.IconSource;
+import dev.vexelray.gui.core.ImageField;
+import dev.vexelray.gui.core.LayeredIcon;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.app.GuiApp;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.layout.NodeLayout;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Theme;
-import dev.vexelray.gui.fileicons.FileFamily;
 import dev.vexelray.gui.fileicons.FileIconView;
 import dev.vexelray.gui.icons.IconView;
 import dev.vexelray.shader.ClipDepth;
@@ -56,7 +58,7 @@ final class BlockView {
     private static final int ICONS = 36;
     /** Smaller than this, in pixels, an icon is not legible and is left off. */
     private static final float ICON_MIN = 12;
-    private static final float ICON_MAX = 44;
+    private static final float ICON_MAX = 88;
 
     /** The lens: under five degrees across the height. */
     private static final double FOCAL = 24;
@@ -91,7 +93,7 @@ final class BlockView {
                 .visible(false);
         for (int i = 0; i < ICONS; i++) {
             icons[i] = new Icon(gui);
-            node.append(icons[i].sheet.node());
+            node.append(icons[i].view.node());
         }
         gui.landmark(Landmarks.BLOCKS, node);
     }
@@ -284,32 +286,59 @@ final class BlockView {
         return Oklab.polar(lightness, 0.025, hue).toColor();
     }
 
-    /** One icon over the picture: a family's sheet with its emblem floated over it, both re-pointed per block. */
+    /**
+     * One icon over the picture, re-pointed per block: the icon the navigator gives the file, so a pom or a Java file
+     * wears its own here too. A soft shadow lifts it off the top it lies on.
+     */
     private final class Icon {
 
-        final IconView sheet;
-        final IconView emblem;
+        final IconView view;
 
         Icon(Gui gui) {
-            sheet = IconView.of(gui, FileFamily.UNKNOWN.sheet()).size(Length.dp(16));
-            emblem = IconView.of(gui, FileFamily.UNKNOWN.sheet()).size(Length.dp(16));
-            sheet.node().hitInert(true).visible(false).floatAt(Length.ZERO, Length.ZERO)
-                    .append(emblem.node().hitInert(true).floatAt(Length.ZERO, Length.ZERO));
+            view = IconView.of(gui, null).size(Length.dp(16)).shadow(0.06f);
+            view.node().hitInert(true).visible(false).floatAt(Length.ZERO, Length.ZERO);
         }
 
-        void show(FileFamily family, float xDp, float yDp, float sideDp) {
-            Length side = Length.dp(sideDp);
-            sheet.icon(family.sheet()).tint(family.hue(dark)).size(side);
-            boolean hasEmblem = family.emblem() != null;
-            if (hasEmblem) {
-                emblem.icon(family.emblem()).tint(family.ink(dark)).size(side);
-            }
-            emblem.node().visible(hasEmblem);
-            sheet.node().floatAt(Length.dp(xDp - sideDp / 2), Length.dp(yDp - sideDp / 2)).visible(true);
+        void show(Blocks.Block b, float xDp, float yDp, float sideDp) {
+            IconSource icon = FolderSource.byName(b.name());
+            view.icon(icon instanceof LayeredIcon layered ? new OnTop(layered, b.family().hue(dark)) : icon)
+                    .size(Length.dp(sideDp));
+            view.node().floatAt(Length.dp(xDp - sideDp / 2), Length.dp(yDp - sideDp / 2)).visible(true);
         }
 
         void hide() {
-            sheet.node().visible(false);
+            view.node().visible(false);
+        }
+    }
+
+    /**
+     * {@code icon} on the top of a block coloured {@code face}, in whichever of its two rows of colours stands out
+     * from it. A block is its family's hue in the theme's row, the same colour as that row's sheet, so the theme's own
+     * row would leave only the emblem showing; the other row is drawn for the other ground, and is usually the one.
+     * Each row's back layer is weighed against the face by lightness, so an icon whose own rows run the other way (a
+     * Java file's page is dark in the dark row) keeps the row that stands out.
+     */
+    private record OnTop(LayeredIcon icon, Color face) implements LayeredIcon {
+
+        @Override
+        public ImageField field(float px, Color tint) {
+            return icon.field(px, tint);
+        }
+
+        @Override
+        public List<ImageField> layers(float px, boolean dark) {
+            List<ImageField> inDark = icon.layers(px, true);
+            List<ImageField> inLight = icon.layers(px, false);
+            return apart(inDark) >= apart(inLight) ? inDark : inLight;
+        }
+
+        /** How far the back layer of {@code row} is from the face in lightness. */
+        private float apart(List<ImageField> row) {
+            return row.isEmpty() ? 0f : Math.abs(lightness(row.getFirst().tint()) - lightness(face));
+        }
+
+        private static float lightness(Color c) {
+            return 0.2126f * c.r() + 0.7152f * c.g() + 0.0722f * c.b();
         }
     }
 
@@ -455,7 +484,7 @@ final class BlockView {
                 if (hidden(eye, b, s.blocks())) {
                     continue;
                 }
-                icons[shown++].show(b.family(), (float) at[0] / dpi, (float) at[1] / dpi, side / dpi);
+                icons[shown++].show(b, (float) at[0] / dpi, (float) at[1] / dpi, side / dpi);
             }
             for (int i = shown; i < ICONS; i++) {
                 icons[i].hide();
