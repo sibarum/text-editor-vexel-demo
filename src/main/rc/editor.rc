@@ -12,3 +12,33 @@
 // drawn at the display's real pixels exactly as a JVM launch is, rather than rendered at 96 DPI and stretched by
 // Windows. Resource 1 of type 24 (RT_MANIFEST) is the one the loader reads for a process.
 1 24 "editor.manifest"
+
+// The version resource. FileDescription is the program's name wherever Windows names the program rather than a
+// file: Open with, Task Manager, the taskbar. Without it Windows falls back to the file name, "text-editor". The
+// pom's compile-icon-resource passes the VI_ defines; VI_STR makes the version a string.
+#define VI_STR2(x) #x
+#define VI_STR(x) VI_STR2(x)
+
+1 VERSIONINFO
+FILEVERSION     VI_MAJOR,VI_MINOR,VI_PATCH,0
+PRODUCTVERSION  VI_MAJOR,VI_MINOR,VI_PATCH,0
+FILEOS          0x40004
+FILETYPE        0x1
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "sibarum"
+            VALUE "FileDescription", "VexelRay IDE"
+            VALUE "ProductName", "VexelRay IDE"
+            VALUE "FileVersion", VI_STR(VI_VERSION)
+            VALUE "ProductVersion", VI_STR(VI_VERSION)
+            VALUE "OriginalFilename", VI_STR(VI_IMAGE)
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

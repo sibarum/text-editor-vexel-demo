@@ -205,6 +205,19 @@
         <pluginManagement>
             <plugins>
                 <plugin>
+                    <!-- Splits the version into parsedVersion.majorVersion and the rest, for the version
+                         resource compile-icon-resource builds: its numeric fields take numbers only. -->
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>3.6.0</version>
+                    <executions>
+                        <execution>
+                            <id>parse-version</id>
+                            <goals><goal>parse-version</goal></goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
                     <!-- native-image compiles small probe executables and runs them to measure the
                          platform. Windows Application Control blocks a brand-new unsigned .exe under
                          %TEMP%, so the probes are pointed at target/nitmp instead, which this creates. -->
@@ -222,9 +235,10 @@
                                 </target>
                             </configuration>
                         </execution>
-                        <!-- The executable's icon: a resource linked into the program, so it has to exist as
-                             a compiled .res before link time. rc.exe is the Windows SDK's resource compiler
-                             and must be on PATH, as it is in a Visual Studio developer prompt. -->
+                        <!-- The executable's icon and version resource: linked into the program, so they have
+                             to exist as a compiled .res before link time. rc.exe is the Windows SDK's resource
+                             compiler and must be on PATH, as it is in a Visual Studio developer prompt. The
+                             defines carry the version and the image's file name into editor.rc. -->
                         <execution>
                             <id>compile-icon-resource</id>
                             <phase>prepare-package</phase>
@@ -233,6 +247,11 @@
                                 <target>
                                     <exec executable="rc.exe" searchpath="true" failonerror="true">
                                         <arg value="/nologo"/>
+                                        <arg value="/dVI_VERSION=${project.version}"/>
+                                        <arg value="/dVI_MAJOR=${parsedVersion.majorVersion}"/>
+                                        <arg value="/dVI_MINOR=${parsedVersion.minorVersion}"/>
+                                        <arg value="/dVI_PATCH=${parsedVersion.incrementalVersion}"/>
+                                        <arg value="/dVI_IMAGE=${native.imageName}.exe"/>
                                         <arg value="/fo"/>
                                         <arg file="${project.build.directory}/text-editor.res"/>
                                         <arg file="${project.basedir}/src/main/rc/editor.rc"/>
@@ -604,6 +623,10 @@
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                    </plugin>
+                    <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-dependency-plugin</artifactId>
                     </plugin>
@@ -627,6 +650,10 @@
             </properties>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                    </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-dependency-plugin</artifactId>
