@@ -35,7 +35,7 @@ included, so it never overwrites that session. Unsaved work is never remembered 
 first.
 
 ```
-mvn test                                                  # the model, files, grammars, and the real tree headless
+mvn test                                                  # the editor alone, the jobs, grammars, and the real tree headless
 mvn compile exec:exec -Dautomation=0                      # with a driving socket (see Taking a screenshot)
 mvn -Plarge-file-bench test                               # the large-file benchmark (see below); slow, off by default
 ```
@@ -76,6 +76,20 @@ row's menu can copy its path and has *Open in Vexplore*, and a folder's also has
 `mainframe --dir=<folder>`, a MainFrame window with a shell there (greyed out as *MainFrame not installed* without
 its install record). The root's name at the top has the same folder menu for the root, and so does every folder in
 Open. `.git`, `target`, `node_modules` and a few others are left out of the listing.
+
+Every row's menu, and the root's name, has **Add**, which makes something in that folder (a file's row: beside it):
+
+| Add | Makes |
+| --- | --- |
+| Folder | an empty folder |
+| File › Blank, Text, Java, Markdown, PowerShell, Bash, Zsh | a file of that type, opened in a tab: Java is a class named for the file, in the package its folder is under `src/main/java`; Markdown starts with a heading; Bash and Zsh with their `#!` line, and executable where the platform has the bit |
+| Symlink | a link to a file picked in the platform's dialog (where links need no privilege: Linux and macOS; greyed out on Windows) |
+| Project | a Maven project, its `pom.xml` opened (offered where there is no `pom.xml` at the folder or above it) |
+| Submodule | a module of the project around the folder: its own `pom.xml` naming that project as its parent, and a `<module>` line in the parent's (offered where there is one; the status line says so when the parent is not packaged as `pom` yet) |
+| Archive | a `.zip` of everything in the folder (offered once there is a file in it) |
+
+Each asks for a name first, in a field over the tree, starting from one it suggests with all but the extension
+selected; Enter makes it, Escape asks nothing. What is made is listed and shown in the tree.
 
 The navigator has two modes. The root's name at its top is a toggle: pressed, the navigator is in **Open**, for
 picking a root; released, it is in **Edit**, the files under the root, as above. A window with nothing to show
@@ -192,40 +206,66 @@ its tabs `console.tabs` and its settings button `console.settings`.
 
 ## How it is put together
 
+Two modules under this folder, split where the dependency edge falls, as the `vexel-desktop` template is: a
+**controller** that decides and builds against no widget, and a **view** that shows. They talk by messages and nothing
+else, and every message is in one file. Three kinds of part, none of which holds another: **components** (a class
+with a lane of its own and mailboxes, reached only by messages), **jobs** (slow work on the offload lane, a request
+in and a reply out), and **recipes** (a part built once and handed to whoever takes it).
+
+**`text-editor-vexel-demo-core`, the controller.** Its tests need no window.
+
 | File | What it is |
 | --- | --- |
-| `Recipes.java` | **what the application builds**, one `@Provides` method per part. `TextEditorWiring` is generated from it at compile time, and each part's phase is inferred from what it takes |
-| `Doc.java`, `Model.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value changed only by relative edits |
-| `Ui.java` | the window: title bar, navigator beside the tabs, status line. `show(Doc)` writes everything derived from the session |
+| `Messages.java` | **every message the parts send each other**, grouped by who sends it to whom, each record beside its topic. A record crosses as itself, so it holds only immutable values and no lists |
+| `Editor.java` | **the controller**, a component on the `editor` lane: every decision. What is open and which tab is in front, when closing, quitting, picking a root or running needs a question first, where an Untitled document is saved, which tabs each root keeps, what the status line and the title bar say, what comes back next time. It owns the session and needs no lock, because nothing else can reach it |
+| `Doc.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value in one field of the editor's |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java` | the jobs: every touch of the disk the editor asks for, on the offload lane. What can go wrong is part of the reply |
+| `Core.java` | the list of this module's component and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it |
+| `TextFile.java` | the policy between bytes on disk and text in a field |
+| `Markdown.java` | Markdown as blocks and inlines, for the formatted view: a pure function |
+| `Scratches.java` | the scratches' folder, as a value: making a scratch, moving and renaming one, and taking one away |
+| `Preferences.java` | the theme, word wrap and indexing: the editor's own, or a root's own in its `.vex` |
+| `ProjectIndex.java` | Concordance's index of the open folder and its libraries, on a thread of its own |
+
+**`text-editor-vexel-demo-gui`, the view and the framework integration.**
+
+| File | What it is |
+| --- | --- |
+| `Recipes.java` | **what this module builds**, one `@Provides` method per part. `TextEditorAppWiring` is generated from it at compile time, and each part's phase is inferred from what it takes |
+| `View.java` | **the view**, a component on the `view` lane: the editor's messages shown (`AddTab` is a tab, `Ask` is a dialog) and the person's gestures told (`Open`, `Closing`, `Save`). What only the window knows stays here: the preferences menu, the Run menu, the formatted view, going to a declaration |
+| `Intent.java` | what a chord or a menu item asks of the view, sent from the thread it arrived on to the view's lane |
+| `Gates.java` | the window's close gate and the navigator's "may I go to Open", as messages: their two callbacks kept under a ticket, the ticket sent |
+| `Ui.java` | the window: title bar, navigator beside the tabs, status line. Holds no state; it shows what the view hands it |
 | `Workspace.java` | the Run button, the tab bar and one `Buffer` per tab, kept in step |
-| `Buffer.java` | one document: its `TextField`, its highlighter, its path and line endings |
+| `Buffer.java` | one document: its `TextField`, its highlighter, its path |
 | `Runs.java` | what the Run menu offers for a folder and a document, worked out from what is on disk |
 | `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
-| `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily |
-| `Scratches.java` | the scratches' folder: making a scratch, moving and renaming one, and taking one away that was never written to |
+| `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily; Add, on a folder's menu |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
-| `Actions.java` | every command, and the questions some of them ask first, through the framework's `Dialogs`; also the main window's close gate |
-| `Session.java` | what is remembered between runs, and bringing it back |
-| `Preferences.java` | the theme, word wrap and indexing: the editor's own, or a root's own in its `.vex` |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |
-| `TextFile.java` | the policy between bytes on disk and text in a field |
 | `Look.java`, `Type.java`, `Landmarks.java` | colour, size, and the names an automation script may use |
 
 The text of each document lives in its `TextField`'s own versioned `State<Document>`; `Doc` holds only what
 nothing else owns. Which phase each part lands in is visible in
-`target/generated-sources/annotations/.../TextEditorWiring.java` after a build.
+`text-editor-vexel-demo-gui/target/generated-sources/annotations/.../TextEditorAppWiring.java` after a build.
 
-### Threads, and the two rules
+### Threads, in one paragraph
 
-Handlers run on workers, and the GUI thread never reads the model. Disk reads and writes go to the offload lane,
-never to the frame loop. The file dialogs are the framework's: on Windows they run on a dialog thread of their own, and
-only on macOS, where AppKit insists, on the frame loop.
+The GUI loop runs on the main thread, which owns Vulkan, the window and present, and nothing of the editor's runs
+there. The editor has a lane of its own and so does the view; each handles one message at a time, and each owns its
+state outright, so the session needs no lock. Input arrives on the handler lane and is only told: a key or a menu item
+becomes an `Intent` for the view, or a message straight to the editor. Every read and write the editor asks for is a
+job on the offload lane, so a slow disk is a slow reply and never a frozen window or a stalled lane. **Each mailbox is
+in order, and two mailboxes are not in order with each other**: so a set of tabs being closed (or quit, or settled
+before Open, or switched away from with a root, or saved before a run) is one message per tab, each saying how many
+make the set and whether its tab is unsaved, and the editor decides when the last one arrives. **Jobs are in no order
+at all**: so a restored session, and the tabs a root gets back, ask for one file at a time. The file dialogs are the
+framework's: on Windows they run on a dialog thread of their own, and only on macOS, where AppKit insists, on the frame
+loop.
 
-Two rules keep the tab bookkeeping deadlock-free, and both are written out on `Workspace`: **nothing commits to
-the model while holding the workspace lock**, and **nothing reached from a model listener takes it**. atchung's
-`onCommitLatest` makes a committing thread wait for a delivery already running on another thread, so breaking
-either rule is a hang with nothing thrown (framework-notes FN-4).
+The tab bar keeps one rule from before the split, written out on `Workspace`: its order and its buffers change
+together under one lock, and the buffers' own listeners (dirty, caret) never take it.
 
 ## The stack
 
@@ -243,7 +283,7 @@ Installed locally rather than downloaded, so `mvn install` in each sibling has t
 | `tactroller-atchung`, `tactroller-clipboard` | input onto the bus, and the OS clipboard |
 | `vexelray-os-*`, `tactroller-*` | picked by an OS-activated profile |
 
-The grammars under `src/main/resources/grammars` are from microsoft/vscode (MIT, `VSCODE-LICENSE.txt` beside
+The grammars under `text-editor-vexel-demo-gui/src/main/resources/grammars` are from microsoft/vscode (MIT, `VSCODE-LICENSE.txt` beside
 them). CSS and YAML are pinned to vscode 1.96.0 for reasons `Highlighter.loadGrammars` gives, and
 `GrammarBundleTest` fails if either is re-synced from main.
 
@@ -294,7 +334,7 @@ mvn -Plarge-file-bench test
 How the editor copes with large and pathological files: 8 MB of source, 100 MB and 1 GB of log lines, 10 M empty
 lines, one line of 1 M characters, mixed CRLF/LF, and many tabs. For each it times the open, the first frame, a caret
 move, a typed character and a jump to the end, and the heap the open file keeps, and writes the table to
-`target/large-file-bench.md`. The fixtures (~1.2 GB) are generated into `target/large-files` on the first run and
+`text-editor-vexel-demo-gui/target/large-file-bench.md`. The fixtures (~1.2 GB) are generated into `target/large-files` on the first run and
 reused after; a file `TextFile` refuses is reported as refused and then opened past the limit anyway, so the table
 shows what the limit protects against. Each fixture runs in a JVM of its own, so one that runs out of memory or
 times out costs only its row. `-Dbench.only=log-100mb.log,...` picks fixtures, `-Dbench.xmx=8g` sets the heap and
@@ -309,13 +349,13 @@ a Vulkan device; `-Dbench.gpu=false` skips it on a machine without one.
 
 ## Logging
 
-The framework configures it: info to the console and debug to `target/logs/text-editor.log` from a checkout,
+The framework configures it: info to the console and debug to `text-editor-vexel-demo-gui/target/logs/text-editor.log` from a checkout,
 more under automation. This application logs as `editor.files`, `editor.highlight`, `editor.index` and `editor.suite`;
 `-Dlog.level.editor.files=debug` raises one of them.
 
 ## Native build and installer
 
-`mvn -Pnative-release package` builds `target/text-editor.exe` (GUI subsystem; what ships) and `mvn -Pnative package` builds `target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
+`mvn -Pnative-release package` builds `text-editor-vexel-demo-gui/target/text-editor.exe` (GUI subsystem; what ships) and `mvn -Pnative package` builds `text-editor-vexel-demo-gui/target/text-editor-debug.exe` (console, drivable by ottermate) (Windows, GraalVM 25, from a Visual Studio developer
 prompt); see [docs/native-build.md](docs/native-build.md). `installer.json` describes the per-user installer
 for it (`vexelray-installer`), with `text-editor` added to `PATH`: `text-editor <folder or files...>` opens a new
 window, a folder as the navigator's root and files as tabs (files alone, a plain window). It also registers the editor for plain-text and

@@ -29,6 +29,7 @@ The markers are a filter, not decoration:
 | 🔬 | a framework gap — something upstream could fix |
 | 💡 | an idea, not yet a finding |
 | 📋 | carried over: needs re-verifying against a newer build before it is repeated |
+| ✅ | fixed upstream, kept for the record of what it cost |
 
 Each finding below also says what it means for **freezing v1** (`vexelray-framework/docs/v1.md`): whether the gap
 is in a surface v1 freezes, and whether closing it later would be additive or breaking.
@@ -471,3 +472,59 @@ Escape and focus-loss handled, which every file tree will want. And `Modal.input
 `Dialogs.askText`, for the question that takes a line. For the disk: a `Change` that can apply asynchronously,
 recorded once it lands. **v1:** `TreeView.edit` and a text prompt are additive. `Dialogs` is a shell interface
 applications implement (tests do), so a new method on it needs a default to stay additive.
+
+### FN-23 · A `-core` cannot build its own services, and a job cannot be told one is supplied 🔬
+
+The editor was split into a `-core` controller and a `-gui` view on 2026-10-26, as the template had been that day.
+Three services both halves read (`Scratches`, `Preferences`, `ProjectIndex`) are `-core`'s classes with no widget in
+them, so `-core`'s `@Configuration` (`Core`, the starter that lists its component and jobs) was the place to build
+them. The processor refused all three: *a concrete class of this application's own; return an interface*. To
+`-gui`'s compilation the same classes are class files, which may be returned as they are, so the recipes went to
+`-gui`'s `Recipes`, away from the module that owns the classes. An interface each would have satisfied the rule and
+said nothing: nothing will ever build another `Scratches`.
+
+The jobs met the other side of it. `MakeScratch`, `NameScratch` and `DropScratch` take the scratches' folder, and
+compiling `-core` the processor cannot know that `-gui` supplies it: *neither shareable nor something the container
+supplies*. `Scratches` held one piece of mutable state (which scratches this run had made and not written), and
+that was the `Editor`'s to know anyway, since it sees every save and close; so the state moved there and `Scratches`
+became a record of its folder, which is shareable. The design is better for it, but the error would have stood for a
+service that genuinely is one.
+
+*Could:* let a `@Configuration` listed as a starter return its own module's concrete classes, as `-gui` already may;
+and let a job's field be a type some recipe in the application provides, checked where the wiring is generated
+rather than where the job compiles. **v1:** both relax a check, so both are additive.
+
+### FN-24 · A list cannot cross, so every set is a message per member 🔬
+
+`Messages` holds no list, because a payload must be deeply immutable and `List` cannot be proved so. The template's
+answer for closing several tabs, one `Closing` per tab carrying the size of its set, carried the editor further than
+expected: the same roll call now serves five purposes (closing tabs, quitting, settling unsaved work before the
+navigator's Open, switching roots, saving before a run), each decided when its last member arrives. Where a list is
+really one value it is spelled out: the three recent roots Open offers are `Recent(first, second, third)`, which is
+right only because Open shows three.
+
+*Could:* a list the processor can see is copied (`List.copyOf` of a shareable element type, checked), so a payload may
+carry one. **v1:** additive.
+
+### FN-25 · Every two-callback question is the same ticket table 🔬
+
+The template turns the close gate's `proceed`/`cancel` into a message with `QuitGate`: the callbacks kept under a
+ticket, the ticket sent. The navigator's "may I go to Open" asks the same way, so `QuitGate` became `Gates`, one
+ticket table for both. The Run menu and a picked root hold their payload under a ticket in `View` for the same
+reason. Every application that bridges a callback API onto messages will write this table.
+
+*Could:* a framework `Tickets<T>` (hold, take, answer exactly once), or a `CloseGate` that is itself a message.
+**v1:** additive.
+
+### FN-26 · Context menus had no submenus, and showed the last menu's rows on opening ✅ upstream
+
+Add (folder, file of a type, link, project, module, archive) wanted a menu inside a menu. `MenuItem` was a line that
+runs something. Built upstream on 2026-10-26 (vexelray-gui `860b8fa`): `MenuItem.children`, `MenuSink.submenu`,
+and `ContextMenu` drawing each depth as a panel beside its row. Driving it in the window found that a pointer going
+diagonally from Add to one of its lines crossed the lines below Add and closed the submenu on the way, so what
+pointing does waits for the pointer to rest (250 ms), as desktop menus do.
+
+Every menu, on every opening after the first, also drew the previous opening's rows for a few frames at a wrong place
+before its own faded in (vexelray-gui `c55ba3e`). The panel is hidden between openings and its rows replaced on the
+next; the removal was offered to the exit motion because the row's own flag said visible, so the rebuild was taken
+for a replacement seen on screen. A node inside something hidden now leaves at once.

@@ -7,11 +7,28 @@
     <groupId>dev.vexelray.demo</groupId>
     <artifactId>text-editor-vexel-demo</artifactId>
     <version>0.1.3-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
     <name>text-editor-vexel-demo</name>
     <description>
         A tabbed text editor with a file navigator, on the VexelRay stack.
     </description>
+
+    <!--
+      Two modules, split where the dependency edge falls, as vexelray-framework-template's vexel-desktop is:
+        text-editor-vexel-demo-core   the controller: the Editor, which decides, and the jobs that touch the disk.
+                                      Builds against the framework's annotations, the bus and vexelray-gui-core's
+                                      values, and no widget, so its tests need no window.
+        text-editor-vexel-demo-gui    the view: the window, the widgets and the framework integration. The entry
+                                      point, its wiring, its icons, its fonts and its native build are all here.
+      They talk by messages and nothing else (-core's Messages). Run everything from this folder:
+      mvn compile exec:exec runs the editor, mvn test runs both modules' tests, and the native profiles build
+      text-editor-vexel-demo-gui/target/text-editor.exe.
+    -->
+    <modules>
+        <module>text-editor-vexel-demo-core</module>
+        <module>text-editor-vexel-demo-gui</module>
+    </modules>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
@@ -43,338 +60,70 @@
           "mvn exec:exec -Dmy.setting=48" runs the app with the default and reports a measurement of nothing.
         -->
         <app.jvmArgs></app.jvmArgs>
+
+        <!-- exec:exec runs in every module of the build; only -gui has an application to run, and it says so. -->
+        <app.run.skip>true</app.run.skip>
     </properties>
 
-    <dependencies>
-        <!-- The application framework: the edge this project would otherwise write for itself. Its -shell
-             module brings vexelray-gui-core, -krono, -widget and tactroller with it, and owns the input
-             backend, the clipboard, the window memory, the clock, the frame loop and the shutdown. -->
-        <dependency>
-            <groupId>dev.vexelray.framework</groupId>
-            <artifactId>vexelray-framework-shell</artifactId>
-            <version>${vexelray-framework.version}</version>
-        </dependency>
-        <!-- The automation sockets, remote control and diagnostics, as a framework component: in every build, the
-             release one too, off until the launch or the title bar's plug switches one on, and the plug's lamps
-             showing what is open and what is or was connected. -->
-        <dependency>
-            <groupId>dev.vexelray.framework</groupId>
-            <artifactId>vexelray-framework-automation</artifactId>
-            <version>${vexelray-framework.version}</version>
-        </dependency>
-        <!-- The widget shelf, and the framework core and draw modules behind it. Reached through -shell as
-             well; named here because this project's own Ui builds against it directly. -->
-        <dependency>
-            <groupId>dev.vexelray.gui</groupId>
-            <artifactId>vexelray-gui-widget</artifactId>
-            <version>${vexelray-gui.version}</version>
-        </dependency>
-        <!-- The file-type family icons, the ones this project registers with Explorer, as distance fields in their
-             own atlas with the suite's colours: FileIconView.node(gui, FileFamily.ofExtension(ext), side). -->
-        <dependency>
-            <groupId>dev.vexelray.gui</groupId>
-            <artifactId>vexelray-gui-file-icons</artifactId>
-            <version>${vexelray-gui.version}</version>
-        </dependency>
-        <!-- Open's picture of a folder with no build in it: its files as blocks, drawn as polygon meshes through the
-             rasteriser (vexelray-technique-mesh) into a viewport the GUI samples as a box (vexelray-engine-embedded's
-             SampledTechniqueHost). Light: the engine's API, its shader IR and Vulkan, which -gui already brings. -->
-        <dependency>
-            <groupId>dev.vexelray</groupId>
-            <artifactId>vexelray-technique-mesh</artifactId>
-            <version>${vexelray.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.vexelray</groupId>
-            <artifactId>vexelray-engine-embedded</artifactId>
-            <version>${vexelray.version}</version>
-        </dependency>
-        <!-- The clock. Motion enters at the application edge and nowhere else: -widget declares seams shaped
-             out of JDK types and this module satisfies them, so a widget animates without naming Kronometer. -->
-        <dependency>
-            <groupId>dev.vexelray.gui</groupId>
-            <artifactId>vexelray-gui-krono</artifactId>
-            <version>${vexelray-gui.version}</version>
-        </dependency>
-        <!-- Driving the running app the way a person does: real window, real Vulkan, real frame loop
-             (vexelray-gui/docs/reference/automation.md). -->
-        <dependency>
-            <groupId>dev.vexelray.gui</groupId>
-            <artifactId>vexelray-gui-automation</artifactId>
-            <version>${vexelray-gui.version}</version>
-        </dependency>
-        <!-- Input at the application edge: the tactroller->atchung bridge (brings tactroller-api and
-             atchung-core transitively, which is where State and Committer come from). -->
-        <dependency>
-            <groupId>sibarum.tactroller</groupId>
-            <artifactId>tactroller-atchung</artifactId>
-            <version>${tactroller.version}</version>
-        </dependency>
-        <!-- Standalone OS clipboard; no input-subsystem coupling. -->
-        <dependency>
-            <groupId>sibarum.tactroller</groupId>
-            <artifactId>tactroller-clipboard</artifactId>
-            <version>${tactroller.version}</version>
-        </dependency>
-        <!-- The title bar's camera records video as well as taking screenshots: found through ServiceLoader, so this
-             dependency is all it takes. AV1 into Matroska, through an FFmpeg that holds the AV1 encoders and no
-             decoder (ffmpeg-wrapper-record). -->
-        <dependency>
-            <groupId>dev.vexelray.codec</groupId>
-            <artifactId>vexelray-codec-record</artifactId>
-            <version>${vexelray-codec.version}</version>
-        </dependency>
-        <!-- The OS's own open, save and pick-folder dialogs (NFDe over Panama). -->
-        <dependency>
-            <groupId>dev.vexelray.gui</groupId>
-            <artifactId>vexelray-gui-nfd</artifactId>
-            <version>${vexelray-gui.version}</version>
-        </dependency>
-        <!-- Syntax highlighting: TM4E's TextMate tokenizer (the NetBeans repack of org.eclipse.tm4e.core, which
-             is the only current release on Maven Central) and the three runtime dependencies it does not declare. -->
-        <dependency>
-            <groupId>org.netbeans.external</groupId>
-            <artifactId>org.eclipse.tm4e.core-0.14.0</artifactId>
-            <version>RELEASE260</version>
-        </dependency>
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.11.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.jruby.joni</groupId>
-            <artifactId>joni</artifactId>
-            <version>2.2.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.snakeyaml</groupId>
-            <artifactId>snakeyaml-engine</artifactId>
-            <version>2.7</version>
-        </dependency>
-
-        <!-- Java code intelligence: Concordance's structural index (declarations and the places names are used),
-             built from a Maven project by reading its poms. Brings concordance-project and javaparser-core, which
-             it drives at LanguageLevel.RAW so nothing reflects and native-image needs no metadata for it.
-             Installed to the local .m2 by `mvn install` in the sibling concordance-indexer repo. -->
-        <dependency>
-            <groupId>sibarum.concordance</groupId>
-            <artifactId>concordance-index</artifactId>
-            <version>${concordance.version}</version>
-        </dependency>
-
-        <!-- The console's terminal: the pseudoconsole a run's program is started on, the VT screen its output is read
-             into, and the screen drawn as a node (the tty package), shared with MainFrame. The suite's picture
-             decoder comes with it and is excluded, since nothing here shows a picture. Installed to the local .m2 by
-             `mvn install` in the sibling vex-suite-common repo. -->
-        <dependency>
-            <groupId>dev.sibarum</groupId>
-            <artifactId>vex-suite-common</artifactId>
-            <version>${vex-suite-common.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>dev.vexelray.codec</groupId>
-                    <artifactId>vexelray-codec-image</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>dev.vexelray.demo</groupId>
+                <artifactId>text-editor-vexel-demo-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-            </resource>
-            <!-- The mark, on the class path for the window: the same file src/main/rc/editor.rc links into the
-                 executable, so the two are one file and cannot drift. @VexelApp(icon) names it. -->
-            <resource>
-                <directory>src/main/rc</directory>
-                <includes>
-                    <include>editor.ico</include>
-                    <include>editor-background.ico</include>
-                </includes>
-            </resource>
-        </resources>
         <pluginManagement>
             <plugins>
+                <!--
+                  Run in a fresh JVM: mvn compile exec:exec
+                  exec:exec rather than exec:java so native access can be enabled for Panama FFM.
+                  One command line split on whitespace, rather than a list of argument elements. An argument
+                  element is exactly one token and a property cannot expand into several, so a multi-word
+                  app.args would arrive as a single argument. %classpath is substituted after the split, so it
+                  stays one argument even where a path contains a space.
+                -->
                 <plugin>
-                    <!-- Splits the version into parsedVersion.majorVersion and the rest, for the version
-                         resource compile-icon-resource builds: its numeric fields take numbers only. -->
                     <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>build-helper-maven-plugin</artifactId>
-                    <version>3.6.0</version>
-                    <executions>
-                        <execution>
-                            <id>parse-version</id>
-                            <goals><goal>parse-version</goal></goals>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
-                    <!-- native-image compiles small probe executables and runs them to measure the
-                         platform. Windows Application Control blocks a brand-new unsigned .exe under
-                         %TEMP%, so the probes are pointed at target/nitmp instead, which this creates. -->
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-antrun-plugin</artifactId>
-                    <version>3.1.0</version>
-                    <executions>
-                        <execution>
-                            <id>make-native-temp-dir</id>
-                            <phase>prepare-package</phase>
-                            <goals><goal>run</goal></goals>
-                            <configuration>
-                                <target>
-                                    <mkdir dir="${project.build.directory}/nitmp"/>
-                                </target>
-                            </configuration>
-                        </execution>
-                        <!-- The executable's icon and version resource: linked into the program, so they have
-                             to exist as a compiled .res before link time. rc.exe is the Windows SDK's resource
-                             compiler and must be on PATH, as it is in a Visual Studio developer prompt. The
-                             defines carry the version and the image's file name into editor.rc. -->
-                        <execution>
-                            <id>compile-icon-resource</id>
-                            <phase>prepare-package</phase>
-                            <goals><goal>run</goal></goals>
-                            <configuration>
-                                <target>
-                                    <exec executable="rc.exe" searchpath="true" failonerror="true">
-                                        <arg value="/nologo"/>
-                                        <arg value="/dVI_VERSION=${project.version}"/>
-                                        <arg value="/dVI_MAJOR=${parsedVersion.majorVersion}"/>
-                                        <arg value="/dVI_MINOR=${parsedVersion.minorVersion}"/>
-                                        <arg value="/dVI_PATCH=${parsedVersion.incrementalVersion}"/>
-                                        <arg value="/dVI_IMAGE=${native.imageName}.exe"/>
-                                        <arg value="/fo"/>
-                                        <arg file="${project.build.directory}/text-editor.res"/>
-                                        <arg file="${project.basedir}/src/main/rc/editor.rc"/>
-                                    </exec>
-                                </target>
-                            </configuration>
-                        </execution>
-                        <!-- The recording encoder (see ffmpeg-record-beside) laid out flat in target/ffmpeg-record, and
-                             zipped for installer.json, which unpacks it into the install's own ffmpeg-record folder.
-                             Fixed times, so the same libraries make the same zip and an installer that already has
-                             its hash skips the download. -->
-                        <execution>
-                            <id>ffmpeg-record-zip</id>
-                            <phase>prepare-package</phase>
-                            <goals><goal>run</goal></goals>
-                            <configuration>
-                                <target>
-                                    <delete dir="${project.build.directory}/ffmpeg-record"/>
-                                    <copy todir="${project.build.directory}/ffmpeg-record" flatten="true">
-                                        <fileset dir="${project.build.directory}/ffmpeg-wrapper-record/natives/record/windows-x86_64"/>
-                                    </copy>
-                                    <delete file="${project.build.directory}/text-editor-ffmpeg-record-windows-x86_64.zip"/>
-                                    <zip destfile="${project.build.directory}/text-editor-ffmpeg-record-windows-x86_64.zip"
-                                         basedir="${project.build.directory}/ffmpeg-record"
-                                         modificationtime="2026-01-01T00:00:00Z"/>
-                                </target>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
-                    <groupId>org.graalvm.buildtools</groupId>
-                    <artifactId>native-maven-plugin</artifactId>
-                    <version>0.10.6</version>
-                    <executions>
-                        <execution>
-                            <id>build-native</id>
-                            <goals><goal>compile-no-fork</goal></goals>
-                            <phase>package</phase>
-                        </execution>
-                    </executions>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.5.0</version>
                     <configuration>
-                        <imageName>${native.imageName}</imageName>
-                        <mainClass>${app.mainClass}</mainClass>
-                        <buildArgs>
-                            <!-- The FFM flags (Panama downcalls, the window procedure's upcall, shared arenas)
-                                 come from the libraries' own META-INF/native-image metadata, with every
-                                 signature they declare. -->
-                            <buildArg>--no-fallback</buildArg>
-                            <buildArg>-H:+ReportExceptionStackTraces</buildArg>
-                            <buildArg>-J-Djava.io.tmpdir=${project.build.directory}/nitmp</buildArg>
-                            <!-- WINDOWS = no console window, and /ENTRY:mainCRTStartup is not optional
-                                 alongside it: the linker would otherwise look for WinMain, and the image's
-                                 entry is the C main. CONSOLE is the linker's default, spelled out so both
-                                 builds pass the same options. Windows linker options. -->
-                            <buildArg>-H:NativeLinkerOption=/SUBSYSTEM:${native.subsystem}</buildArg>
-                            <buildArg>-H:NativeLinkerOption=/ENTRY:mainCRTStartup</buildArg>
-                            <buildArg>-H:NativeLinkerOption=${project.build.directory}/text-editor.res</buildArg>
-                        </buildArgs>
+                        <skip>${app.run.skip}</skip>
+                        <executable>${java.home}/bin/java</executable>
+                        <classpathScope>runtime</classpathScope>
+                        <commandlineArgs>--enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dautomation=${automation} "-Dbuild.dir=${project.build.directory}" ${app.jvmArgs} -classpath %classpath ${app.mainClass} ${app.args}</commandlineArgs>
                     </configuration>
-                </plugin>
-                <!-- The camera's video recording beside the executable. ffmpeg-wrapper-record-windows's encoder (AV1 into
-                     Matroska, 14 MB) is not a resource of the image, so it is taken out of its jar (into
-                     target/ffmpeg-wrapper-record, then flattened into target/ffmpeg-record by ffmpeg-record-zip), where
-                     its loader looks beside an executable run from target/. Without it a native build offers
-                     "Record video to file…" and fails when it is clicked. FFmpeg's and SVT-AV1's licences come out
-                     with the libraries. -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-dependency-plugin</artifactId>
-                    <version>3.7.0</version>
-                    <executions>
-                        <execution>
-                            <id>ffmpeg-record-beside</id>
-                            <phase>prepare-package</phase>
-                            <goals><goal>unpack-dependencies</goal></goals>
-                            <configuration>
-                                <includeArtifactIds>ffmpeg-wrapper-record-windows</includeArtifactIds>
-                                <includes>natives/record/windows-x86_64/**</includes>
-                                <outputDirectory>${project.build.directory}/ffmpeg-wrapper-record</outputDirectory>
-                                <overWriteReleases>true</overWriteReleases>
-                                <overWriteSnapshots>true</overWriteSnapshots>
-                            </configuration>
-                        </execution>
-                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
-            <!--
-              This application's fonts, which it carries and no other application does: Noto Sans in Regular, Bold,
-              Italic and Bold Italic (the formatted view's emphasis and headings), and Noto Sans Mono Regular, from
-              fonts/ (the official notofonts releases, OFL). Every glyph each face maps, one atlas per face, listed in
-              fonts.json beside them and read by Recipes.fonts. Baked once and committed: the build skips a face whose
-              outputs are newer than its font, and prints each face's cost and the total.
-            -->
+            <!-- Stamps each module with the exact source of its binaries, and keeps platform-specific code in -windows,
+                 -linux and -macos modules only: vexelray-build's identify and isolate (vexelray-build/README.md). -->
             <plugin>
-                <groupId>dev.vexelray</groupId>
-                <artifactId>vexelray-msdf-maven-plugin</artifactId>
-                <version>${vexelray.version}</version>
+                <groupId>dev.vexelray.build</groupId>
+                <artifactId>vexelray-build-maven-plugin</artifactId>
+                <version>0.1.3-SNAPSHOT</version>
                 <executions>
                     <execution>
-                        <id>generate-fonts</id>
+                        <id>identify</id>
                         <goals>
-                            <goal>generate-atlas</goal>
+                            <goal>identify</goal>
                         </goals>
-                        <configuration>
-                            <outputDir>${project.basedir}/src/main/resources/dev/vexelray/demo/editor/fonts</outputDir>
-                            <families>
-                                <family>
-                                    <name>sans</name>
-                                    <sources><source>${project.basedir}/fonts</source></sources>
-                                    <match>Noto Sans</match>
-                                    <styles>regular bold italic bold-italic</styles>
-                                </family>
-                                <family>
-                                    <name>mono</name>
-                                    <sources><source>${project.basedir}/fonts</source></sources>
-                                    <match>Noto Sans Mono</match>
-                                    <styles>regular</styles>
-                                </family>
-                            </families>
-                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>isolate</id>
+                        <goals>
+                            <goal>isolate</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
@@ -384,9 +133,10 @@
                 <version>3.13.0</version>
                 <configuration>
                     <release>${maven.compiler.release}</release>
-                    <!-- The framework's annotation processor: what its vocabulary calls a compile error is
-                         one. Named rather than found, because since JDK 23 javac runs no processor it merely
-                         finds on the class path. -->
+                    <!-- The framework's annotation processor, in both modules: what its vocabulary calls a compile error
+                         is one in -core as well, where the Editor's mailboxes and the jobs' messages are checked as a
+                         library. In -gui it also writes the wiring. Named rather than found, because since JDK 23 javac
+                         runs no processor it merely finds on the class path. -->
                     <annotationProcessorPaths>
                         <path>
                             <groupId>dev.vexelray.framework</groupId>
@@ -433,46 +183,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!--
-              Run in a fresh JVM: mvn compile exec:exec
-              exec:exec rather than exec:java so native access can be enabled for Panama FFM.
-
-              One command line split on whitespace, rather than a list of argument elements. An argument
-              element is exactly one token and a property cannot expand into several, so a multi-word
-              app.args would arrive as a single argument. %classpath is substituted after the split, so it
-              stays one argument even where a path contains a space.
-            -->
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <version>3.5.0</version>
-                <configuration>
-                    <executable>${java.home}/bin/java</executable>
-                    <classpathScope>runtime</classpathScope>
-                    <commandlineArgs>--enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dautomation=${automation} "-Dbuild.dir=${project.build.directory}" ${app.jvmArgs} -classpath %classpath ${app.mainClass} ${app.args}</commandlineArgs>
-                </configuration>
-            </plugin>
-            <!-- Platform-specific code only in -windows, -linux and -macos modules: vexelray-build's isolate goal fails
-                 the build on any outside them (vexelray-build/README.md). -->
-            <plugin>
-                <groupId>dev.vexelray.build</groupId>
-                <artifactId>vexelray-build-maven-plugin</artifactId>
-                <version>0.1.3-SNAPSHOT</version>
-                <executions>
-                    <execution>
-                        <id>identify</id>
-                        <goals>
-                            <goal>identify</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>isolate</id>
-                        <goals>
-                            <goal>isolate</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 
@@ -489,267 +199,6 @@
             </activation>
             <build>
                 <directory>${project.basedir}/target-linux</directory>
-            </build>
-        </profile>
-        <!--
-          This application's own icons, switched on by the folder, as vexelray-framework-template's app-icons profile:
-          art in src/main/icons/small (a 16-unit grid, for 24 px and under) or src/main/icons/large (a 64-unit grid,
-          above), one file per icon named for it (make-root.svg is MAKE_ROOT). The build bakes it into TextEditorIcon,
-          a set that extends the suite's dev.vexelray.gui.icons.Icon: its grids, none of its names, and every place an
-          Icon goes. See vexelray-gui/vexelray-gui-icons/README.md, "An application's own icons".
-        -->
-        <profile>
-            <id>app-icons</id>
-            <activation><file><exists>${basedir}/src/main/icons</exists></file></activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>dev.vexelray.gui</groupId>
-                        <artifactId>vexelray-gui-icons-maven-plugin</artifactId>
-                        <version>${vexelray-gui.version}</version>
-                        <executions>
-                            <execution>
-                                <goals><goal>bake</goal></goals>
-                                <configuration>
-                                    <extends>dev.vexelray.gui.icons.Icon</extends>
-                                    <packageName>dev.vexelray.demo.editor</packageName>
-                                    <enumName>TextEditorIcon</enumName>
-                                    <directories>
-                                        <directory>
-                                            <path>src/main/icons/small</path>
-                                            <size>small</size>
-                                            <optional>true</optional>
-                                        </directory>
-                                        <directory>
-                                            <path>src/main/icons/large</path>
-                                            <size>large</size>
-                                            <optional>true</optional>
-                                        </directory>
-                                    </directories>
-                                </configuration>
-                            </execution>
-                            <!-- The Java and Maven icons the navigator's rows wear, copied from vexelray-icons/java: each
-                                 colour of a drawing its own distance field, drawn one over the other (JavaIcon). -->
-                            <execution>
-                                <id>java-icons</id>
-                                <goals><goal>layered</goal></goals>
-                                <configuration>
-                                    <packageName>dev.vexelray.demo.editor</packageName>
-                                    <enumName>JavaIcon</enumName>
-                                    <directory>src/main/icons/java</directory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <!-- Build-time platform selection: exactly one activates from the host OS, adding VexelRay's
-             matching provider module and tactroller's input backend (both found by ServiceLoader). -->
-        <profile>
-            <id>platform-windows</id>
-            <activation><os><family>windows</family></os></activation>
-            <dependencies>
-                <dependency>
-                    <groupId>dev.vexelray</groupId>
-                    <artifactId>vexelray-os-windows</artifactId>
-                    <version>${vexelray.version}</version>
-                    <scope>runtime</scope>
-                </dependency>
-                <dependency>
-                    <groupId>sibarum.tactroller</groupId>
-                    <artifactId>tactroller-windows</artifactId>
-                    <version>${tactroller.version}</version>
-                    <scope>runtime</scope>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
-            <id>platform-linux</id>
-            <activation><os><family>unix</family><name>linux</name></os></activation>
-            <dependencies>
-                <dependency>
-                    <groupId>dev.vexelray</groupId>
-                    <artifactId>vexelray-os-linux</artifactId>
-                    <version>${vexelray.version}</version>
-                    <scope>runtime</scope>
-                </dependency>
-                <dependency>
-                    <groupId>sibarum.tactroller</groupId>
-                    <artifactId>tactroller-linux</artifactId>
-                    <version>${tactroller.version}</version>
-                    <scope>runtime</scope>
-                </dependency>
-            </dependencies>
-        </profile>
-        <profile>
-            <id>platform-macos</id>
-            <activation><os><family>mac</family></os></activation>
-            <dependencies>
-                <dependency>
-                    <groupId>dev.vexelray</groupId>
-                    <artifactId>vexelray-os-macos</artifactId>
-                    <version>${vexelray.version}</version>
-                    <scope>runtime</scope>
-                </dependency>
-                <dependency>
-                    <groupId>sibarum.tactroller</groupId>
-                    <artifactId>tactroller-macos</artifactId>
-                    <version>${tactroller.version}</version>
-                    <scope>runtime</scope>
-                </dependency>
-            </dependencies>
-        </profile>
-        <!--
-          Windows native images; run from a Visual Studio developer prompt, or after vcvars64.bat, so link.exe and
-          rc.exe are the MSVC ones and on PATH.
-
-            mvn -Pnative-release package -DskipTests  ->  target/text-editor.exe        what ships and gets signed
-            mvn -Pnative package -DskipTests          ->  target/text-editor-debug.exe  for ottermate
-
-          release: Windows GUI subsystem (no console window ever).
-          debug:   console subsystem (stdout is the `automation: localhost:<port>` protocol line).
-          Both carry the automation sockets, off until asked for, with the title bar's plug showing their state.
-          The plugins are declared once, in pluginManagement; the profiles only choose their inputs. The switches
-          are the ones the earlier editor and mainframe-dist found, and each is load-bearing: see
-          docs/native-build.md for why, and for what the metadata under META-INF/native-image is.
-        -->
-        <profile>
-            <id>native</id>
-            <properties>
-                <native.imageName>text-editor-debug</native.imageName>
-                <native.subsystem>CONSOLE</native.subsystem>
-            </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>build-helper-maven-plugin</artifactId>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-dependency-plugin</artifactId>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.graalvm.buildtools</groupId>
-                        <artifactId>native-maven-plugin</artifactId>
-                        <extensions>true</extensions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>native-release</id>
-            <properties>
-                <native.imageName>text-editor</native.imageName>
-                <native.subsystem>WINDOWS</native.subsystem>
-            </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>build-helper-maven-plugin</artifactId>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-dependency-plugin</artifactId>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.graalvm.buildtools</groupId>
-                        <artifactId>native-maven-plugin</artifactId>
-                        <extensions>true</extensions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <!-- Linux: mvn -Pnative-linux package -DskipTests  ->  target-linux/text-editor. No linker options and no
-             rc.exe; a Linux executable has no subsystem and no icon of its own. -->
-        <profile>
-            <id>native-linux</id>
-            <properties>
-                <native.imageName>text-editor</native.imageName>
-            </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.graalvm.buildtools</groupId>
-                        <artifactId>native-maven-plugin</artifactId>
-                        <extensions>true</extensions>
-                        <configuration>
-                            <buildArgs combine.self="override">
-                                <buildArg>--no-fallback</buildArg>
-                            </buildArgs>
-                        </configuration>
-                    </plugin>
-                    <!-- The camera's recording encoder beside the executable, as on Windows: ffmpeg-wrapper-record-linux's
-                         libraries, flat in target-linux/ffmpeg-record, and packed as text-editor-ffmpeg-record-linux-x86_64.tar.gz
-                         for an installer to unpack into the install's own ffmpeg-record folder (Linux's form of
-                         ffmpeg-record-zip: names in order, fixed times, owners and modes, gzip without a name or time,
-                         so the same libraries make the same archive). -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-dependency-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>ffmpeg-record-beside</id>
-                                <configuration>
-                                    <includeArtifactIds>ffmpeg-wrapper-record-linux</includeArtifactIds>
-                                    <includes>natives/record/linux-x86_64/**</includes>
-                                    <outputDirectory>${project.build.directory}/ffmpeg-record</outputDirectory>
-                                    <fileMappers>
-                                        <org.codehaus.plexus.components.io.filemappers.FlattenFileMapper/>
-                                    </fileMappers>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>ffmpeg-record-tar</id>
-                                <phase>package</phase>
-                                <goals><goal>exec</goal></goals>
-                                <configuration>
-                                    <executable>sh</executable>
-                                    <workingDirectory>${project.build.directory}/ffmpeg-record</workingDirectory>
-                                    <commandlineArgs>-c "LC_ALL=C tar --sort=name --mtime=2026-01-01T00:00:00Z --owner=0 --group=0 --numeric-owner --mode=a=r,u+w -cf - * | gzip -n > ../text-editor-ffmpeg-record-linux-x86_64.tar.gz"</commandlineArgs>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <!--
-          The large-file benchmark: mvn -Plarge-file-bench test
-          Runs LargeFileBench alone, which is otherwise skipped, and writes target/large-file-bench.md. It generates
-          ~1.2 GB of fixtures under target/large-files on its first run. See LargeFileBench for its -D knobs.
-        -->
-        <profile>
-            <id>large-file-bench</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration>
-                            <test>LargeFileBench</test>
-                            <systemPropertyVariables>
-                                <bench.large>true</bench.large>
-                            </systemPropertyVariables>
-                        </configuration>
-                    </plugin>
-                </plugins>
             </build>
         </profile>
     </profiles>

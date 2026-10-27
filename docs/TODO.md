@@ -9,7 +9,7 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 ## Next
 
 - [ ] Only a launch with no arguments may write **the window's placement**. The session half is done: a launch
-      with paths (Vexplore's *Open in VexelRay IDE* is one) opens only those and never arms `Session`, so it neither
+      with paths (Vexplore's *Open in VexelRay IDE* is one) opens only those and the `Editor` never arms, so it neither
       restores nor writes the tabs. The framework's window memory still writes `window.main.*` (x, y, size) to the
       same `~/.text-editor/settings.properties` from every window, which is upstream: *Settings and the session*
       in the framework TODO.
@@ -23,6 +23,13 @@ Keep an entry short enough that it does not need editing, and delete it when it 
       its colour and, if it is large enough, its icon.
 - [ ] The window wears the executable's icon (`src/main/rc/vex-window.svg`, from the suite icon canvas) once a
       generated wiring can name an icon (FN-2).
+
+- [ ] The view still reaches the disk itself in four places the editor has no part in: a preference written to a
+      root's `.vex`, a library's source read for a declaration, the Run menu worked out, and the suite's other
+      applications started. Each goes to `Gui.offload()` with a lambda, which the framework means to withdraw
+      (components.md, section 10). Make each a `@Job` in `-core`, as the files' are.
+- [ ] `Preferences` and `ProjectIndex` are services both halves read, locked inside. The model the stack is heading
+      for (Spike/ROADMAP.md) wants them owned: a component each, reached by messages, like the `Editor`.
 
 ## Later
 

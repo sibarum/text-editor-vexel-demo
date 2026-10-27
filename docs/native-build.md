@@ -1,11 +1,12 @@
 # The native build
 
 ```
-mvn -Pnative-release package -DskipTests   # target/text-editor.exe, about 43 MB, about 40 s: what ships and is signed
-mvn -Pnative package -DskipTests           # target/text-editor-debug.exe: for ottermate
+mvn -Pnative-release package -DskipTests   # text-editor-vexel-demo-gui/target/text-editor.exe, about 43 MB, about 40 s: what ships and is signed
+mvn -Pnative package -DskipTests           # text-editor-vexel-demo-gui/target/text-editor-debug.exe: for ottermate
 ```
 
-Two builds of the same code:
+Run from the root, the parent of the two modules; the image is built in `text-editor-vexel-demo-gui`, and the paths
+below are inside it. Two builds of the same code:
 
 - **release** is a Windows GUI subsystem program (no console window ever). `installer.json` points at this exe.
 - **debug** is a console subsystem program: `text-editor-debug.exe --automation=0` prints
