@@ -50,8 +50,10 @@ final class Landmarks {
     /** The name field Add opens over the root's tree: Enter makes what is being added, Escape puts it away. */
     static final String NAME = "navigator.name";
 
-    /** The status line, and its four slots. The slot keys are landmarks too, so a script can read each. */
+    /** The status line, and its five slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";
+    /** Where the root stands in git — {@code main ↑2 · 3 changed} — inside a repository; empty otherwise. */
+    static final String STATUS_GIT = "status.git";
     static final String STATUS_MESSAGE = "status.message";
     /** The declaration the caret is in — {@code Outer › method} — in a Java document; empty otherwise. */
     static final String STATUS_SCOPE = "status.scope";

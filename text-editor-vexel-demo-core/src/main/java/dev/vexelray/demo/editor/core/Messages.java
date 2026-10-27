@@ -10,9 +10,10 @@ import java.nio.file.Path;
  * <h2>Message passing is how the parts talk</h2>
  *
  * <p>The editor is three kinds of part, and none of them holds another. The {@link Editor} decides; it runs on a lane
- * of its own and owns the session. The view, in {@code -gui}, shows; it runs on a lane of its own and owns the
- * widgets. The jobs ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link MakeScratch}, {@link NameScratch},
- * {@link DropScratch}, {@link Make}) touch the disk, on the offload lane. Each sends a record on a topic and the
+ * of its own and owns the session. The {@link Repository} decides what git is asked and when; it too has a lane of
+ * its own. The view, in {@code -gui}, shows; it runs on a lane of its own and owns the widgets. The jobs
+ * ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link MakeScratch}, {@link NameScratch},
+ * {@link DropScratch}, {@link Make}, {@link ReadStatus}) touch the disk or run git, on the offload lane. Each sends a record on a topic and the
  * others hear it on their own thread, so no state is shared and nothing needs a lock.
  *
  * <p>A record here is what crossed, and it crosses as itself: the processor refuses a payload that is not deeply
@@ -444,5 +445,46 @@ public final class Messages {
     public static final String MADE = "path.made";
 
     public record Created(Path path, Made what, String note, String problem) {
+    }
+
+    // ------------------------------------------------------------------ the repository, and git
+
+    /**
+     * Where the root stands in git, for the status line: the branch, how far from its upstream, and how much is
+     * changed. {@link #NOT_A_REPOSITORY} when the root is not in one, git is not installed, or there is no root.
+     *
+     * @param label    what the status line says: {@code main ↑2 · 3 changed}; empty outside a repository
+     * @param branch   the branch checked out; the short commit when {@code HEAD} is detached
+     * @param staged   paths with something staged
+     * @param unstaged paths changed and not staged, untracked or conflicted; an untracked folder counts once
+     */
+    public static final String GIT_HEAD = "view.git-head";
+    public static final Topic<GitHead> GIT_HEAD_TOPIC = Topic.of(GIT_HEAD, GitHead.class);
+
+    public record GitHead(boolean repository, String label, String branch, int ahead, int behind, int staged,
+                          int unstaged) {
+    }
+
+    public static final GitHead NOT_A_REPOSITORY = new GitHead(false, "", "", 0, 0, 0, 0);
+
+    /**
+     * Ask git where {@code folder} stands ({@link ReadStatus}). {@code generation} comes back on the answer, so the
+     * {@link Repository} can tell an answer about a root it has since left from one about the root it has.
+     */
+    public static final String GIT_STATUS = "git.status";
+    public static final Topic<GitAsk> GIT_STATUS_TOPIC = Topic.of(GIT_STATUS, GitAsk.class);
+
+    public record GitAsk(long generation, Path folder) {
+    }
+
+    /**
+     * What {@link ReadStatus} found: {@code repository} false, and the rest empty, outside one. {@code branch} is the
+     * branch's name, or the short commit when {@code HEAD} is detached. The counts are of what is under the folder
+     * asked about; {@code changed} counts each path once, though one staged and changed again is in both lists.
+     */
+    public static final String GIT_STATUS_READ = "git.status-read";
+
+    public record GitRead(long generation, boolean repository, String branch, int ahead, int behind, int staged,
+                          int unstaged, int changed) {
     }
 }

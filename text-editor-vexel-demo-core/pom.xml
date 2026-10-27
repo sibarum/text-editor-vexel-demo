@@ -52,6 +52,14 @@
             <artifactId>concordance-index</artifactId>
             <version>${concordance.version}</version>
         </dependency>
+        <!-- Git, run as a process, and what it says read into records: the Repository's view of the root. The
+             suite library's git module alone, which has no widget, so this module still builds against none.
+             Installed to the local .m2 by `mvn install` in the sibling vex-suite-common repo. -->
+        <dependency>
+            <groupId>dev.sibarum</groupId>
+            <artifactId>vex-suite-common-git</artifactId>
+            <version>${vex-suite-common.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

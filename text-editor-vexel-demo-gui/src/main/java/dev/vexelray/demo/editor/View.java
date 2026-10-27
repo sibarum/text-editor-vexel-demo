@@ -18,6 +18,7 @@ import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.Flush;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
+import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.NewFile;
@@ -320,6 +321,12 @@ final class View {
     @Subscribe(topic = Messages.STATUS)
     public void status(Status m) {
         ui.status(m.message(), m.alert());
+    }
+
+    /** Where the root stands in git, from the {@code Repository}. */
+    @Subscribe(topic = Messages.GIT_HEAD)
+    public void gitHead(GitHead m) {
+        ui.git(m.label());
     }
 
     /** A question, as the framework's dialog: its answer goes back to the editor, from whichever thread presses it. */

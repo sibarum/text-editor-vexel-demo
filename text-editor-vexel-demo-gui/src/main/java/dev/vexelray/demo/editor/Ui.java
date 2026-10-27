@@ -77,7 +77,9 @@ final class Ui {
         // The design's bar is the page, not chrome: the cards are what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
 
+        // The branch first, where it stays put: the message after it comes and goes.
         status = new StatusBar(gui)
+                .slot(Landmarks.STATUS_GIT, StatusBar.Side.LEFT, "")
                 .slot(Landmarks.STATUS_MESSAGE, StatusBar.Side.LEFT, "")
                 .slot(Landmarks.STATUS_SCOPE, StatusBar.Side.RIGHT, "")
                 .slot(Landmarks.STATUS_LANGUAGE, StatusBar.Side.RIGHT, "")
@@ -85,8 +87,8 @@ final class Ui {
                 .minWidth(Landmarks.STATUS_POSITION, Length.rem(7));
         status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
         gui.landmark(Landmarks.STATUS, status.node());
-        for (String slot : new String[] {Landmarks.STATUS_MESSAGE, Landmarks.STATUS_SCOPE, Landmarks.STATUS_LANGUAGE,
-                Landmarks.STATUS_POSITION}) {
+        for (String slot : new String[] {Landmarks.STATUS_GIT, Landmarks.STATUS_MESSAGE, Landmarks.STATUS_SCOPE,
+                Landmarks.STATUS_LANGUAGE, Landmarks.STATUS_POSITION}) {
             gui.landmark(slot, status.slot(slot));
         }
 
@@ -255,6 +257,11 @@ final class Ui {
         if (alert) {
             alert();
         }
+    }
+
+    /** Where the root stands in git, at the left of the status line; empty outside a repository. */
+    void git(String label) {
+        status.text(Landmarks.STATUS_GIT, label);
     }
 
     /** What the document in front is written in, at the right of the status line. */

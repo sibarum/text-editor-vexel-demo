@@ -219,8 +219,9 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Messages.java` | **every message the parts send each other**, grouped by who sends it to whom, each record beside its topic. A record crosses as itself, so it holds only immutable values and no lists |
 | `Editor.java` | **the controller**, a component on the `editor` lane: every decision. What is open and which tab is in front, when closing, quitting, picking a root or running needs a question first, where an Untitled document is saved, which tabs each root keeps, what the status line and the title bar say, what comes back next time. It owns the session and needs no lock, because nothing else can reach it |
 | `Doc.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value in one field of the editor's |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java` | the jobs: every touch of the disk the editor asks for, on the offload lane. What can go wrong is part of the reply |
-| `Core.java` | the list of this module's component and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it |
+| `Repository.java` | **the controller for git**, a component on the `git` lane: follows the root the editor shows, asks git where it stands when the root changes and after the editor writes or makes something, one question at a time, and tells the view what the status line's Git slot says (`develop ↑8 · 10 changed`). Git mode builds on it ([docs/git-mode.md](docs/git-mode.md)) |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
+| `Core.java` | the list of this module's components and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it |
 | `TextFile.java` | the policy between bytes on disk and text in a field |
 | `Markdown.java` | Markdown as blocks and inlines, for the formatted view: a pure function |
 | `Scratches.java` | the scratches' folder, as a value: making a scratch, moving and renaming one, and taking one away |
@@ -279,6 +280,7 @@ Installed locally rather than downloaded, so `mvn install` in each sibling has t
 | `vexelray-gui-file-icons` | the file-type family icons and their colours, on the navigator's rows and Open's blocks |
 | `vexelray-technique-mesh`, `vexelray-engine-embedded` (repo `vexelray`) | Open's blocks: polygon meshes through the rasteriser, composited into a viewport the GUI samples |
 | `vex-suite-common` (its `tty` package; the picture decoder excluded) | the console's terminal, shared with MainFrame |
+| `vex-suite-common-git` (in `-core`) | git, run as a process, and its answers read into records; its own module, with no widget, so `-core` still builds against none |
 | `org.netbeans.external:org.eclipse.tm4e.core-0.14.0` + `gson`, `joni`, `snakeyaml-engine` | the TextMate tokenizer and the runtime dependencies it does not declare |
 | `tactroller-atchung`, `tactroller-clipboard` | input onto the bus, and the OS clipboard |
 | `vexelray-os-*`, `tactroller-*` | picked by an OS-activated profile |

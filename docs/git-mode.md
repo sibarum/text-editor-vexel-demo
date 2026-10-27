@@ -1,6 +1,6 @@
 # Git mode: the build plan
 
-Status: **planned**, 2026-10-27. Nothing here is built yet. The look is the
+Status: **slices 0 and 1 built**, 2026-10-27: the library's read side, and the branch in the status line. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -45,12 +45,15 @@ stall that the watchdog ends the application for.
 - **Generations.** Each refresh carries a number. A reply from an older refresh is dropped, so a slow status that
   arrives after a quick one never overwrites it.
 - **When it refreshes:** on a root change, on entering Git mode, after each of its own writes, after the editor
-  saves a file inside the repository, and from a Refresh button. While Git mode is up it also checks the
+  saves or makes something (it hears the editor's `Relist`), and from a Refresh button. `Relist` stays a lossless
+  mailbox, because the view hears the same topic and one topic has one loss class (T4.1); a burst is folded into
+  one more question by the component instead. While Git mode is up it also checks the
   modification time of `.git/index` and `HEAD` every 2 s, so a commit made at a prompt shows up without a click.
   That check is one `stat`, not one run of git.
 - **What it decides:** whether Commit is allowed (something staged and a first line), whether Push is allowed
   (ahead > 0), and what a failed run means. Git's own stderr goes to the console as it came.
-- `-core` gains a dependency on `vex-suite-common` (only `-gui` has one today).
+- `-core` depends on `vex-suite-common-git`, the library's git package as a module of its own. The whole library
+  brings `vexelray-gui-widget`, and `-core` builds against no widget.
 
 ### `-gui`: the mode, the pane and the stage
 
