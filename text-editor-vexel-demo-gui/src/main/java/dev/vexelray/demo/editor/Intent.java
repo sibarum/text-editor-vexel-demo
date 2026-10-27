@@ -100,6 +100,13 @@ record Intent(Command command, long id) {
             void on(View view, long id) {
                 view.run(id);
             }
+        },
+        /** A file to open from Git mode, a row or a diff's line; {@code id} is the view's ticket for where. */
+        OPEN_AT {
+            @Override
+            void on(View view, long id) {
+                view.openAt(id);
+            }
         };
 
         abstract void on(View view, long id);

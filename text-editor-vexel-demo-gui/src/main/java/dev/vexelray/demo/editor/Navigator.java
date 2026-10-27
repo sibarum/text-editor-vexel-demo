@@ -160,7 +160,6 @@ final class Navigator {
         gitChip.node().font(Type.UI).wordWrap(false).visible(false);
         gui.landmark(Landmarks.GIT, gitChip.node());
         gitPane = new GitPane(gui);
-        gitPane.onOpenFile(p -> openFile.accept(p));
         // The root is a folder like any row, so its name has a folder's menu; with no root there is nothing to offer.
         gui.onContextMenu(heading.node(), menu -> {
             Path base = source.base();
@@ -631,6 +630,21 @@ final class Navigator {
     /** Be asked to ask git again: Git mode's Refresh. Runs on a worker. */
     void onGitRefresh(Runnable handler) {
         gitPane.onRefresh(handler);
+    }
+
+    /** Be told a Git mode row was picked, to show its diff. */
+    void onGitPick(Consumer<GitPane.Row> handler) {
+        gitPane.onPick(handler);
+    }
+
+    /** Be asked to open a Git mode row's file: Enter or a double click on it. Runs on a worker. */
+    void onGitOpen(Consumer<Path> handler) {
+        gitPane.onOpenFile(handler);
+    }
+
+    /** Let go of the Git mode row picked: its diff was put away. */
+    void gitUnpick() {
+        gitPane.unpick();
     }
 
     /**

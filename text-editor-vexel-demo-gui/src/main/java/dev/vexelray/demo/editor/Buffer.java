@@ -337,6 +337,21 @@ final class Buffer implements AutoCloseable {
         }
     }
 
+    /**
+     * Select 1-based {@code line}, without its line end: a line gone to from a diff. Selecting is what scrolls the
+     * field to it, and the selection is what shows which line was meant. A line past the end is the last.
+     */
+    void goToLine(int line) {
+        String text = field.text();
+        int start = offsetOf(text, line, 1);
+        int end = text.indexOf('\n', start);
+        end = end < 0 ? text.length() : end;
+        if (end > start && text.charAt(end - 1) == '\r') {
+            end--;
+        }
+        field.select(start, end);
+    }
+
     /** Where the name of the declaration at {@code line}:{@code column} is in the text, or -1. */
     int declaredNameAt(String name, int line, int column) {
         String text = field.text();

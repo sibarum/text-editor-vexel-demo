@@ -11,6 +11,7 @@ import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.ListView;
+import dev.vexelray.gui.widget.SelectionModel;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,8 +26,8 @@ import java.util.function.Consumer;
  * back arrives as git's own text ({@link GitTree}), read here by the parsers that read it there. Rows are
  * {@link ListView}s, so a repository with thousands of untracked files costs a screenful of rows.
  *
- * <p>Read-only for now: a row opens its file, and staging, the commit and the diff are later slices of
- * {@code docs/git-mode.md}.
+ * <p>A row picked shows its diff where the editor stands ({@link GitStage}); Enter or a double click opens its file.
+ * Read-only for now: staging and the commit are later slices of {@code docs/git-mode.md}.
  */
 final class GitPane {
 
@@ -94,6 +95,9 @@ final class GitPane {
     private volatile boolean anyUnstaged;
     private volatile Consumer<Path> openFile = p -> { };
     private volatile Runnable refresh = () -> { };
+    private volatile Consumer<Row> pick = r -> { };
+    /** The row picked, by path and side, so a refreshed list picks it again; null while none is. */
+    private volatile Row picked;
 
     GitPane(Gui gui) {
         this.gui = gui;
@@ -118,6 +122,9 @@ final class GitPane {
         stagedEmpty = empty("Nothing staged");
         staged = list();
         gui.landmark(Landmarks.GIT_STAGED, staged.node());
+        // One row is picked across both lists: picking in one lets go of the other's.
+        unstaged.selection().onChange(set -> picked(set, staged));
+        staged.selection().onChange(set -> picked(set, unstaged));
 
         root = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
@@ -141,13 +148,43 @@ final class GitPane {
     }
 
     private ListView<Row> list() {
-        ListView<Row> list = new ListView<>(gui, ROW_REM, this::row);
+        ListView<Row> list = new ListView<>(gui, ROW_REM, this::row, SelectionModel.single());
         list.node().width(Length.FILL).height(Length.grow(1)).background(gui.theme().color(Role.NONE));
         Look.ring(gui, list.node());
-        // A row is a file to open, as a row of the root's tree is; a deleted one has nothing to open.
+        // Picked, by a click or the arrows, a row's diff stands where the editor does; Enter or a double click
+        // opens the file itself, and a deleted one has nothing to open.
         list.onActivate(this::open);
-        list.onRowClicked(this::open);
         return list;
+    }
+
+    /** A list's selection moved. One row picked is its diff asked for; the same row picked again asks nothing. */
+    private void picked(java.util.Set<Row> set, ListView<Row> other) {
+        if (set.size() != 1) {
+            return;   // let go of because the other list was picked in, or emptied by a refresh: the stage stays
+        }
+        Row r = set.iterator().next();
+        if (same(r, picked)) {
+            return;
+        }
+        picked = r;
+        other.selection().clear();
+        pick.accept(r);
+    }
+
+    private static boolean same(Row a, Row b) {
+        return a != null && b != null && a.path().equals(b.path()) && a.staged() == b.staged();
+    }
+
+    /** Let go of the row picked: the stage was closed. */
+    void unpick() {
+        picked = null;
+        unstaged.selection().clear();
+        staged.selection().clear();
+    }
+
+    /** Be told a row was picked, to show its diff. Runs on whichever thread moved the selection. */
+    void onPick(Consumer<Row> handler) {
+        this.pick = handler == null ? r -> { } : handler;
     }
 
     private void open(Row r) {
@@ -246,6 +283,16 @@ final class GitPane {
         unstaged.items(notStaged);
         staged.items(isStaged);
         anyUnstaged = !notStaged.isEmpty();
+        // The rows are new, counts and all: the one picked is picked again, which asks nothing since it is the same.
+        Row was = picked;
+        if (was != null) {
+            for (Row r : was.staged() ? isStaged : notStaged) {
+                if (same(r, was)) {
+                    (was.staged() ? staged : unstaged).selection().at(r);
+                    break;
+                }
+            }
+        }
     }
 
     /** Put the keyboard in the first list with something in it. */

@@ -62,11 +62,29 @@ final class Landmarks {
     /** Git mode's Refresh, which asks git again. */
     static final String GIT_REFRESH = "git.refresh";
 
-    /** Git mode's list of what is changed and not staged, untracked and conflicted. A row opens its file. */
+    /**
+     * Git mode's list of what is changed and not staged, untracked and conflicted. A row picked shows its diff on the
+     * stage; Enter or a double click opens its file.
+     */
     static final String GIT_UNSTAGED = "git.unstaged";
 
-    /** Git mode's list of what is staged. */
+    /** Git mode's list of what is staged, picked and opened as {@link #GIT_UNSTAGED}'s rows are. */
     static final String GIT_STAGED = "git.staged";
+
+    /** What stands where the editor does while a Git mode row is picked: its diff. */
+    static final String STAGE = "stage";
+
+    /** The stage's file name, over the diff. */
+    static final String DIFF_FILE = "stage.file";
+
+    /** The diff's lines: Enter or a double click on one opens the file there; Escape closes the stage. */
+    static final String DIFF = "stage.diff";
+
+    /** The stage's Open file, which opens it at its first line. */
+    static final String DIFF_OPEN = "stage.open";
+
+    /** The stage's Close: the editor comes back. */
+    static final String DIFF_CLOSE = "stage.close";
 
     /** The status line, and its five slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";

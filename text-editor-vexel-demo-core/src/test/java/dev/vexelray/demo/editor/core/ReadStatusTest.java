@@ -1,6 +1,9 @@
 package dev.vexelray.demo.editor.core;
 
+import dev.sibarum.suite.git.Diff;
 import dev.sibarum.suite.git.Git;
+import dev.vexelray.demo.editor.core.Messages.DiffAsk;
+import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.sibarum.suite.git.Numstat;
 import dev.sibarum.suite.git.Status;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
@@ -94,6 +97,24 @@ class ReadStatusTest {
         Files.writeString(repo.resolve("a.txt"), "changed\n");
         git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am", "at a prompt");
         assertNotEquals(r.stamp(), new ReadStamp().run(new GitStampAsk(1, r.gitDir())).stamp());
+    }
+
+    @Test
+    void readsADiffOnEachSide() throws IOException {
+        Path repo = repository();
+        Files.writeString(repo.resolve("a.txt"), "b\n");
+        git(repo, "add", "a.txt");
+        Files.writeString(repo.resolve("new.txt"), "one\n");
+        Path root = new ReadStatus().run(new GitAsk(1, repo)).root();
+
+        DiffRead staged = new ReadDiff().run(new DiffAsk(4, root, "a.txt", Diff.Side.STAGED));
+        assertEquals(4, staged.ticket());
+        assertEquals(List.of(new Diff.Line(1, 0, Diff.Kind.REMOVED, "a"), new Diff.Line(0, 1, Diff.Kind.ADDED, "b")),
+                Diff.parse(staged.text()).hunks().getFirst().lines());
+        assertTrue(Diff.parse(new ReadDiff().run(new DiffAsk(5, root, "a.txt", Diff.Side.UNSTAGED)).text())
+                .hunks().isEmpty(), "nothing unstaged");
+        assertEquals(1, Diff.parse(new ReadDiff().run(new DiffAsk(6, root, "new.txt", Diff.Side.UNTRACKED)).text())
+                .added());
     }
 
     private Path repository() throws IOException {

@@ -18,7 +18,10 @@ import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.Flush;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
+import dev.sibarum.suite.git.Diff;
+import dev.vexelray.demo.editor.core.Messages.GitDiff;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
+import dev.vexelray.demo.editor.core.Messages.ShowDiff;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
 import dev.vexelray.demo.editor.core.Messages.GitTick;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
@@ -115,7 +118,7 @@ import java.util.function.Consumer;
 @Publishes({Messages.OPEN, Messages.NEW_FILE, Messages.OPEN_TEXT, Messages.FRONTED, Messages.EDITED,
         Messages.DROPPED, Messages.CLOSING, Messages.SAVE, Messages.SAVE_AS, Messages.ANSWER, Messages.PLACED,
         Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Messages.GIT_WATCH,
-        Messages.GIT_REFRESH, Messages.GIT_TICK, Intent.TOPIC})
+        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Intent.TOPIC})
 final class View {
 
     private static final Log LOG = Log.of("editor.files");
@@ -160,6 +163,14 @@ final class View {
     private record Library(Source source, Consumer<Buffer> then) {
     }
 
+    /** Files opened from Git mode, each held under a ticket until this lane takes it: where, and at which line. */
+    private final Map<Long, At> openings = new ConcurrentHashMap<>();
+    /** Whether the file of the Git mode row picked is on the disk to open: a deleted one is not. */
+    private volatile boolean pickedThere;
+
+    private record At(Path file, int line) {
+    }
+
     View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, ProjectIndex concordance,
          Preferences prefs, KronoGui krono) {
         this.gui = gui;
@@ -190,6 +201,10 @@ final class View {
         nav.onAdd(this::add);
         nav.onGit(this::gitShown);
         nav.onGitRefresh(() -> bus.publish(Messages.GIT_REFRESH_TOPIC, new GitRefresh()));
+        nav.onGitPick(this::gitPicked);
+        nav.onGitOpen(file -> openFromGit(file, 0));
+        ui.gitStage().onOpenAt(this::openFromGit);
+        ui.gitStage().onClose(this::closeDiff);
         // A build or a script writes files the tree has not listed; its end is when they are all there.
         console.onEnded(nav::refresh);
         ws.runButton().onPress(this::runMenu);
@@ -365,8 +380,73 @@ final class View {
         if (on) {
             watching = krono.every("git-watch", Dur.ms(Repository.WATCH.toMillis()),
                     () -> bus.publish(Messages.GIT_TICK_TOPIC, new GitTick()));
+        } else {
+            // The navigator's mode change has put the diff away already; the repository stops asking for it.
+            nav.gitUnpick();
+            bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
         }
         bus.publish(Messages.GIT_WATCH_TOPIC, new GitWatch(on));
+    }
+
+    /**
+     * A Git mode row was picked: its diff is asked for, and stands where the editor does when it comes. Which side is
+     * the row's: staged, untracked as a whole file, or the working tree's. A deleted file has nothing to open.
+     */
+    private void gitPicked(GitPane.Row r) {
+        Diff.Side side = r.staged() ? Diff.Side.STAGED : r.letter() == 'U' ? Diff.Side.UNTRACKED : Diff.Side.UNSTAGED;
+        pickedThere = r.letter() != 'D';
+        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(r.path(), side));
+    }
+
+    /** A diff, from the {@code Repository}, for the row picked or again because the status changed. */
+    @Subscribe(topic = Messages.GIT_DIFF_SHOWN)
+    public void gitDiff(GitDiff m) {
+        if (nav.mode() != Navigator.Mode.GIT) {
+            return;
+        }
+        ui.gitStage().show(m, pickedThere);
+        ui.showDiff(true);
+    }
+
+    /** Close, or Escape on the diff: the editor comes back, and the keyboard goes to the row that was picked. */
+    private void closeDiff() {
+        ui.showDiff(false);
+        nav.gitUnpick();
+        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
+        nav.focus();
+    }
+
+    /** Open {@code file} from Git mode, at 1-based {@code line}, or as it opens for 0: on this lane, via a ticket. */
+    private void openFromGit(Path file, int line) {
+        long ticket = tickets.incrementAndGet();
+        openings.put(ticket, new At(file, line));
+        tell(Command.OPEN_AT, ticket);
+    }
+
+    /**
+     * A file opened from Git mode: the diff goes, so the editor is what is seen, and the file comes to the front at the
+     * line asked for, now if its tab is open, else once the editor has given it one ({@link #selections}).
+     */
+    void openAt(long ticket) {
+        At at = openings.remove(ticket);
+        if (at == null) {
+            return;
+        }
+        ui.showDiff(false);
+        nav.gitUnpick();
+        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
+        Buffer open = ws.find(at.file());
+        if (open != null) {
+            ws.show(open);
+            if (at.line() > 0) {
+                open.goToLine(at.line());
+            }
+            return;
+        }
+        if (at.line() > 0) {
+            selections.put(at.file(), loaded -> loaded.goToLine(at.line()));
+        }
+        bus.publish(Messages.OPEN_TOPIC, new Open(at.file(), true));
     }
 
     /** A question, as the framework's dialog: its answer goes back to the editor, from whichever thread presses it. */

@@ -155,6 +155,24 @@ final class Look {
         return Oklab.polar(level.l(), 0.070, p.accent().hueDegrees()).toColor();
     };
 
+    /**
+     * A line a diff adds: two steps above the card, steeped in the green the framework's SUCCESS is drawn in. Quiet
+     * enough that the text on it is still the text, as the design's blue-on-navy is.
+     */
+    static final Role ADDED_LINE = p -> {
+        Oklab level = Oklab.of(p.surface(2));
+        return Oklab.polar(level.l(), 0.045, 145).toColor();
+    };
+
+    /** A line a diff removes: as {@link #ADDED_LINE}, in the danger's hue. */
+    static final Role REMOVED_LINE = p -> {
+        Oklab level = Oklab.of(p.surface(2));
+        return Oklab.polar(level.l(), 0.050, p.danger().hueDegrees()).toColor();
+    };
+
+    /** A diff's hunk header: a step above the card, so each hunk starts where it is seen to. */
+    static final Role HUNK = p -> p.surface(3);
+
     /** A scrollbar thumb: level 5 ({@code #313a47}), where the framework's GRIP is a loud level 10. */
     static final Role THUMB = p -> p.surface(5);
 

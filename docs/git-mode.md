@@ -1,7 +1,7 @@
 # Git mode: the build plan
 
-Status: **slices 0 to 2 built**, 2026-10-27: the library's read side, the branch in the status line, and Git mode
-read-only. The look is the
+Status: **slices 0 to 3 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode
+read-only, and diffs. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -78,7 +78,10 @@ stall that the watchdog ends the application for.
 - **`GitStage`** (right), standing where the editor does, the way `Preview` does in Open. With no file selected it
   shows Branches and Changesets. With a file selected it shows that file's diff: old and new line numbers, the `+`
   or `−`, and colored lines, with Stage or Unstage at the top. Double-clicking a line of the diff opens the file at
-  that line.
+  that line. Built in slice 3 as a diff only: a row picked (click or arrows) shows it, the editor stays when none
+  is, and Branches and Changesets come in slice 6. A removed line opens at the line that now stands where it was.
+  Open file, Close and Escape are at its top; leaving Git mode puts it away. The diff on show is asked for again
+  with every new status, through the `Repository`, which sends on only the answer to the latest ask.
 - **The status line** gets a Git slot showing the branch in every mode, not just Git.
 - Each part has a landmark, so `ottermate` and the tests can find it.
 

@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor.core;
 
+import dev.sibarum.suite.git.Diff;
 import sibarum.atchung.Topic;
 
 import java.nio.file.Path;
@@ -549,5 +550,40 @@ public final class Messages {
     public static final String GIT_STAMPED = "git.stamped";
 
     public record GitStamp(long generation, String stamp) {
+    }
+
+    /** One file's diff, for the stage ({@link ReadDiff}). {@code ticket} tells the answer to the latest ask apart. */
+    public static final String GIT_DIFF = "git.diff";
+    public static final Topic<DiffAsk> GIT_DIFF_TOPIC = Topic.of(GIT_DIFF, DiffAsk.class);
+
+    public record DiffAsk(long ticket, Path root, String path, Diff.Side side) {
+    }
+
+    /** What {@link ReadDiff} found: the diff as git wrote it, empty for no difference or a git that failed. */
+    public static final String GIT_DIFF_READ = "git.diff-read";
+
+    public record DiffRead(long ticket, String path, Diff.Side side, String text) {
+    }
+
+    // ------------------------------------------------------------------ diffs, between the view and the repository
+
+    /**
+     * Show {@code path}'s diff on {@code side} where the editor stands: a row of Git mode's lists was picked. A null
+     * {@code path} is the diff put away, so it is no longer asked for again when the status changes.
+     */
+    public static final String SHOW_DIFF = "git.show-diff";
+    public static final Topic<ShowDiff> SHOW_DIFF_TOPIC = Topic.of(SHOW_DIFF, ShowDiff.class);
+
+    public record ShowDiff(String path, Diff.Side side) {
+    }
+
+    /**
+     * A diff to show: {@code path} on {@code side}, relative to {@code root}, as git wrote it, read by the view with
+     * {@code Diff.parse}. Sent for each {@link ShowDiff}, and again whenever the status changes while it is shown.
+     */
+    public static final String GIT_DIFF_SHOWN = "view.git-diff";
+    public static final Topic<GitDiff> GIT_DIFF_SHOWN_TOPIC = Topic.of(GIT_DIFF_SHOWN, GitDiff.class);
+
+    public record GitDiff(Path root, String path, Diff.Side side, String text) {
     }
 }

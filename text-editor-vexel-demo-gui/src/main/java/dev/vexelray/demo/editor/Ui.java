@@ -42,6 +42,9 @@ final class Ui {
     private final Workspace workspace;
     private final Navigator navigator;
     private final Preview preview;
+    private final GitStage gitStage;
+    /** Whether a diff stands where the editor does. */
+    private volatile boolean diffing;
     private final SplitPane split;
     private final Motion motion;
     private final Color danger;
@@ -98,19 +101,25 @@ final class Ui {
             status.text(Landmarks.STATUS_POSITION, "Ln " + p.line() + ", Col " + p.column());
         });
 
-        // In Open the editor steps aside for a picture of the folder being considered: the two share the place
-        // beside the navigator, one showing at a time, and the tabs keep everything they had while hidden.
+        // In Open the editor steps aside for a picture of the folder being considered, and in Git mode for the diff of
+        // the row picked: the three share the place beside the navigator, one showing at a time, and the tabs keep
+        // everything they had while hidden.
         preview = new Preview(gui);
+        gitStage = new GitStage(gui);
         Node stage = gui.column().width(Length.FILL).height(Length.FILL).scroll(false, false)
                 .alignItems(AlignItems.STRETCH)
-                .children(workspace.node(), preview.node());
+                .children(workspace.node(), preview.node(), gitStage.node());
         navigator.onPreview(preview::show);
         navigator.onMode(m -> {
             boolean open = m == Navigator.Mode.OPEN;
             if (open) {
                 preview.forget();
             }
-            workspace.node().visible(!open);
+            if (m != Navigator.Mode.GIT) {
+                diffing = false;
+                gitStage.node().visible(false);
+            }
+            workspace.node().visible(!open && !diffing);
             preview.node().visible(open);
         });
 
@@ -198,6 +207,20 @@ final class Ui {
 
     Preview preview() {
         return preview;
+    }
+
+    GitStage gitStage() {
+        return gitStage;
+    }
+
+    /**
+     * Stand the diff where the editor does, or bring the editor back. Only in Git mode: leaving it puts the diff away
+     * by itself ({@code onMode} above).
+     */
+    void showDiff(boolean on) {
+        diffing = on && navigator.mode() == Navigator.Mode.GIT;
+        gitStage.node().visible(diffing);
+        workspace.node().visible(!diffing && navigator.mode() != Navigator.Mode.OPEN);
     }
 
     /**

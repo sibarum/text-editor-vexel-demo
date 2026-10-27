@@ -142,9 +142,12 @@ project.
 Inside a git repository the status line starts with where the root stands, `develop ↑8 · 10 changed`, and a chip
 beside the root's name says the branch. Pressing it (or Ctrl+Shift+G) puts the navigator in **Git mode**: the
 branch and what it tracks, then *Unstaged* (changed, deleted, untracked, conflicted) and *Staged*, each row with
-its letter, its folder and the lines it adds and removes. A row opens its file. While Git mode is up a commit or a
-checkout made at a prompt shows within two seconds; a file changed by another program shows after *Refresh*.
-Staging, committing, diffs and history are the next slices of [docs/git-mode.md](docs/git-mode.md).
+its letter, its folder and the lines it adds and removes. A row picked, by a click or the arrows, stands its diff
+where the editor was: the old and new line numbers, added lines on green and removed on red, under each hunk's
+header. Enter or a double click on a line opens the file there (a removed line, where it was); on a row, it opens
+the file. *Close* or Escape brings the editor back, as leaving Git mode does. While Git mode is up a commit or a
+checkout made at a prompt shows within two seconds, the diff on show with it; a file changed by another program
+shows after *Refresh*. Staging, committing and history are the next slices of [docs/git-mode.md](docs/git-mode.md).
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -228,7 +231,7 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Editor.java` | **the controller**, a component on the `editor` lane: every decision. What is open and which tab is in front, when closing, quitting, picking a root or running needs a question first, where an Untitled document is saved, which tabs each root keeps, what the status line and the title bar say, what comes back next time. It owns the session and needs no lock, because nothing else can reach it |
 | `Doc.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value in one field of the editor's |
 | `Repository.java` | **the controller for git**, a component on the `git` lane: follows the root the editor shows, asks git where it stands when the root changes and after the editor writes or makes something, one question at a time, and tells the view what the status line's Git slot says (`develop ↑8 · 10 changed`) and every changed path, as git's own text. While Git mode is up it looks every 2 s whether git did anything, and asks only when it did ([docs/git-mode.md](docs/git-mode.md)) |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java`, `ReadStamp.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java`, `ReadStamp.java`, `ReadDiff.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
 | `Core.java` | the list of this module's components and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it |
 | `TextFile.java` | the policy between bytes on disk and text in a field |
 | `Markdown.java` | Markdown as blocks and inlines, for the formatted view: a pure function |
@@ -252,6 +255,7 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily; Add, on a folder's menu |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `GitPane.java` | Git mode's card: the branch, then Unstaged and Staged, read from the git text the repository sends |
+| `GitStage.java` | what stands where the editor does while a Git mode row is picked: its diff, a line of which opens the file there |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |
 | `Look.java`, `Type.java`, `Landmarks.java` | colour, size, and the names an automation script may use |

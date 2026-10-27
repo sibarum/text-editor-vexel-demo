@@ -1,6 +1,11 @@
 package dev.vexelray.demo.editor.core;
 
+import dev.sibarum.suite.git.Diff;
+import dev.vexelray.demo.editor.core.Messages.DiffAsk;
+import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
+import dev.vexelray.demo.editor.core.Messages.GitDiff;
+import dev.vexelray.demo.editor.core.Messages.ShowDiff;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
@@ -44,6 +49,8 @@ class RepositoryTest {
         bus.subscribe(Messages.GIT_STAMP_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_HEAD_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_TREE_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_DIFF_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_DIFF_SHOWN_TOPIC, sent::add);
     }
 
     private <T> List<T> took(Class<T> kind) {
@@ -189,6 +196,47 @@ class RepositoryTest {
         took(GitAsk.class);
         repository.stamped(new GitStamp(g, "moved"));
         assertEquals(List.of(), took(GitAsk.class));
+    }
+
+    @Test
+    void aPickedRowsDiffIsAskedForAndOnlyTheLatestShown() {
+        shown();
+        repository.showDiff(new ShowDiff("src/Ui.java", Diff.Side.UNSTAGED));
+        DiffAsk first = took(DiffAsk.class).getFirst();
+        assertEquals(new DiffAsk(first.ticket(), ROOT, "src/Ui.java", Diff.Side.UNSTAGED), first);
+
+        repository.showDiff(new ShowDiff("pom.xml", Diff.Side.STAGED));
+        DiffAsk second = took(DiffAsk.class).getFirst();
+        repository.diffRead(new DiffRead(first.ticket(), "src/Ui.java", Diff.Side.UNSTAGED, "old"));
+        assertEquals(List.of(), took(GitDiff.class), "picked past");
+        repository.diffRead(new DiffRead(second.ticket(), "pom.xml", Diff.Side.STAGED, "@@ -1 +1 @@\n"));
+        assertEquals(List.of(new GitDiff(ROOT, "pom.xml", Diff.Side.STAGED, "@@ -1 +1 @@\n")), took(GitDiff.class));
+    }
+
+    @Test
+    void aNewStatusAsksForTheDiffOnShowAgainAndAClosedOneIsNot() {
+        long g = shown();
+        repository.showDiff(new ShowDiff("src/Ui.java", Diff.Side.UNSTAGED));
+        took(DiffAsk.class);
+        repository.changed(new Relist(null));
+        repository.read(main(took(GitAsk.class).getFirst().generation(), 2));
+        assertEquals(1, took(DiffAsk.class).size(), "the save may have changed it");
+
+        repository.showDiff(new ShowDiff(null, Diff.Side.UNSTAGED));
+        assertEquals(List.of(), took(DiffAsk.class));
+        repository.changed(new Relist(null));
+        repository.read(main(took(GitAsk.class).getFirst().generation(), 2));
+        assertEquals(List.of(), took(DiffAsk.class));
+    }
+
+    @Test
+    void aDiffAboutARootSinceLeftIsDropped() {
+        shown();
+        repository.showDiff(new ShowDiff("src/Ui.java", Diff.Side.UNSTAGED));
+        DiffAsk asked = took(DiffAsk.class).getFirst();
+        repository.folder(new ShowFolder(OTHER));
+        repository.diffRead(new DiffRead(asked.ticket(), "src/Ui.java", Diff.Side.UNSTAGED, "x"));
+        assertEquals(List.of(), took(GitDiff.class));
     }
 
     @Test

@@ -1,6 +1,10 @@
 package dev.vexelray.demo.editor.core;
 
+import dev.sibarum.suite.git.Diff;
+import dev.vexelray.demo.editor.core.Messages.DiffAsk;
+import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
+import dev.vexelray.demo.editor.core.Messages.GitDiff;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
@@ -11,6 +15,7 @@ import dev.vexelray.demo.editor.core.Messages.GitTree;
 import dev.vexelray.demo.editor.core.Messages.GitWatch;
 import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Relist;
+import dev.vexelray.demo.editor.core.Messages.ShowDiff;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.framework.api.Component;
 import dev.vexelray.framework.api.Overflow;
@@ -37,6 +42,12 @@ import java.time.Duration;
  * once, and the {@code generation} on each question tells an answer about the old root from one about the new, which
  * is the one kept.
  *
+ * <h2>Diffs</h2>
+ *
+ * <p>A row picked in Git mode is a diff asked for ({@link ShowDiff}); {@link ReadDiff} reads it and the view is sent it
+ * ({@link GitDiff}). The diff on show is asked for again with every new status, since whatever changed the status may
+ * have changed it, and only the answer to the latest ask is sent on: rows picked fast show the last one.
+ *
  * <h2>Watching, while Git mode is up</h2>
  *
  * <p>Git is also used from a prompt, and a commit made there should show without a click. While Git mode is up
@@ -45,7 +56,8 @@ import java.time.Duration;
  * tick, not a run of git.
  */
 @Component(lane = "git")
-@Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_HEAD, Messages.GIT_TREE})
+@Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_DIFF, Messages.GIT_HEAD, Messages.GIT_TREE,
+        Messages.GIT_DIFF_SHOWN})
 public final class Repository {
 
     /** How often git is looked at while Git mode is up. */
@@ -69,6 +81,13 @@ public final class Repository {
     private Path gitDir;
     /** What the stamp was when git was last asked. */
     private String stamp = "";
+    /** The repository's top, from the last answer; null outside one or before the first. */
+    private Path root;
+    /** The diff the stage shows, path and side; null path while it shows none. */
+    private String diffPath;
+    private Diff.Side diffSide;
+    /** Counts the diffs asked for: only the answer to the latest is shown, however fast rows are picked. */
+    private long diffTicket;
 
     public Repository(Atchung bus) {
         this.bus = bus;
@@ -145,14 +164,42 @@ public final class Repository {
         asking = false;
         gitDir = r.gitDir();
         stamp = r.stamp();
+        root = r.root();
         bus.publish(Messages.GIT_HEAD_TOPIC, head(r));
         if (r.repository()) {
             bus.publish(Messages.GIT_TREE_TOPIC,
                     new GitTree(r.root(), r.status(), r.unstagedLines(), r.stagedLines()));
+            // What changed the status may have changed the diff on show.
+            askDiff();
         }
         if (again) {
             again = false;
             ask();
+        }
+    }
+
+    /** A row was picked, and its diff is to stand where the editor does; or, with no path, the diff was put away. */
+    @Subscribe(topic = Messages.SHOW_DIFF)
+    public void showDiff(ShowDiff m) {
+        diffPath = m.path();
+        diffSide = m.side();
+        diffTicket++;
+        askDiff();
+    }
+
+    @Subscribe(topic = Messages.GIT_DIFF_READ)
+    public void diffRead(DiffRead d) {
+        if (d.ticket() != diffTicket || root == null) {
+            return;
+        }
+        bus.publish(Messages.GIT_DIFF_SHOWN_TOPIC, new GitDiff(root, d.path(), d.side(), d.text()));
+    }
+
+    /** Ask for the diff on show, if there is one and a repository to ask. */
+    private void askDiff() {
+        if (diffPath != null && root != null) {
+            diffTicket++;
+            bus.publish(Messages.GIT_DIFF_TOPIC, new DiffAsk(diffTicket, root, diffPath, diffSide));
         }
     }
 
@@ -164,6 +211,9 @@ public final class Repository {
         looking = false;
         gitDir = null;
         stamp = "";
+        root = null;
+        diffPath = null;
+        diffTicket++;
     }
 
     /** Ask git again: now, or when the question that is out comes back. */
