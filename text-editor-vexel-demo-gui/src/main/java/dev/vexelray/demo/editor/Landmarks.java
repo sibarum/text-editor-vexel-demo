@@ -50,6 +50,24 @@ final class Landmarks {
     /** The name field Add opens over the root's tree: Enter makes what is being added, Escape puts it away. */
     static final String NAME = "navigator.name";
 
+    /**
+     * The chip beside the root's name, inside a repository: the branch and its distance ({@code main ↑2}). Pressed,
+     * the navigator is in Git mode (Ctrl+Shift+G); released, back in Edit.
+     */
+    static final String GIT = "navigator.git";
+
+    /** Git mode's branch, at the top of its card. */
+    static final String GIT_BRANCH = "git.branch";
+
+    /** Git mode's Refresh, which asks git again. */
+    static final String GIT_REFRESH = "git.refresh";
+
+    /** Git mode's list of what is changed and not staged, untracked and conflicted. A row opens its file. */
+    static final String GIT_UNSTAGED = "git.unstaged";
+
+    /** Git mode's list of what is staged. */
+    static final String GIT_STAGED = "git.staged";
+
     /** The status line, and its five slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";
     /** Where the root stands in git — {@code main ↑2 · 3 changed} — inside a repository; empty otherwise. */

@@ -1,6 +1,8 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Make;
+import dev.vexelray.demo.editor.core.Messages.GitHead;
+import dev.vexelray.demo.editor.core.Messages.GitTree;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Template;
 import dev.vexelray.demo.editor.core.Scratches;
@@ -52,6 +54,9 @@ import java.util.function.Consumer;
  * arrow keys only move, so walking the folders does not change the root at every step. Whichever folder the pointer
  * is on, or the keys have reached, is handed to {@link #onPreview}, which pictures it where the editor stands.
  *
+ * <p>Inside a repository a fourth, <b>Git</b>, is a chip beside the root's name saying the branch (Ctrl+Shift+G): what
+ * is changed and not staged, and what is staged, in place of the files ({@link GitPane}). A row opens its file.
+ *
  * <p>A third mode, <b>Scratches</b>, lays the scratches folder ({@link Scratches}) over the root's files for a moment,
  * on Alt+N: a file picked there opens in a tab as one from the root's tree would, and the root, its tabs and the
  * session stay as they are. The way back is Alt+N again, or the heading, which says Scratches while it is up.
@@ -69,7 +74,7 @@ import java.util.function.Consumer;
 final class Navigator {
 
     /** What the card is showing. */
-    enum Mode { EDIT, OPEN, SCRATCHES }
+    enum Mode { EDIT, OPEN, SCRATCHES, GIT }
 
     /** How many recent roots Open lists: as many as the editor offers, the root itself left out. */
     private static final int RECENT_SHOWN = 3;
@@ -95,6 +100,12 @@ final class Navigator {
     /** Open's way to the scratches as a root, shown once there is at least one. */
     private final Button scratchesButton;
     private final Button heading;
+    /** The way into Git mode, beside the root's name: the branch, shown only inside a repository. */
+    private final Button gitChip;
+    private final GitPane gitPane;
+    /** Whether the root is in a repository, as the last word from the repository said. */
+    private volatile boolean repository;
+    private volatile Consumer<Boolean> gitShown = on -> { };
     /**
      * Add's name field, above the root's tree while something is being named: the same field-of-the-pane as Rename's,
      * for the same reason (FN-22). What a name goes to is {@link #naming}; null while it is put away.
@@ -140,8 +151,16 @@ final class Navigator {
                         mode(Mode.EDIT);
                     }
                 });
-        heading.node().font(Type.UI).wordWrap(false);
+        heading.node().font(Type.UI).wordWrap(false).width(Length.grow(1));
         gui.landmark(Landmarks.FOLDER, heading.node());
+        // Git mode's way in is a chip of the same kind beside it, saying the branch: the thing Git mode is about, and
+        // held down while it is up, as the root's name is while Open is. Only a repository has one.
+        gitChip = new Button(gui, "").kind(Button.Kind.SECONDARY).toggle(true)
+                .onToggle(on -> mode(on ? Mode.GIT : Mode.EDIT));
+        gitChip.node().font(Type.UI).wordWrap(false).visible(false);
+        gui.landmark(Landmarks.GIT, gitChip.node());
+        gitPane = new GitPane(gui);
+        gitPane.onOpenFile(p -> openFile.accept(p));
         // The root is a folder like any row, so its name has a folder's menu; with no root there is nothing to offer.
         gui.onContextMenu(heading.node(), menu -> {
             Path base = source.base();
@@ -343,7 +362,9 @@ final class Navigator {
                 .corner(Type.CORNER)
                 .border(Type.RULE, gui.theme().color(Look.RIM))
                 .alignItems(AlignItems.STRETCH)
-                .children(heading.node(), editPane, openPane, scratchPane);
+                .children(gui.row().width(Length.FILL).gap(Type.TIGHT).alignItems(AlignItems.CENTER)
+                                .children(heading.node(), gitChip.node()),
+                        editPane, openPane, scratchPane, gitPane.node());
     }
 
     /** What the navigator's Add asks for: something made in a folder, named first ({@link #askName}). */
@@ -546,27 +567,33 @@ final class Navigator {
         mode = value;
         boolean open = value == Mode.OPEN;
         boolean scratch = value == Mode.SCRATCHES;
+        boolean git = value == Mode.GIT;
         heading.show(open || scratch);
         heading.label(scratch ? Scratches.NAME : rootLabel);
+        gitChip.show(git);
         // Open is a different place, and looks it: the card steeps in the accent and wears it as its edge, the name
         // stays pressed, and a sweep runs down the card as it changes, so the switch is seen even by an eye that was
-        // on the document. Scratches is only laid over the root, with the editor still beside it: the edge and the
-        // sweep, not the steeping.
+        // on the document. Scratches and Git are only laid over the root, with the editor still beside it: the edge
+        // and the sweep, not the steeping.
         Theme theme = gui.theme();
         root.background(theme.color(open ? Look.PICKING : Look.CARD))
-                .border(Type.RULE, theme.color(open || scratch ? Look.PICKING_RIM : Look.RIM));
+                .border(Type.RULE, theme.color(open || scratch || git ? Look.PICKING_RIM : Look.RIM));
         modeChanged.accept(value);
         if (open) {
             recentHover = null;
             treeHover = null;
             repicture();
         }
-        if ((open || scratch) && was != value) {
+        if ((open || scratch || git) && was != value) {
             motion.cues.play(root, Cue.scanline(theme.color(Role.ACCENT)));
         }
         editPane.visible(value == Mode.EDIT);
         openPane.visible(open);
         scratchPane.visible(scratch);
+        gitPane.node().visible(git);
+        if ((was == Mode.GIT) != git) {
+            gitShown.accept(git);
+        }
         if (!scratch && renaming != null) {
             renaming = null;   // a rename left unfinished when the scratches went is a rename not made
             renameField.node().visible(false);
@@ -585,6 +612,47 @@ final class Navigator {
     /** Alt+N: lay the scratches over the root's files, or take them away again. */
     void toggleScratches() {
         mode(mode == Mode.SCRATCHES ? Mode.EDIT : Mode.SCRATCHES);
+    }
+
+    /** Ctrl+Shift+G: Git mode, or back to Edit. Outside a repository there is no Git mode, and nothing happens. */
+    void toggleGit() {
+        if (mode == Mode.GIT) {
+            mode(Mode.EDIT);
+        } else if (repository) {
+            mode(Mode.GIT);
+        }
+    }
+
+    /** Be told when Git mode comes up ({@code true}) or goes. Runs on whichever thread changed the mode. */
+    void onGit(Consumer<Boolean> handler) {
+        this.gitShown = handler == null ? on -> { } : handler;
+    }
+
+    /** Be asked to ask git again: Git mode's Refresh. Runs on a worker. */
+    void onGitRefresh(Runnable handler) {
+        gitPane.onRefresh(handler);
+    }
+
+    /**
+     * Where the root stands in git. Outside a repository the chip goes, and Git mode with it, since there is nothing
+     * in it to show.
+     */
+    void git(GitHead h) {
+        repository = h.repository();
+        gitChip.label(h.chip());
+        gitChip.node().visible(h.repository());
+        gitPane.head(h);
+        if (!h.repository()) {
+            gitPane.clear();
+            if (mode == Mode.GIT) {
+                mode(Mode.EDIT);
+            }
+        }
+    }
+
+    /** Every changed path, for Git mode's lists. */
+    void gitTree(GitTree t) {
+        gitPane.tree(t);
     }
 
     /** Point the scratches tree at the folder, made if this is its first look, and list it. For the offload lane. */
@@ -930,6 +998,7 @@ final class Navigator {
         switch (mode) {
             case OPEN -> picker.focus();
             case SCRATCHES -> scratchTree.focus();
+            case GIT -> gitPane.focus();
             case EDIT -> tree.focus();
         }
     }

@@ -1,6 +1,7 @@
 # Git mode: the build plan
 
-Status: **slices 0 and 1 built**, 2026-10-27: the library's read side, and the branch in the status line. The look is the
+Status: **slices 0 to 2 built**, 2026-10-27: the library's read side, the branch in the status line, and Git mode
+read-only. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -36,20 +37,25 @@ root it is watching, the latest status, and which refresh is current. Every run 
 as `ReadFile` is, because a status on a large repository is a slow answer and on a component's lane it would be a
 stall that the watchdog ends the application for.
 
-- **Jobs:** `ReadStatus` (status and numstat together), `ReadDiff`, `ReadLog`, `ReadBranches`, and `RunGit` for
-  every write. Each is listed in `Core`.
-- **No lists cross (FN-24).** A status is one `GitHead` (branch, upstream, ahead, behind, how many unstaged and
-  staged) and then one `GitFile` per path carrying `batch` and `of`, the roll call `Closing` already uses. History is
-  a `Changeset` per commit and a `BranchRow` per branch, in the same way. A diff crosses as its text, one `String`,
-  and the view reads it with the shared `Diff`.
+- **Jobs:** `ReadStatus` (status and numstat together, untracked files counted by reading them), `ReadStamp` (the
+  2 s look), `ReadDiff`, `ReadLog`, `ReadBranches`, and `RunGit` for every write. Each is listed in `Core`.
+- **No lists cross (FN-24), so a list crosses as git's text.** A status is one `GitHead` (branch, upstream, ahead,
+  behind, how many unstaged and staged) and one `GitTree`, which carries git's own status and numstat output as
+  strings; the view reads them with the shared `Status.parse` and `Numstat.parse`. The plan first had a `GitFile`
+  per path, the roll call `Closing` uses. Built, that was wrong twice: a job returns exactly one reply, and a
+  mailbox that overflows ends the application, which a repository with thousands of changes would do. A diff crosses
+  as its text in the same way, and history and branches will too.
 - **Generations.** Each refresh carries a number. A reply from an older refresh is dropped, so a slow status that
   arrives after a quick one never overwrites it.
 - **When it refreshes:** on a root change, on entering Git mode, after each of its own writes, after the editor
   saves or makes something (it hears the editor's `Relist`), and from a Refresh button. `Relist` stays a lossless
   mailbox, because the view hears the same topic and one topic has one loss class (T4.1); a burst is folded into
-  one more question by the component instead. While Git mode is up it also checks the
-  modification time of `.git/index` and `HEAD` every 2 s, so a commit made at a prompt shows up without a click.
-  That check is one `stat`, not one run of git.
+  one more question by the component instead. While Git mode is up the view's clock ticks every 2 s
+  (`krono.every`, named `git-watch`), and `ReadStamp` reads the modification times of `index`, `HEAD` and
+  `logs/HEAD` in the repository's own directory, so a commit made at a prompt shows up without a click. That look is
+  three `stat`s, not a run of git; git is asked only when they moved. It cannot see a file edited outside the editor,
+  or a push; Refresh asks outright. While the tick runs the clock never goes quiet, so ottermate's `settle` times
+  out in Git mode; read with `find` and `await` there.
 - **What it decides:** whether Commit is allowed (something staged and a first line), whether Push is allowed
   (ahead > 0), and what a failed run means. Git's own stderr goes to the console as it came.
 - `-core` depends on `vex-suite-common-git`, the library's git package as a module of its own. The whole library
@@ -58,8 +64,8 @@ stall that the watchdog ends the application for.
 ### `-gui`: the mode, the pane and the stage
 
 - **`Navigator.Mode.GIT`.** The way in is a branch chip beside the root's name, `main ↑2`, shown only inside a
-  repository. It is a toggle button, the pattern the root's name already uses for Open. Ctrl+Shift+G does the same,
-  if no other command uses it.
+  repository. It is a toggle button, the pattern the root's name already uses for Open. Ctrl+Shift+G does the same.
+  Built in slice 2, with `GitPane` as the card: a row opens its file.
 - **The Git pane** (left), drawn as in the design:
   - the branch, with how far it is ahead or behind;
   - **Unstaged** and **Staged** lists, each row showing the status letter, the name, the folder, the line counts

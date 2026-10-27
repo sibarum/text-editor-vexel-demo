@@ -454,18 +454,65 @@ public final class Messages {
      * changed. {@link #NOT_A_REPOSITORY} when the root is not in one, git is not installed, or there is no root.
      *
      * @param label    what the status line says: {@code main ↑2 · 3 changed}; empty outside a repository
+     * @param chip     what the navigator's way into Git mode says: {@code main ↑2}, the branch and its distance
      * @param branch   the branch checked out; the short commit when {@code HEAD} is detached
+     * @param upstream the branch it tracks, {@code origin/main}; empty if none
      * @param staged   paths with something staged
      * @param unstaged paths changed and not staged, untracked or conflicted; an untracked folder counts once
      */
     public static final String GIT_HEAD = "view.git-head";
     public static final Topic<GitHead> GIT_HEAD_TOPIC = Topic.of(GIT_HEAD, GitHead.class);
 
-    public record GitHead(boolean repository, String label, String branch, int ahead, int behind, int staged,
-                          int unstaged) {
+    public record GitHead(boolean repository, String label, String chip, String branch, String upstream, int ahead,
+                          int behind, int staged, int unstaged) {
     }
 
-    public static final GitHead NOT_A_REPOSITORY = new GitHead(false, "", "", 0, 0, 0, 0);
+    public static final GitHead NOT_A_REPOSITORY = new GitHead(false, "", "", "", "", 0, 0, 0, 0);
+
+    /**
+     * Every changed path, for Git mode's lists. A list cannot cross (FN-24), and a message per path could fill the
+     * view's mailbox, which ends the application, in a repository with thousands of changes. But the whole status is
+     * one value, and it crosses as the text git wrote: the view reads it with the same parsers that read it here.
+     *
+     * @param root          the repository's top directory, which every path in the texts is relative to
+     * @param status        {@code git status --porcelain=v2 -z}, as {@code Status.parse} reads it
+     * @param unstagedLines lines added and removed per path not staged, untracked files counted too, as
+     *                      {@code Numstat.parse} reads it
+     * @param stagedLines   lines added and removed per path staged, as {@code Numstat.parse} reads it
+     */
+    public static final String GIT_TREE = "view.git-tree";
+    public static final Topic<GitTree> GIT_TREE_TOPIC = Topic.of(GIT_TREE, GitTree.class);
+
+    public record GitTree(Path root, String status, String unstagedLines, String stagedLines) {
+    }
+
+    // ------------------------------------------------------------------ the view asks the repository
+
+    /** Git mode was entered ({@code on}) or left: while it is up, git is watched for changes made outside the editor. */
+    public static final String GIT_WATCH = "git.watch";
+    public static final Topic<GitWatch> GIT_WATCH_TOPIC = Topic.of(GIT_WATCH, GitWatch.class);
+
+    public record GitWatch(boolean on) {
+    }
+
+    /** Git mode's Refresh: ask git again now. */
+    public static final String GIT_REFRESH = "git.refresh";
+    public static final Topic<GitRefresh> GIT_REFRESH_TOPIC = Topic.of(GIT_REFRESH, GitRefresh.class);
+
+    public record GitRefresh() {
+    }
+
+    /**
+     * Time to look whether git changed, every {@code Repository.WATCH} while Git mode is up. A sample: a tick missed
+     * is the next one's to catch.
+     */
+    public static final String GIT_TICK = "git.tick";
+    public static final Topic<GitTick> GIT_TICK_TOPIC = Topic.of(GIT_TICK, GitTick.class);
+
+    public record GitTick() {
+    }
+
+    // ------------------------------------------------------------------ the repository and its jobs
 
     /**
      * Ask git where {@code folder} stands ({@link ReadStatus}). {@code generation} comes back on the answer, so the
@@ -481,10 +528,26 @@ public final class Messages {
      * What {@link ReadStatus} found: {@code repository} false, and the rest empty, outside one. {@code branch} is the
      * branch's name, or the short commit when {@code HEAD} is detached. The counts are of what is under the folder
      * asked about; {@code changed} counts each path once, though one staged and changed again is in both lists.
+     * {@code root} and the three texts are what a {@link GitTree} carries; {@code gitDir} and {@code stamp} are what
+     * the next {@link GitStampAsk} asks about and compares with.
      */
     public static final String GIT_STATUS_READ = "git.status-read";
 
-    public record GitRead(long generation, boolean repository, String branch, int ahead, int behind, int staged,
-                          int unstaged, int changed) {
+    public record GitRead(long generation, boolean repository, String branch, String upstream, int ahead, int behind,
+                          int staged, int unstaged, int changed, Path root, Path gitDir, String stamp,
+                          String status, String unstagedLines, String stagedLines) {
+    }
+
+    /** Look at the files git itself changes ({@link ReadStamp}), to see whether it is worth asking git again. */
+    public static final String GIT_STAMP = "git.stamp";
+    public static final Topic<GitStampAsk> GIT_STAMP_TOPIC = Topic.of(GIT_STAMP, GitStampAsk.class);
+
+    public record GitStampAsk(long generation, Path gitDir) {
+    }
+
+    /** What {@link ReadStamp} saw: equal to the last answer's {@code stamp} if git has done nothing since. */
+    public static final String GIT_STAMPED = "git.stamped";
+
+    public record GitStamp(long generation, String stamp) {
     }
 }

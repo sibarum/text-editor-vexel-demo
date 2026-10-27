@@ -19,6 +19,14 @@ import dev.vexelray.demo.editor.core.Messages.Flush;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
+import dev.vexelray.demo.editor.core.Messages.GitRefresh;
+import dev.vexelray.demo.editor.core.Messages.GitTick;
+import dev.vexelray.demo.editor.core.Messages.GitTree;
+import dev.vexelray.demo.editor.core.Messages.GitWatch;
+import dev.vexelray.demo.editor.core.Repository;
+import dev.vexelray.gui.krono.KronoGui;
+import dev.vexelray.gui.krono.Scheduled;
+import sibarum.kronometer.Dur;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.NewFile;
@@ -106,7 +114,8 @@ import java.util.function.Consumer;
 @Component(lane = "view")
 @Publishes({Messages.OPEN, Messages.NEW_FILE, Messages.OPEN_TEXT, Messages.FRONTED, Messages.EDITED,
         Messages.DROPPED, Messages.CLOSING, Messages.SAVE, Messages.SAVE_AS, Messages.ANSWER, Messages.PLACED,
-        Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Intent.TOPIC})
+        Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Messages.GIT_WATCH,
+        Messages.GIT_REFRESH, Messages.GIT_TICK, Intent.TOPIC})
 final class View {
 
     private static final Log LOG = Log.of("editor.files");
@@ -128,7 +137,10 @@ final class View {
     private final Console console;
     private final ProjectIndex concordance;
     private final Preferences prefs;
+    private final KronoGui krono;
     private final Executor io;
+    /** The tick that has the repository look at git, while Git mode is up; null while it is not. */
+    private volatile Scheduled watching;
 
     /** Sets of tabs being closed, numbered. Only this lane counts them. */
     private long batches;
@@ -149,8 +161,9 @@ final class View {
     }
 
     View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, ProjectIndex concordance,
-         Preferences prefs) {
+         Preferences prefs, KronoGui krono) {
         this.gui = gui;
+        this.krono = krono;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
@@ -175,6 +188,8 @@ final class View {
         nav.onRelocated((from, to) -> bus.publish(Messages.RELOCATED_TOPIC, new Relocated(from, to)));
         nav.onOpening(gates::settle);
         nav.onAdd(this::add);
+        nav.onGit(this::gitShown);
+        nav.onGitRefresh(() -> bus.publish(Messages.GIT_REFRESH_TOPIC, new GitRefresh()));
         // A build or a script writes files the tree has not listed; its end is when they are all there.
         console.onEnded(nav::refresh);
         ws.runButton().onPress(this::runMenu);
@@ -212,6 +227,7 @@ final class View {
         gui.shortcut(Key.N, () -> bus.publish(Messages.NEW_SCRATCH_TOPIC, new NewScratch(null)),
                 Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.N, this::toggleScratches, Modifier.ALT);
+        gui.shortcut(Key.G, this::toggleGit, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.O, this::openDialog, Modifier.CONTROL);
         gui.shortcut(Key.O, this::openFolderDialog, Modifier.CONTROL, Modifier.SHIFT);
         gui.shortcut(Key.S, () -> tell(Command.SAVE_FRONT, Messages.NO_TAB), Modifier.CONTROL);
@@ -323,10 +339,34 @@ final class View {
         ui.status(m.message(), m.alert());
     }
 
-    /** Where the root stands in git, from the {@code Repository}. */
+    /** Where the root stands in git, from the {@code Repository}: the status line, and the way into Git mode. */
     @Subscribe(topic = Messages.GIT_HEAD)
     public void gitHead(GitHead m) {
         ui.git(m.label());
+        nav.git(m);
+    }
+
+    /** Every changed path, from the {@code Repository}, for Git mode's lists. */
+    @Subscribe(topic = Messages.GIT_TREE)
+    public void gitTree(GitTree m) {
+        nav.gitTree(m);
+    }
+
+    /**
+     * Git mode came up, or went. While it is up the repository is told to look at git every {@code Repository.WATCH},
+     * so a commit made at a prompt shows; the clock's loop is named, since it keeps the timeline from going quiet.
+     */
+    private void gitShown(boolean on) {
+        Scheduled was = watching;
+        if (was != null) {
+            was.cancel();
+            watching = null;
+        }
+        if (on) {
+            watching = krono.every("git-watch", Dur.ms(Repository.WATCH.toMillis()),
+                    () -> bus.publish(Messages.GIT_TICK_TOPIC, new GitTick()));
+        }
+        bus.publish(Messages.GIT_WATCH_TOPIC, new GitWatch(on));
     }
 
     /** A question, as the framework's dialog: its answer goes back to the editor, from whichever thread presses it. */
@@ -552,6 +592,13 @@ final class View {
     private void toggleScratches() {
         nav.toggleScratches();
         if (nav.mode() == Navigator.Mode.SCRATCHES) {
+            ui.showNavigator(true);
+        }
+    }
+
+    private void toggleGit() {
+        nav.toggleGit();
+        if (nav.mode() == Navigator.Mode.GIT) {
             ui.showNavigator(true);
         }
     }
