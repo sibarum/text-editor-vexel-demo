@@ -7,6 +7,9 @@ import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.sibarum.suite.git.Numstat;
 import dev.sibarum.suite.git.Status;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
+import dev.vexelray.demo.editor.core.Messages.GitOp;
+import dev.vexelray.demo.editor.core.Messages.GitRan;
+import dev.vexelray.demo.editor.core.Messages.GitRun;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitStamp;
 import dev.vexelray.demo.editor.core.Messages.GitStampAsk;
@@ -97,6 +100,27 @@ class ReadStatusTest {
         Files.writeString(repo.resolve("a.txt"), "changed\n");
         git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am", "at a prompt");
         assertNotEquals(r.stamp(), new ReadStamp().run(new GitStampAsk(1, r.gitDir())).stamp());
+    }
+
+    @Test
+    void runGitStagesAndUnstagesAndSaysWhatGitSaidWhenItFails() throws IOException {
+        Path repo = repository();
+        Files.writeString(repo.resolve("a.txt"), "changed\n");
+        Path root = new ReadStatus().run(new GitAsk(1, repo)).root();
+
+        GitRan staged = new RunGit().run(new GitRun(1, root, GitOp.STAGE, "a.txt"));
+        assertTrue(staged.ok(), staged.error());
+        assertEquals(1, new ReadStatus().run(new GitAsk(1, repo)).staged());
+
+        GitRan back = new RunGit().run(new GitRun(1, root, GitOp.UNSTAGE, "."));
+        assertTrue(back.ok(), back.error());
+        assertEquals(0, new ReadStatus().run(new GitAsk(1, repo)).staged());
+
+        Files.writeString(root.resolve(".git/index.lock"), "");
+        GitRan locked = new RunGit().run(new GitRun(1, root, GitOp.STAGE, "a.txt"));
+        assertFalse(locked.ok());
+        assertTrue(locked.error().contains("index.lock"), locked.error());
+        assertFalse(locked.error().startsWith("fatal:"), "the status line says it plainly");
     }
 
     @Test

@@ -22,6 +22,7 @@ import dev.sibarum.suite.git.Diff;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.ShowDiff;
+import dev.vexelray.demo.editor.core.Messages.Stage;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
 import dev.vexelray.demo.editor.core.Messages.GitTick;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
@@ -118,7 +119,7 @@ import java.util.function.Consumer;
 @Publishes({Messages.OPEN, Messages.NEW_FILE, Messages.OPEN_TEXT, Messages.FRONTED, Messages.EDITED,
         Messages.DROPPED, Messages.CLOSING, Messages.SAVE, Messages.SAVE_AS, Messages.ANSWER, Messages.PLACED,
         Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Messages.GIT_WATCH,
-        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Intent.TOPIC})
+        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Messages.STAGE, Intent.TOPIC})
 final class View {
 
     private static final Log LOG = Log.of("editor.files");
@@ -171,6 +172,16 @@ final class View {
     private record At(Path file, int line) {
     }
 
+    /** Stagings asked for in Git mode, each held under a ticket while the tabs it covers are saved. */
+    private final Map<Long, Staging> stagings = new ConcurrentHashMap<>();
+
+    /**
+     * What to stage or unstage: {@code path} relative to the repository's top, or null for everything under the root;
+     * {@code covers} is where on the disk that is, so the tabs inside it can be saved first.
+     */
+    private record Staging(String path, boolean on, Path covers) {
+    }
+
     View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, ProjectIndex concordance,
          Preferences prefs, KronoGui krono) {
         this.gui = gui;
@@ -203,8 +214,10 @@ final class View {
         nav.onGitRefresh(() -> bus.publish(Messages.GIT_REFRESH_TOPIC, new GitRefresh()));
         nav.onGitPick(this::gitPicked);
         nav.onGitOpen(file -> openFromGit(file, 0));
+        nav.onGitStage(this::askToStage);
         ui.gitStage().onOpenAt(this::openFromGit);
         ui.gitStage().onClose(this::closeDiff);
+        ui.gitStage().onMove(nav::gitMovePicked);
         // A build or a script writes files the tree has not listed; its end is when they are all there.
         console.onEnded(nav::refresh);
         ws.runButton().onPress(this::runMenu);
@@ -416,6 +429,42 @@ final class View {
         nav.focus();
     }
 
+    /**
+     * A row's + or −, the diff's Stage or Unstage, or Stage all and Unstage all (a null row). On a worker: what it
+     * covers is worked out here, and the rest is this lane's, via a ticket ({@link #stage}).
+     */
+    private void askToStage(GitPane.Row r, boolean on) {
+        Path top = nav.gitTop();
+        Path covers = r == null ? nav.folder() : top == null ? null : top.resolve(r.path()).normalize();
+        if (covers == null) {
+            return;
+        }
+        long ticket = tickets.incrementAndGet();
+        stagings.put(ticket, new Staging(r == null ? null : r.path(), on, covers));
+        tell(Command.STAGE, ticket);
+    }
+
+    /**
+     * Stage, once the tabs it covers are saved: git stages what is on the disk, and what is meant is what is on the
+     * screen. The editor saves them ({@link Purpose#STAGE}) and answers with {@link Settled}; a save that fails
+     * stages nothing. Unstaging leaves the disk as it is, so it goes at once.
+     */
+    void stage(long ticket) {
+        Staging s = stagings.get(ticket);
+        if (s == null) {
+            return;
+        }
+        if (!s.on()) {
+            stagings.remove(ticket);
+            bus.publish(Messages.STAGE_TOPIC, new Stage(s.path(), false));
+            return;
+        }
+        List<Buffer> inside = ws.all().stream()
+                .filter(b -> b.path() != null && b.path().toAbsolutePath().normalize().startsWith(s.covers()))
+                .toList();
+        rollCall(inside, ticket, Purpose.STAGE, null);
+    }
+
     /** Open {@code file} from Git mode, at 1-based {@code line}, or as it opens for 0: on this lane, via a ticket. */
     private void openFromGit(Path file, int line) {
         long ticket = tickets.incrementAndGet();
@@ -530,6 +579,12 @@ final class View {
             Runs.Run run = runs.remove(m.batch());
             if (run != null && m.go()) {
                 console.run(run);
+            }
+        } else if (m.purpose() == Purpose.STAGE) {
+            // A save that failed has been said by the editor, which file and why; nothing is staged.
+            Staging s = stagings.remove(m.batch());
+            if (s != null && m.go()) {
+                bus.publish(Messages.STAGE_TOPIC, new Stage(s.path(), true));
             }
         } else {
             gates.answer(m.batch(), m.go());

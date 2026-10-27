@@ -1,7 +1,7 @@
 # Git mode: the build plan
 
-Status: **slices 0 to 3 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode
-read-only, and diffs. The look is the
+Status: **slices 0 to 4 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode,
+diffs, and staging. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -96,7 +96,7 @@ later one changes only this repository, except where it says otherwise.
 | 1 | **Branch in the status line:** `Repository`, `ReadStatus`, `GitHead`, the Git status slot | core, gui | The smallest end-to-end path through component, job, message and view. The status line shows `main ↑2`, and it refreshes after a save. |
 | 2 | **Git mode, read-only:** `Mode.GIT`, the branch chip, the Unstaged and Staged lists, Refresh, the `.git/index` check | core, gui | The mode switches in and out. The lists match `git status`. A commit made in a terminal shows up within 2 s. |
 | 3 | **Diffs:** `ReadDiff`, the diff view in `GitStage`, opening the file at a line | core, gui | Click a row to see its diff. Covers modified, added, deleted, untracked and renamed files. |
-| 4 | **Staging:** the stage and unstage commands (library), the +/− buttons, stage all, results in the console | lib, core, gui | Stage, unstage and partly staged files. Git's errors appear in the console. |
+| 4 | **Staging:** the stage and unstage commands (library), the +/− buttons, stage all, results in the console | lib, core, gui | Stage, unstage and partly staged files. Git's errors appear in the console. Built: `RunGit`, writes queued one at a time in the `Repository`, the diff's Stage/Unstage, save-first. Git's error goes to the status line, not the console, which is for runs. |
 | 5 | **Commit:** the message box, the 72-character count, commit with hooks and a longer timeout | lib, core, gui | Committing empties Staged and the branch goes one ahead. A failing hook leaves everything as it was and says why. |
 | 6 | **History and branches**, read-only on `GitStage` | core, gui | Changesets with `HEAD` and `origin/…` marked, and branches with their ahead/behind. |
 | 7 | **Push, and switching branch** | lib, core, gui | Push, and what happens when it fails. Switching branch reloads the open tabs whose files changed on disk. |
@@ -110,10 +110,12 @@ Pull, fetch, merge, rebase, stash, resolving conflicts, and staging part of a fi
 marked, but resolving them is done at a prompt. Each of these can be a later slice once the first eight have been
 used for a while.
 
-## Questions before slice 4
+## Questions
 
-1. **Unsaved work when staging.** Staging stages the disk, not the tab. Either save the tab first, as Run does, or
-   stage the disk and mark the row as having unsaved changes. The plan assumes **save first**.
+1. **Unsaved work when staging. Decided 2026-10-27: save first**, as Run does. Built in slice 4 as
+   `Purpose.STAGE`: the view rolls the tabs a stage covers (the file, or everything under the root for Stage all),
+   the editor saves the dirty ones with a file, and the stage is sent only when they have landed; a save that fails
+   stages nothing, and the editor says why. Unstaging leaves the disk alone and goes at once.
 2. **Push credentials.** `Git` sets `GIT_TERMINAL_PROMPT=0`, so a push that needs a password fails rather than
    waiting at a prompt nobody sees. Git Credential Manager may still open its own window. Either rely on that, or
    accept that push only works with credentials already stored and say so when it fails.

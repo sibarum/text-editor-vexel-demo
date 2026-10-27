@@ -51,6 +51,17 @@ class GitPaneTest {
     }
 
     @Test
+    void aRowMovedAcrossIsOnTheOtherSideWithTheLetterItWillHaveThere() {
+        Row untracked = new Row("notes.md", null, 'U', null, false);
+        assertEquals(new Row("notes.md", null, 'A', null, true), untracked.across());
+        assertEquals(untracked, untracked.across().across());
+        Row modified = new Row("Ui.java", null, 'M', null, false);
+        assertEquals(new Row("Ui.java", null, 'M', null, true), modified.across());
+        Row deleted = new Row("Old.java", null, 'D', null, false);
+        assertEquals('D', deleted.across().letter());
+    }
+
+    @Test
     void aRowSaysItsNameItsFolderAndItsCounts() {
         Row r = new Row("src/main/Ui.java", null, 'M', new Numstat.Lines(4, 1, false), false);
         assertEquals("Ui.java", r.name());

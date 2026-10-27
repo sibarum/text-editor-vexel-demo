@@ -14,8 +14,13 @@ import dev.vexelray.demo.editor.core.Messages.GitTick;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
 import dev.vexelray.demo.editor.core.Messages.GitWatch;
 import dev.vexelray.demo.editor.core.Messages.Plain;
+import dev.vexelray.demo.editor.core.Messages.GitOp;
+import dev.vexelray.demo.editor.core.Messages.GitRan;
+import dev.vexelray.demo.editor.core.Messages.GitRun;
 import dev.vexelray.demo.editor.core.Messages.Relist;
 import dev.vexelray.demo.editor.core.Messages.ShowDiff;
+import dev.vexelray.demo.editor.core.Messages.Stage;
+import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.framework.api.Component;
 import dev.vexelray.framework.api.Overflow;
@@ -25,6 +30,8 @@ import sibarum.atchung.Atchung;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * The controller for git: what is asked of it and when, on a lane of its own, reached only by messages.
@@ -48,6 +55,12 @@ import java.time.Duration;
  * ({@link GitDiff}). The diff on show is asked for again with every new status, since whatever changed the status may
  * have changed it, and only the answer to the latest ask is sent on: rows picked fast show the last one.
  *
+ * <h2>Writes</h2>
+ *
+ * <p>Staging and unstaging ({@link Stage}) are run by {@link RunGit}, one at a time from a queue, since two runs of
+ * {@code git add} at once meet at {@code index.lock} and the second fails. Each is followed by a fresh status; one that
+ * failed is said on the status line in git's own words.
+ *
  * <h2>Watching, while Git mode is up</h2>
  *
  * <p>Git is also used from a prompt, and a commit made there should show without a click. While Git mode is up
@@ -56,8 +69,8 @@ import java.time.Duration;
  * tick, not a run of git.
  */
 @Component(lane = "git")
-@Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_DIFF, Messages.GIT_HEAD, Messages.GIT_TREE,
-        Messages.GIT_DIFF_SHOWN})
+@Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_DIFF, Messages.GIT_RUN, Messages.GIT_HEAD,
+        Messages.GIT_TREE, Messages.GIT_DIFF_SHOWN, Messages.STATUS})
 public final class Repository {
 
     /** How often git is looked at while Git mode is up. */
@@ -88,6 +101,10 @@ public final class Repository {
     private Diff.Side diffSide;
     /** Counts the diffs asked for: only the answer to the latest is shown, however fast rows are picked. */
     private long diffTicket;
+    /** Writes waiting their turn: one is out at a time, so two never meet at git's {@code index.lock}. */
+    private final Deque<GitRun> writes = new ArrayDeque<>();
+    /** Whether a write is out. */
+    private boolean writing;
 
     public Repository(Atchung bus) {
         this.bus = bus;
@@ -195,6 +212,45 @@ public final class Repository {
         bus.publish(Messages.GIT_DIFF_SHOWN_TOPIC, new GitDiff(root, d.path(), d.side(), d.text()));
     }
 
+    /**
+     * Stage or unstage a path, or everything under the root: queued, and run when the write before it is done. The
+     * view has saved what it covers already.
+     */
+    @Subscribe(topic = Messages.STAGE)
+    public void stage(Stage m) {
+        if (root == null || folder == null) {
+            return;
+        }
+        GitOp op = m.on() ? GitOp.STAGE : GitOp.UNSTAGE;
+        writes.add(m.path() == null ? new GitRun(generation, folder, op, ".")
+                : new GitRun(generation, root, op, m.path()));
+        write();
+    }
+
+    /** A write is done. Whatever it did, git is asked again; what went wrong is said on the status line. */
+    @Subscribe(topic = Messages.GIT_RAN)
+    public void ran(GitRan r) {
+        if (r.generation() != generation) {
+            return;
+        }
+        writing = false;
+        if (!r.ok()) {
+            String what = ".".equals(r.path()) ? "everything" : r.path();
+            String verb = r.op() == GitOp.STAGE ? "stage " : "unstage ";
+            bus.publish(Messages.STATUS_TOPIC, new Status("Could not " + verb + what + ": " + r.error(), true));
+        }
+        refresh();
+        write();
+    }
+
+    private void write() {
+        if (writing || writes.isEmpty()) {
+            return;
+        }
+        writing = true;
+        bus.publish(Messages.GIT_RUN_TOPIC, writes.poll());
+    }
+
     /** Ask for the diff on show, if there is one and a repository to ask. */
     private void askDiff() {
         if (diffPath != null && root != null) {
@@ -214,6 +270,9 @@ public final class Repository {
         root = null;
         diffPath = null;
         diffTicket++;
+        // Writes for the old root are not made in the new one; one already out finishes there, and is not heard.
+        writes.clear();
+        writing = false;
     }
 
     /** Ask git again: now, or when the question that is out comes back. */

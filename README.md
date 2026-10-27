@@ -147,7 +147,14 @@ where the editor was: the old and new line numbers, added lines on green and rem
 header. Enter or a double click on a line opens the file there (a removed line, where it was); on a row, it opens
 the file. *Close* or Escape brings the editor back, as leaving Git mode does. While Git mode is up a commit or a
 checkout made at a prompt shows within two seconds, the diff on show with it; a file changed by another program
-shows after *Refresh*. Staging, committing and history are the next slices of [docs/git-mode.md](docs/git-mode.md).
+shows after *Refresh*.
+
+A row's **+** stages it and **−** unstages it; *Stage all* and *Unstage all* sit beside the lists' headings, and the
+diff has *Stage* or *Unstage* at its top, the diff following the file to its new side. Staging saves the tabs it
+covers first, as Run does, so what is staged is what is on the screen; a save that fails stages nothing. A
+conflicted file has no **+**: staging it would mark it resolved, markers and all, so that is done at a prompt. What
+git refuses (an `index.lock` left by another git, say) is said on the status line in git's words. Committing and
+history are the next slices of [docs/git-mode.md](docs/git-mode.md).
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -231,7 +238,7 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Editor.java` | **the controller**, a component on the `editor` lane: every decision. What is open and which tab is in front, when closing, quitting, picking a root or running needs a question first, where an Untitled document is saved, which tabs each root keeps, what the status line and the title bar say, what comes back next time. It owns the session and needs no lock, because nothing else can reach it |
 | `Doc.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value in one field of the editor's |
 | `Repository.java` | **the controller for git**, a component on the `git` lane: follows the root the editor shows, asks git where it stands when the root changes and after the editor writes or makes something, one question at a time, and tells the view what the status line's Git slot says (`develop ↑8 · 10 changed`) and every changed path, as git's own text. While Git mode is up it looks every 2 s whether git did anything, and asks only when it did ([docs/git-mode.md](docs/git-mode.md)) |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java`, `ReadStamp.java`, `ReadDiff.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java`, `ReadStamp.java`, `ReadDiff.java`, `RunGit.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
 | `Core.java` | the list of this module's components and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it |
 | `TextFile.java` | the policy between bytes on disk and text in a field |
 | `Markdown.java` | Markdown as blocks and inlines, for the formatted view: a pure function |

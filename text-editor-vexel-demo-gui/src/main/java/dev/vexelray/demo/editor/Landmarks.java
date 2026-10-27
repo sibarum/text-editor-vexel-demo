@@ -71,6 +71,15 @@ final class Landmarks {
     /** Git mode's list of what is staged, picked and opened as {@link #GIT_UNSTAGED}'s rows are. */
     static final String GIT_STAGED = "git.staged";
 
+    /** Git mode's Stage all, beside Unstaged's heading: everything under the root, its tabs saved first. */
+    static final String GIT_STAGE_ALL = "git.stage-all";
+
+    /** Git mode's Unstage all, beside Staged's heading. */
+    static final String GIT_UNSTAGE_ALL = "git.unstage-all";
+
+    /** The diff's Stage or Unstage: the row picked, moved to the other side. */
+    static final String DIFF_STAGE = "stage.stage";
+
     /** What stands where the editor does while a Git mode row is picked: its diff. */
     static final String STAGE = "stage";
 

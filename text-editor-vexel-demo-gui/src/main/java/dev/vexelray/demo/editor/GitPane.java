@@ -9,13 +9,16 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.icons.Icon;
 import dev.vexelray.gui.widget.Button;
+import dev.vexelray.gui.widget.IconButton;
 import dev.vexelray.gui.widget.ListView;
 import dev.vexelray.gui.widget.SelectionModel;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -41,6 +44,15 @@ final class GitPane {
      * @param lines  how many lines it adds and removes on this side; null if not counted
      */
     record Row(String path, String from, char letter, Numstat.Lines lines, boolean staged) {
+
+        /**
+         * The same path once it has moved to the other side: staged, a new file is added; unstaged, an added file is
+         * untracked again. Which letter git gives it is the next status's to say; this is for the diff meanwhile.
+         */
+        Row across() {
+            char to = staged ? (letter == 'A' ? 'U' : letter) : (letter == 'U' ? 'A' : letter);
+            return new Row(path, from, to, lines, !staged);
+        }
 
         /** The name, without its folder; a whole untracked folder keeps its slash. */
         String name() {
@@ -88,6 +100,10 @@ final class GitPane {
     private final Node stagedEmpty;
     private final ListView<Row> unstaged;
     private final ListView<Row> staged;
+    private final Button stageAll;
+    private final Button unstageAll;
+    /** Asked to stage ({@code true}) or unstage a row, or everything for a null row. */
+    private volatile BiConsumer<Row, Boolean> staging = (r, on) -> { };
 
     /** The repository's top, which every row's path is relative to; null before the first status. */
     private volatile Path top;
@@ -119,12 +135,17 @@ final class GitPane {
         unstaged = list();
         gui.landmark(Landmarks.GIT_UNSTAGED, unstaged.node());
         stagedLabel = label();
-        stagedEmpty = empty("Nothing staged");
+        stagedEmpty = empty("Nothing staged. Press + on a file to stage it.");
         staged = list();
         gui.landmark(Landmarks.GIT_STAGED, staged.node());
         // One row is picked across both lists: picking in one lets go of the other's.
         unstaged.selection().onChange(set -> picked(set, staged));
         staged.selection().onChange(set -> picked(set, unstaged));
+        stageAll = new Button(gui, "Stage all").kind(Button.Kind.GHOST).onPress(() -> staging.accept(null, true));
+        unstageAll = new Button(gui, "Unstage all").kind(Button.Kind.GHOST)
+                .onPress(() -> staging.accept(null, false));
+        gui.landmark(Landmarks.GIT_STAGE_ALL, stageAll.node());
+        gui.landmark(Landmarks.GIT_UNSTAGE_ALL, unstageAll.node());
 
         root = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
@@ -132,9 +153,16 @@ final class GitPane {
                 .alignItems(AlignItems.STRETCH)
                 .visible(false)
                 .children(head, gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
-                        unstagedLabel, unstagedEmpty, unstaged.node(),
-                        stagedLabel, stagedEmpty, staged.node());
+                        heading(unstagedLabel, stageAll), unstagedEmpty, unstaged.node(),
+                        heading(stagedLabel, unstageAll), stagedEmpty, staged.node());
         show(List.of(), List.of());
+    }
+
+    /** A list's heading: its name and count, and the button that moves all of it to the other side. */
+    private Node heading(Node label, Button all) {
+        label.width(Length.grow(1));
+        return gui.row().width(Length.FILL).alignItems(AlignItems.CENTER).gap(Type.TIGHT)
+                .children(label, all.node());
     }
 
     private Node label() {
@@ -205,9 +233,42 @@ final class GitPane {
                 .children(name, folder);
         Node counts = g.text(r.counts()).font(Type.MONO).textSize(Type.SMALL)
                 .textColor(g.theme().color(Role.DIM)).wordWrap(false);
+        // + to stage, − to unstage. A conflict is resolved at a prompt: staging it would mark it resolved, markers
+        // and all, so it has no button here.
+        IconButton move = new IconButton(g, r.staged() ? Icon.MINUS : Icon.PLUS, r.staged() ? "Unstage" : "Stage")
+                .size(Length.rem(1.5f), Length.rem(0.875f))
+                .tip(r.staged() ? "Unstage" : r.letter() == '!' ? "Resolve the conflict at a prompt" : "Stage")
+                .enabled(r.letter() != '!')
+                .onPress(() -> move(r));
         return g.row().width(Length.FILL).height(Length.FILL).gap(Type.TIGHT).alignItems(AlignItems.CENTER)
                 .padding(Length.ZERO, Type.TIGHT)
-                .children(letter, names, counts);
+                .children(letter, names, counts, move.node());
+    }
+
+    /**
+     * A row's + or −: staged or unstaged. When it is the row picked, the pick goes with it to the other side, so the
+     * diff shows what is now there rather than an emptied one.
+     */
+    private void move(Row r) {
+        if (same(r, picked)) {
+            Row moved = r.across();
+            picked = moved;
+            pick.accept(moved);
+        }
+        staging.accept(r, !r.staged());
+    }
+
+    /** The row picked, staged if it is not, unstaged if it is: the diff's Stage or Unstage. */
+    void movePicked() {
+        Row r = picked;
+        if (r != null && r.letter() != '!') {
+            move(r);
+        }
+    }
+
+    /** Be asked to stage ({@code true}) or unstage a row, or everything for a null row. Runs on a worker. */
+    void onStage(BiConsumer<Row, Boolean> handler) {
+        this.staging = handler == null ? (r, on) -> { } : handler;
     }
 
     /** What colour a letter is: changed, added, gone, moved, new to git, or stuck in a merge. */
@@ -228,6 +289,11 @@ final class GitPane {
     /** Be asked to open a file a row stands for. Runs on a worker. */
     void onOpenFile(Consumer<Path> handler) {
         this.openFile = handler == null ? p -> { } : handler;
+    }
+
+    /** The repository's top, which every row's path is relative to; null before the first status or outside one. */
+    Path top() {
+        return top;
     }
 
     /** Be asked to ask git again: Refresh. Runs on a worker. */
@@ -280,19 +346,37 @@ final class GitPane {
         stagedEmpty.visible(isStaged.isEmpty());
         unstaged.node().visible(!notStaged.isEmpty());
         staged.node().visible(!isStaged.isEmpty());
+        stageAll.node().visible(!notStaged.isEmpty());
+        unstageAll.node().visible(!isStaged.isEmpty());
         unstaged.items(notStaged);
         staged.items(isStaged);
         anyUnstaged = !notStaged.isEmpty();
         // The rows are new, counts and all: the one picked is picked again, which asks nothing since it is the same.
+        // Gone from its side and on the other, it moved there (a stage made at a prompt, or one of ours that failed
+        // and left it where it was), and the pick and its diff follow it.
         Row was = picked;
         if (was != null) {
-            for (Row r : was.staged() ? isStaged : notStaged) {
-                if (same(r, was)) {
-                    (was.staged() ? staged : unstaged).selection().at(r);
-                    break;
+            Row here = find(was.staged() ? isStaged : notStaged, was.path());
+            if (here != null) {
+                (was.staged() ? staged : unstaged).selection().at(here);
+            } else {
+                Row there = find(was.staged() ? notStaged : isStaged, was.path());
+                if (there != null) {
+                    picked = there;
+                    (there.staged() ? staged : unstaged).selection().at(there);
+                    pick.accept(there);
                 }
             }
         }
+    }
+
+    private static Row find(List<Row> rows, String path) {
+        for (Row r : rows) {
+            if (r.path().equals(path)) {
+                return r;
+            }
+        }
+        return null;
     }
 
     /** Put the keyboard in the first list with something in it. */

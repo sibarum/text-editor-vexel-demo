@@ -107,6 +107,13 @@ record Intent(Command command, long id) {
             void on(View view, long id) {
                 view.openAt(id);
             }
+        },
+        /** Something to stage or unstage from Git mode; {@code id} is the view's ticket for what. */
+        STAGE {
+            @Override
+            void on(View view, long id) {
+                view.stage(id);
+            }
         };
 
         abstract void on(View view, long id);

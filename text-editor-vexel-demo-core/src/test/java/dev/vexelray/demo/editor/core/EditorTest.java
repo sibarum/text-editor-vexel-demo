@@ -239,6 +239,28 @@ class EditorTest {
     }
 
     @Test
+    void stagingSavesTheTabsItCoversFirstAndAFailedSaveStagesNothing() {
+        long a = opened("a.txt", "a");
+        editor.closing(new Closing(5, 1, a, true, Purpose.STAGE, null));
+        assertEquals(List.of(new Flush(a)), took(Flush.class));
+        editor.save(new Save(a, "a!", true));
+        Write w = took(Write.class).getFirst();
+        editor.written(new Written(a, w.path(), ""));
+        assertTrue(sent.contains(new Settled(5, Purpose.STAGE, true)));
+        sent.clear();
+
+        editor.edited(new Edited(a, true));
+        editor.closing(new Closing(6, 1, a, true, Purpose.STAGE, null));
+        took(Flush.class);
+        editor.save(new Save(a, "a!!", true));
+        editor.written(new Written(a, took(Write.class).getFirst().path(), "the disk is full"));
+        assertTrue(sent.contains(new Settled(6, Purpose.STAGE, false)));
+
+        editor.closing(new Closing(7, 1, Messages.NO_TAB, false, Purpose.STAGE, null));
+        assertTrue(sent.contains(new Settled(7, Purpose.STAGE, true)), "nothing open: nothing to save first");
+    }
+
+    @Test
     void switchingRootsPutsTheTabsAwayAndSwitchingBackBringsThemBackOneAtATime() {
         Path one = file("one");
         Path two = file("two");

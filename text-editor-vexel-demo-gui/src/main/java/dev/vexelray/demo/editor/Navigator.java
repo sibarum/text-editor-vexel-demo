@@ -647,6 +647,21 @@ final class Navigator {
         gitPane.unpick();
     }
 
+    /** Be asked to stage ({@code true}) or unstage a Git mode row, or everything for a null row. Runs on a worker. */
+    void onGitStage(BiConsumer<GitPane.Row, Boolean> handler) {
+        gitPane.onStage(handler);
+    }
+
+    /** The Git mode row picked, staged if it is not and unstaged if it is: the diff's Stage or Unstage. */
+    void gitMovePicked() {
+        gitPane.movePicked();
+    }
+
+    /** The repository's top, which a Git mode row's path is relative to; null outside one. */
+    Path gitTop() {
+        return gitPane.top();
+    }
+
     /**
      * Where the root stands in git. Outside a repository the chip goes, and Git mode with it, since there is nothing
      * in it to show.

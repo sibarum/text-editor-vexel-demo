@@ -5,7 +5,12 @@ import dev.vexelray.demo.editor.core.Messages.DiffAsk;
 import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
+import dev.vexelray.demo.editor.core.Messages.GitOp;
+import dev.vexelray.demo.editor.core.Messages.GitRan;
+import dev.vexelray.demo.editor.core.Messages.GitRun;
 import dev.vexelray.demo.editor.core.Messages.ShowDiff;
+import dev.vexelray.demo.editor.core.Messages.Stage;
+import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
@@ -26,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The git controller, alone: no window, no lanes, no git. Each test hands the {@link Repository} a message the way its
@@ -51,6 +57,8 @@ class RepositoryTest {
         bus.subscribe(Messages.GIT_TREE_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_DIFF_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_DIFF_SHOWN_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_RUN_TOPIC, sent::add);
+        bus.subscribe(Messages.STATUS_TOPIC, sent::add);
     }
 
     private <T> List<T> took(Class<T> kind) {
@@ -237,6 +245,58 @@ class RepositoryTest {
         repository.folder(new ShowFolder(OTHER));
         repository.diffRead(new DiffRead(asked.ticket(), "src/Ui.java", Diff.Side.UNSTAGED, "x"));
         assertEquals(List.of(), took(GitDiff.class));
+    }
+
+    @Test
+    void writesGoOneAtATimeAndEachIsFollowedByAFreshStatus() {
+        long g = shown();
+        repository.stage(new Stage("src/Ui.java", true));
+        repository.stage(new Stage("src/Old.java", false));
+        repository.stage(new Stage(null, true));
+        assertEquals(List.of(new GitRun(g, ROOT, GitOp.STAGE, "src/Ui.java")), took(GitRun.class),
+                "one is out; the rest wait, so they never meet at index.lock");
+
+        repository.ran(new GitRan(g, GitOp.STAGE, "src/Ui.java", true, "git add -A -- src/Ui.java", ""));
+        assertEquals(1, took(GitAsk.class).size());
+        assertEquals(List.of(new GitRun(g, ROOT, GitOp.UNSTAGE, "src/Old.java")), took(GitRun.class));
+
+        repository.ran(new GitRan(g, GitOp.UNSTAGE, "src/Old.java", true, "git restore", ""));
+        assertEquals(List.of(new GitRun(g, ROOT, GitOp.STAGE, ".")), took(GitRun.class),
+                "everything is everything under the root");
+        repository.ran(new GitRan(g, GitOp.STAGE, ".", true, "git add -A -- .", ""));
+        assertEquals(List.of(), took(GitRun.class));
+    }
+
+    @Test
+    void aWriteThatFailsSaysSoInGitsWords() {
+        long g = shown();
+        repository.stage(new Stage("src/Ui.java", true));
+        took(GitRun.class);
+        repository.ran(new GitRan(g, GitOp.STAGE, "src/Ui.java", false, "git add",
+                "Unable to create 'C:/work/project/.git/index.lock': File exists."));
+        Status said = took(Status.class).getFirst();
+        assertTrue(said.alert());
+        assertEquals("Could not stage src/Ui.java: Unable to create 'C:/work/project/.git/index.lock': File exists.",
+                said.message());
+        assertEquals(1, took(GitAsk.class).size(), "still asked again: some of it may have happened");
+    }
+
+    @Test
+    void writesForARootSinceLeftAreNotMadeInTheNewOne() {
+        long g = shown();
+        repository.stage(new Stage("a", true));
+        repository.stage(new Stage("b", true));
+        took(GitRun.class);
+        repository.folder(new ShowFolder(OTHER));
+        repository.ran(new GitRan(g, GitOp.STAGE, "a", true, "", ""));
+        assertEquals(List.of(), took(GitRun.class));
+    }
+
+    @Test
+    void beforeTheFirstStatusThereIsNothingToStage() {
+        repository.folder(new ShowFolder(ROOT));
+        repository.stage(new Stage("a", true));
+        assertEquals(List.of(), took(GitRun.class));
     }
 
     @Test

@@ -18,6 +18,6 @@ import dev.vexelray.framework.api.Configuration;
  */
 @Configuration(components = {Editor.class, Repository.class},
         jobs = {ReadFile.class, WriteFile.class, FindPath.class, MakeScratch.class, NameScratch.class,
-                DropScratch.class, Make.class, ReadStatus.class, ReadStamp.class, ReadDiff.class})
+                DropScratch.class, Make.class, ReadStatus.class, ReadStamp.class, ReadDiff.class, RunGit.class})
 public final class Core {
 }

@@ -821,14 +821,15 @@ public final class Editor {
             case SETTLE -> settle(unsaved, () -> settled(c.batch(), Purpose.SETTLE, true),
                     () -> settled(c.batch(), Purpose.SETTLE, false));
             case ROOT -> switchRoot(c.folder(), all, unsaved);
-            case RUN -> {
-                // What runs is what is on disk, so it has to be what is on screen; a save that fails runs nothing.
+            case RUN, STAGE -> {
+                // What runs, or is staged, is what is on disk, so it has to be what is on screen; a save that fails
+                // runs or stages nothing.
                 List<Long> files = unsaved.stream().filter(id -> {
                     Doc.Entry e = doc.entry(id);
                     return e != null && e.path() != null && e.library() == null;
                 }).toList();
-                saveAll(files, () -> settled(c.batch(), Purpose.RUN, true),
-                        () -> settled(c.batch(), Purpose.RUN, false));
+                saveAll(files, () -> settled(c.batch(), c.purpose(), true),
+                        () -> settled(c.batch(), c.purpose(), false));
             }
         }
     }

@@ -92,7 +92,12 @@ public final class Messages {
         /** The root is changing to {@link Closing#folder}: the tabs are put away as the old root's. */
         ROOT,
         /** Something is about to run: every file with unsaved work is saved first, so what runs is what is shown. */
-        RUN
+        RUN,
+        /**
+         * Something is about to be staged: the tabs it covers are saved first, as for {@link #RUN}, since git stages
+         * what is on the disk and the person means what is on the screen.
+         */
+        STAGE
     }
 
     /**
@@ -585,5 +590,41 @@ public final class Messages {
     public static final Topic<GitDiff> GIT_DIFF_SHOWN_TOPIC = Topic.of(GIT_DIFF_SHOWN, GitDiff.class);
 
     public record GitDiff(Path root, String path, Diff.Side side, String text) {
+    }
+
+    // ------------------------------------------------------------------ staging
+
+    /**
+     * Stage ({@code on}) or unstage {@code path}, relative to the repository's top; a null {@code path} is everything
+     * under the root. The view sends it once the tabs it covers are saved ({@link Purpose#STAGE}).
+     */
+    public static final String STAGE = "git.stage";
+    public static final Topic<Stage> STAGE_TOPIC = Topic.of(STAGE, Stage.class);
+
+    public record Stage(String path, boolean on) {
+    }
+
+    /** A write {@link RunGit} makes. */
+    public enum GitOp {
+        STAGE, UNSTAGE
+    }
+
+    /**
+     * Run a write ({@link RunGit}) in {@code dir}: {@code path} relative to it, or {@code "."} for everything under it.
+     * One at a time, so two never meet at git's {@code index.lock}.
+     */
+    public static final String GIT_RUN = "git.run";
+    public static final Topic<GitRun> GIT_RUN_TOPIC = Topic.of(GIT_RUN, GitRun.class);
+
+    public record GitRun(long generation, Path dir, GitOp op, String path) {
+    }
+
+    /**
+     * How a write went: {@code ok}, and if not, what git said ({@code error}). {@code command} is the command line, for
+     * whatever shows the user what git did.
+     */
+    public static final String GIT_RAN = "git.ran";
+
+    public record GitRan(long generation, GitOp op, String path, boolean ok, String command, String error) {
     }
 }

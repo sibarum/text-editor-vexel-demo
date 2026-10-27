@@ -62,7 +62,9 @@ final class GitStage {
     private final Node about;
     private final Node note;
     private final Button open;
+    private final Button move;
     private final ListView<Row> lines;
+    private volatile Runnable moved = () -> { };
 
     /** The file on show, absolute; null while there is none. */
     private volatile Path file;
@@ -77,8 +79,11 @@ final class GitStage {
                 .wordWrap(false).clip(true);
         about = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(gui.theme().color(Role.FAINT))
                 .wordWrap(false).clip(true);
+        // Stage or Unstage, as the side on show is: the row picked moves, and the diff goes with it.
+        move = new Button(gui, "Stage").kind(Button.Kind.SECONDARY).onPress(() -> moved.run());
         open = new Button(gui, "Open file").kind(Button.Kind.GHOST).onPress(() -> openAt(1));
         Button close = new Button(gui, "Close").kind(Button.Kind.GHOST).onPress(() -> closed.run());
+        gui.landmark(Landmarks.DIFF_STAGE, move.node());
         gui.landmark(Landmarks.DIFF_OPEN, open.node());
         gui.landmark(Landmarks.DIFF_CLOSE, close.node());
         gui.landmark(Landmarks.DIFF_FILE, name);
@@ -86,7 +91,7 @@ final class GitStage {
                 .children(name, about);
         Node head = gui.row().width(Length.FILL).gap(Type.TIGHT).alignItems(AlignItems.CENTER)
                 .padding(Type.TIGHT, Type.WIDE)
-                .children(names, open.node(), close.node());
+                .children(names, move.node(), open.node(), close.node());
 
         note = gui.text("").font(Type.UI).textSize(Type.LABEL).textColor(gui.theme().color(Role.DIM))
                 .padding(Type.WIDE, Type.WIDE).wordWrap(false).visible(false);
@@ -144,6 +149,11 @@ final class GitStage {
         this.openAt = handler == null ? (p, line) -> { } : handler;
     }
 
+    /** Be asked to stage the file on show, or unstage it: its Stage or Unstage. Runs on a worker. */
+    void onMove(Runnable handler) {
+        this.moved = handler == null ? () -> { } : handler;
+    }
+
     /** Be told the stage was closed: Close, or Escape. Runs on a worker. */
     void onClose(Runnable handler) {
         this.closed = handler == null ? () -> { } : handler;
@@ -172,6 +182,7 @@ final class GitStage {
         name.text(own);
         about.text(folder + side(d.side()) + counts(diff));
         open.enabled(openable);
+        move.label(d.side() == Diff.Side.STAGED ? "Unstage" : "Stage");
         String says = diff.binary() ? "A binary file: there are no lines to show."
                 : rows.isEmpty() ? "No changes on this side." : "";
         note.text(says);
