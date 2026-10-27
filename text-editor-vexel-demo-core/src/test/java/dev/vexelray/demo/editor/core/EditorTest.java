@@ -188,6 +188,7 @@ class EditorTest {
         editor.written(new Written(blank, target, ""));
         assertTrue(sent.contains(new Saved(blank, target)));
         assertTrue(sent.contains(new Retitle(blank, "kept.txt")), "the tab is named for its file now");
+        assertTrue(sent.contains(new Relist(null)), "the navigator lists the file it has never seen");
     }
 
     @Test
@@ -205,6 +206,8 @@ class EditorTest {
         assertEquals(List.of(new Flush(a)), took(Flush.class));
         editor.save(new Save(a, "x", true));
         assertEquals(List.of(new Write(a, copy, "x", true)), took(Write.class));
+        editor.written(new Written(a, copy, ""));
+        assertTrue(sent.contains(new Relist(null)), "the navigator lists the copy");
     }
 
     @Test
