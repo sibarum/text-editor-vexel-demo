@@ -1,7 +1,7 @@
 # Git mode: the build plan
 
-Status: **slices 0 to 6 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode,
-diffs, staging, committing, and history and branches. The look is the
+Status: **all eight slices built**, 2026-10-28: the library's read side, the branch in the status line, Git mode,
+diffs, staging, committing, history and branches, and pushing and switching branch. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -99,10 +99,10 @@ later one changes only this repository, except where it says otherwise.
 | 4 | **Staging:** the stage and unstage commands (library), the +/− buttons, stage all, results in the console | lib, core, gui | Stage, unstage and partly staged files. Git's errors appear in the console. Built: `RunGit`, writes queued one at a time in the `Repository`, the diff's Stage/Unstage, save-first. Git's error goes to the status line, not the console, which is for runs. |
 | 5 | **Commit:** the message box, the 72-character count, commit with hooks and a longer timeout | lib, core, gui | Committing empties Staged and the branch goes one ahead. A failing hook leaves everything as it was and says why. Built: `Git.commit` (`-F -`, `COMMIT_TIMEOUT` 5 min), `CommitStaged` queued behind the stages asked before it, one commit at a time, `Repository.committable` deciding for both the button and the controller, `GitCommitted` emptying the box or giving it back. Ctrl+Enter in the message commits. A failure is said on the status line as its first line (a hook's, or the last of git's standard output when standard error is silent). |
 | 6 | **History and branches**, read-only on `GitStage` | core, gui | Changesets with `HEAD` and `origin/…` marked, and branches with their ahead/behind. Built: one job, `ReadHistory` (200 commits and every branch), not `ReadLog` and `ReadBranches`; both cross as text (`Log.text`, `Refs.text`, read back with `parse`), so the library changed too. Asked while Git mode is up, with a status whose stamp moved, on coming up and on Refresh; not on a save. `HistoryStage` stands where the editor does with no row picked, Changesets beside Branches; Close on a diff comes back to it, its own Close or opening a file brings the editor, and *History* in the pane brings it back. |
-| 7 | **Push, and switching branch** | lib, core, gui | Push, and what happens when it fails. Switching branch reloads the open tabs whose files changed on disk. |
+| 7 | **Push, and switching branch** | lib, core, gui | Push, and what happens when it fails. Switching branch reloads the open tabs whose files changed on disk. Built: `Git.push` tries an installed SSH key first (an HTTPS remote rewritten to SSH for that push, `BatchMode`), then HTTPS through Git Credential Manager; `Git.switchTo` is `git switch`. Both are writes in the `Repository`'s queue; `Repository.pushable` decides Push. A switch settles the tabs under the repository first (`Purpose.SWITCH`: save, discard or cancel), and afterwards `Reload` has the editor read every clean tab under it again, closing one whose file is not on the branch. A file changed by another program is still not reloaded; only git's switch is. |
 
 Slice 7 is last because it is the only one that reaches the network and the only one that changes files under open
-tabs. The editor cannot yet reload a tab whose file changed on disk, and switching branch needs that first.
+tabs. It added the reload it needed: the tabs under the repository, read again after a switch.
 
 ## Not in this plan
 
@@ -116,8 +116,9 @@ used for a while.
    `Purpose.STAGE`: the view rolls the tabs a stage covers (the file, or everything under the root for Stage all),
    the editor saves the dirty ones with a file, and the stage is sent only when they have landed; a save that fails
    stages nothing, and the editor says why. Unstaging leaves the disk alone and goes at once.
-2. **Push credentials.** `Git` sets `GIT_TERMINAL_PROMPT=0`, so a push that needs a password fails rather than
-   waiting at a prompt nobody sees. Git Credential Manager may still open its own window. Either rely on that, or
-   accept that push only works with credentials already stored and say so when it fails.
+2. **Push credentials. Decided 2026-10-28: an installed SSH key first, Git Credential Manager after.** `Git` keeps
+   `GIT_TERMINAL_PROMPT=0`, which stops git's own prompt and not the credential manager's window. Over SSH, `BatchMode`
+   turns anything that would prompt into a failure, and that failure (git's "Could not read from remote repository")
+   is what sends the push over HTTPS. A key held only by an agent, with no file in `~/.ssh`, is not looked for.
 3. **Lists across messages.** The plan sends a message per member (FN-24). If the framework's *Could* lands first,
    so a list can be copied across, slices 2 and 6 get simpler. That fix is outside this plan.

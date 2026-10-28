@@ -34,6 +34,7 @@ import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Relist;
 import dev.vexelray.demo.editor.core.Messages.Relocated;
+import dev.vexelray.demo.editor.core.Messages.Reload;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Revert;
 import dev.vexelray.demo.editor.core.Messages.Save;
@@ -179,6 +180,9 @@ public final class Editor {
     private boolean somewhere;
     /** How many tabs a returning root has had back so far, for the one line that says so. */
     private int reopened;
+    /** Tabs being read again after a switch of branch, and the names of those closed since their files went. */
+    private int reloading;
+    private final List<String> gone = new ArrayList<>();
 
     /** The roots the last session offered as recent, as each is found still there; null where it is not. */
     private Path[] recentFound = new Path[0];
@@ -481,7 +485,7 @@ public final class Editor {
     }
 
     private void read(Path file, Why why, boolean focus, long id) {
-        if (why != Why.REVERT && (doc.entry(file) != null || !reading.add(file))) {
+        if (why != Why.REVERT && why != Why.RELOAD && (doc.entry(file) != null || !reading.add(file))) {
             if (stepped(why)) {
                 next();
             }
@@ -495,6 +499,10 @@ public final class Editor {
     public void read(FileRead r) {
         if (r.why() == Why.REVERT) {
             reverted(r);
+            return;
+        }
+        if (r.why() == Why.RELOAD) {
+            reloaded(r);
             return;
         }
         reading.remove(r.path());
@@ -818,8 +826,10 @@ public final class Editor {
         switch (c.purpose()) {
             case TABS -> closeTabs(all, unsaved);
             case QUIT -> quit(c.batch(), unsaved);
-            case SETTLE -> settle(unsaved, () -> settled(c.batch(), Purpose.SETTLE, true),
-                    () -> settled(c.batch(), Purpose.SETTLE, false));
+            // A switch rewrites the files under the tabs it covers: what is unsaved in them is saved first, so git
+            // carries it over or refuses, or thrown away, as the person says.
+            case SETTLE, SWITCH -> settle(unsaved, () -> settled(c.batch(), c.purpose(), true),
+                    () -> settled(c.batch(), c.purpose(), false));
             case ROOT -> switchRoot(c.folder(), all, unsaved);
             case RUN, STAGE -> {
                 // What runs, or is staged, is what is on disk, so it has to be what is on screen; a save that fails
@@ -944,6 +954,46 @@ public final class Editor {
         bus.publish(Messages.RETITLE_TOPIC, new Retitle(r.id(), doc.entry(r.id()).title()));
         if (doc.active() == r.id()) {
             caption();
+        }
+    }
+
+    /**
+     * Git rewrote the files under {@code under}, switching branch: every tab on one of them with nothing unsaved is
+     * read again, and the view puts back only those whose text changed. One with unsaved work is left as it is: the
+     * switch settled every such tab first, so that is typing done while git ran, and it is the person's.
+     */
+    @Subscribe(topic = Messages.RELOAD)
+    public void reload(Reload m) {
+        Path under = m.under().toAbsolutePath().normalize();
+        for (Doc.Entry e : doc.tabs()) {
+            if (e.path() != null && e.library() == null && !e.dirty() && e.path().startsWith(under)) {
+                reloading++;
+                read(e.path(), Why.RELOAD, false, e.id());
+            }
+        }
+    }
+
+    /**
+     * A tab read again after a switch: put back as the file now is, or closed if the file is not on this branch. Once
+     * the last is in, the tabs closed are said in one line.
+     */
+    private void reloaded(FileRead r) {
+        reloading--;
+        Doc.Entry e = doc.entry(r.id());
+        if (e != null && !e.dirty()) {
+            if (r.problem().isEmpty()) {
+                doc = doc.withEntry(r.id(), x -> new Doc.Entry(x.id(), x.path(), false, r.crlf(), x.library()));
+                bus.publish(Messages.REVERT_TOPIC, new Revert(r.id(), r.text(), r.crlf()));
+            } else {
+                LOG.info("closing {}, which is not there after the switch: {}", r.path(), r.problem());
+                gone.add(e.name());
+                closeTab(r.id());
+            }
+        }
+        if (reloading == 0 && !gone.isEmpty()) {
+            say("Closed " + String.join(", ", gone) + (gone.size() == 1 ? ", which is" : ", which are")
+                    + " not on this branch");
+            gone.clear();
         }
     }
 

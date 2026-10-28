@@ -114,6 +114,13 @@ record Intent(Command command, long id) {
             void on(View view, long id) {
                 view.stage(id);
             }
+        },
+        /** A branch to switch to, from the history; {@code id} is the view's ticket for which. */
+        SWITCH {
+            @Override
+            void on(View view, long id) {
+                view.switchBranch(id);
+            }
         };
 
         abstract void on(View view, long id);

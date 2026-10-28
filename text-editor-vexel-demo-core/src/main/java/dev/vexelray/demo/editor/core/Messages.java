@@ -97,7 +97,12 @@ public final class Messages {
          * Something is about to be staged: the tabs it covers are saved first, as for {@link #RUN}, since git stages
          * what is on the disk and the person means what is on the screen.
          */
-        STAGE
+        STAGE,
+        /**
+         * The branch is about to be switched, which rewrites the files under the root: unsaved work in the tabs it
+         * covers is saved or thrown away first, as for {@link #SETTLE}, or the switch is not made.
+         */
+        SWITCH
     }
 
     /**
@@ -368,7 +373,9 @@ public final class Messages {
         /** A file the navigator's Add has just made, opened to be written in: what the status line says is that it was made. */
         MADE,
         /** A tab's unsaved work thrown away: its file read again, to put it back. */
-        REVERT
+        REVERT,
+        /** A tab with nothing unsaved, read again because git rewrote what is under it ({@link Reload}). */
+        RELOAD
     }
 
     /** Read a file and decide whether it can be opened ({@link ReadFile}). {@code id} is the tab to revert, or {@link #NO_TAB}. */
@@ -650,15 +657,54 @@ public final class Messages {
     public record GitCommitted(boolean ok, String subject) {
     }
 
+    // ------------------------------------------------------------------ pushing, and switching branch
+
+    /**
+     * Push the branch checked out to where it pushes: Git mode's Push. The {@code Repository} decides whether it can go
+     * ({@code Repository.pushable}) and answers with {@link GitPushed} either way.
+     */
+    public static final String PUSH = "git.push";
+    public static final Topic<PushBranch> PUSH_TOPIC = Topic.of(PUSH, PushBranch.class);
+
+    public record PushBranch() {
+    }
+
+    /** How a push went, for Push, which waits for it; the status line says what happened. */
+    public static final String GIT_PUSHED = "view.git-pushed";
+    public static final Topic<GitPushed> GIT_PUSHED_TOPIC = Topic.of(GIT_PUSHED, GitPushed.class);
+
+    public record GitPushed(boolean ok) {
+    }
+
+    /**
+     * Check out {@code branch}: a branch of the history's picked. A remote's, {@code origin/x}, is switched to as
+     * {@code x}. The view sends it once the tabs under the root have nothing unsaved ({@link Purpose#SWITCH}).
+     */
+    public static final String SWITCH = "git.switch";
+    public static final Topic<SwitchBranch> SWITCH_TOPIC = Topic.of(SWITCH, SwitchBranch.class);
+
+    public record SwitchBranch(String branch) {
+    }
+
+    /**
+     * Git rewrote the files under {@code under}: every tab on one of them with nothing unsaved is read again, and one
+     * whose file has gone is closed. The {@code Repository} sends it after a switch of branch.
+     */
+    public static final String RELOAD = "editor.reload";
+    public static final Topic<Reload> RELOAD_TOPIC = Topic.of(RELOAD, Reload.class);
+
+    public record Reload(Path under) {
+    }
+
     /** A write {@link RunGit} makes. */
     public enum GitOp {
-        STAGE, UNSTAGE, COMMIT
+        STAGE, UNSTAGE, COMMIT, PUSH, SWITCH
     }
 
     /**
      * Run a write ({@link RunGit}) in {@code dir}: {@code path} relative to it, or {@code "."} for everything under it;
-     * a commit has no path, and has its {@code message}. One at a time, so two never meet at git's
-     * {@code index.lock}.
+     * a commit has no path, and has its {@code message}; a push has neither; a switch's {@code path} is the branch.
+     * One at a time, so two never meet at git's {@code index.lock}.
      */
     public static final String GIT_RUN = "git.run";
     public static final Topic<GitRun> GIT_RUN_TOPIC = Topic.of(GIT_RUN, GitRun.class);

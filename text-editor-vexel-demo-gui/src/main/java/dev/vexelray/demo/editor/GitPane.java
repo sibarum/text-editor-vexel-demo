@@ -3,6 +3,7 @@ package dev.vexelray.demo.editor;
 import dev.sibarum.suite.git.Numstat;
 import dev.sibarum.suite.git.Status;
 import dev.vexelray.demo.editor.core.Messages.GitCommitted;
+import dev.vexelray.demo.editor.core.Messages.GitPushed;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
 import dev.vexelray.demo.editor.core.Repository;
@@ -39,8 +40,8 @@ import java.util.function.Consumer;
  *
  * <p>A row picked shows its diff where the editor stands ({@link GitStage}); Enter or a double click opens its file.
  * Each row's + or − stages or unstages it. Below the lists is the commit's message, with how long its first line is,
- * and Commit; whether a commit can go is the {@code Repository}'s to say ({@link Repository#committable}), asked here
- * only to enable the button.
+ * then Push and Commit; whether either can go is the {@code Repository}'s to say ({@link Repository#pushable},
+ * {@link Repository#committable}), asked here only to enable the buttons.
  */
 final class GitPane {
 
@@ -124,6 +125,14 @@ final class GitPane {
     private volatile Consumer<String> committing = m -> { };
     /** How many paths are staged, from the last head. */
     private volatile int stagedCount;
+    private final Button push;
+    /** Asked to push the branch checked out. */
+    private volatile Runnable pushing = () -> { };
+    /** What the branch tracks and how far ahead of it, from the last head: what Push would send. */
+    private volatile String tracking = "";
+    private volatile int ahead;
+    /** Whether a push is out: Push waits for its answer, which may be minutes, a sign-in among them. */
+    private volatile boolean pushOut;
     /** Whether a commit is out: Commit waits for its answer, so it is never pressed twice for one. */
     private volatile boolean out;
 
@@ -185,8 +194,10 @@ final class GitPane {
         gui.landmark(Landmarks.GIT_COUNT, count);
         commit = new Button(gui, "Commit").kind(Button.Kind.PRIMARY).onPress(this::commit);
         gui.landmark(Landmarks.GIT_COMMIT, commit.node());
+        push = new Button(gui, "Push").kind(Button.Kind.SECONDARY).onPress(this::push);
+        gui.landmark(Landmarks.GIT_PUSH, push.node());
         Node commitRow = gui.row().width(Length.FILL).alignItems(AlignItems.CENTER).gap(Type.TIGHT)
-                .children(count, commit.node());
+                .children(count, push.node(), commit.node());
 
         root = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
@@ -200,6 +211,7 @@ final class GitPane {
                         message.node(), commitRow);
         show(List.of(), List.of());
         typed();
+        pushable();
     }
 
     /** The message changed, or what is staged did: the count says how long the first line is, and Commit whether. */
@@ -245,6 +257,33 @@ final class GitPane {
     /** Be asked to commit what is staged, with the message as typed. Runs on whichever thread pressed it. */
     void onCommit(Consumer<String> handler) {
         this.committing = handler == null ? m -> { } : handler;
+    }
+
+    /** Push: sent if it can go, and Push waits for how it went. */
+    private void push() {
+        if (pushOut || !Repository.pushable(tracking, ahead)) {
+            return;
+        }
+        pushOut = true;
+        pushable();
+        pushing.run();
+    }
+
+    /** How a push went; the status line has said what happened, and the next status how far ahead the branch is. */
+    void pushed(GitPushed p) {
+        pushOut = false;
+        pushable();
+    }
+
+    /** Push says how many commits it would send, and is enabled when there are some and nothing is out. */
+    private void pushable() {
+        push.label(pushOut ? "Pushing…" : ahead > 0 ? "Push ↑" + ahead : "Push");
+        push.enabled(!pushOut && Repository.pushable(tracking, ahead));
+    }
+
+    /** Be asked to push the branch checked out. Runs on whichever thread pressed it. */
+    void onPush(Runnable handler) {
+        this.pushing = handler == null ? () -> { } : handler;
     }
 
     /** A list's heading: its name and count, and the button that moves all of it to the other side. */
@@ -401,7 +440,10 @@ final class GitPane {
         branch.text(h.chip());
         upstream.text(h.upstream().isEmpty() ? "no upstream" : "tracking " + h.upstream());
         stagedCount = h.staged();
+        tracking = h.upstream();
+        ahead = h.ahead();
         typed();
+        pushable();
     }
 
     /** Every changed path, as git wrote it: read, sorted into the two sides, and shown. */

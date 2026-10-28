@@ -151,7 +151,8 @@ within two seconds, the diff on show with it; a file changed by another program 
 With no row picked, the **history** stands where the editor was: the last 200 changesets from `HEAD`, each with the
 refs at it (`HEAD`, branches, `origin/…` faint, tags amber), its subject, author, how long ago and short hash; and
 beside them every branch, local then remote, the checked-out one marked, with how far it is ahead of or behind what
-it tracks. It is read-only. *Close* or Escape on it, or opening a file, brings the editor back; *History*, beside
+it tracks. Enter or a double click on a branch switches to it (a remote's, `origin/x`, as a local `x` that
+tracks it). *Close* or Escape on it, or opening a file, brings the editor back; *History*, beside
 *Refresh*, brings it back again. It is read again when git has done something (a commit, a stage, a checkout), not
 on a save; a fetch made at a prompt shows after *Refresh*.
 
@@ -165,8 +166,19 @@ Below the lists is the **commit message**, with how long its first line is (`48 
 allowed), and **Commit**, enabled when something is staged and the message has a line that says something.
 Ctrl+Enter in the message commits too; Enter is a new line. The message goes to git as typed, on its standard input,
 and the repository's hooks run (for up to five minutes). Made, the box empties and the lists follow; refused, by a
-hook or by git, nothing changes, the message stays, and the status line says why. Push and switching branch are the
-last slice of [docs/git-mode.md](docs/git-mode.md).
+hook or by git, nothing changes, the message stays, and the status line says why.
+
+Beside Commit, **Push** sends the branch to what it tracks, and says how much: `Push ↑2`, enabled while the branch
+is ahead. An installed SSH key (`~/.ssh/id_rsa`, `id_ecdsa` or `id_ed25519`) is tried first, an HTTPS remote
+rewritten to SSH for that one push, with nothing allowed to prompt; when SSH cannot reach the repository (no key the
+host accepts, a host not yet known, a passphrase with no agent), the push goes over HTTPS, where Git Credential
+Manager may open its own window to sign in. A push the remote turns away says why on the status line:
+`rejected main -> main (fetch first)`.
+
+**Switching branch** settles the tabs under the repository first, as switching root does: unsaved work is saved, or
+thrown away, or the switch is not made. Git refuses a switch that would overwrite a change not committed, and says
+which files. Made, every tab under the repository is read again: one whose text changed shows the other branch's,
+one whose file is not on that branch is closed, and the status line says which.
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -273,9 +285,9 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily; Add, on a folder's menu |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
-| `GitPane.java` | Git mode's card: the branch, then Unstaged and Staged, read from the git text the repository sends, and the commit message with its first line's count and Commit |
+| `GitPane.java` | Git mode's card: the branch, then Unstaged and Staged, read from the git text the repository sends, and the commit message with its first line's count, Push and Commit |
 | `GitStage.java` | what stands where the editor does while a Git mode row is picked: its diff, a line of which opens the file there |
-| `HistoryStage.java` | what stands there in Git mode while no row is: the changesets with the refs at each, and the branches with their ahead and behind |
+| `HistoryStage.java` | what stands there in Git mode while no row is: the changesets with the refs at each, and the branches with their ahead and behind; a branch activated is switched to |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |
 | `Look.java`, `Type.java`, `Landmarks.java` | colour, size, and the names an automation script may use |

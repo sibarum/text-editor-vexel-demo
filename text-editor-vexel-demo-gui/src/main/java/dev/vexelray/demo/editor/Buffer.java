@@ -220,6 +220,11 @@ final class Buffer implements AutoCloseable {
         dirty.accept(false);
     }
 
+    /** Whether this shows {@code content} already, with nothing unsaved: a file read again unchanged is left alone. */
+    boolean shows(TextFile.Loaded content) {
+        return !dirty() && content.crlf() == crlf && field.text().equals(content.text());
+    }
+
     /** The write landed at {@code target}, which is now this document's file. */
     void savedAs(Path target) {
         this.path = target;

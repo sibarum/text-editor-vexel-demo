@@ -86,6 +86,9 @@ final class Landmarks {
     /** Git mode's Commit: enabled with something staged and a message. */
     static final String GIT_COMMIT = "git.commit";
 
+    /** Git mode's Push, beside Commit: enabled while the branch is ahead of what it tracks, {@code Push ↑2}. */
+    static final String GIT_PUSH = "git.push";
+
     /** The diff's Stage or Unstage: the row picked, moved to the other side. */
     static final String DIFF_STAGE = "stage.stage";
 

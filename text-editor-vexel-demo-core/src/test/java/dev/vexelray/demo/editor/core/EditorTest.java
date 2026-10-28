@@ -22,7 +22,9 @@ import dev.vexelray.demo.editor.core.Messages.Purpose;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Relist;
 import dev.vexelray.demo.editor.core.Messages.Relocated;
+import dev.vexelray.demo.editor.core.Messages.Reload;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
+import dev.vexelray.demo.editor.core.Messages.Revert;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveAs;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
@@ -258,6 +260,47 @@ class EditorTest {
 
         editor.closing(new Closing(7, 1, Messages.NO_TAB, false, Purpose.STAGE, null));
         assertTrue(sent.contains(new Settled(7, Purpose.STAGE, true)), "nothing open: nothing to save first");
+    }
+
+    @Test
+    void switchingBranchAsksAboutUnsavedWorkFirstAndCancelledDoesNotSwitch() {
+        long a = opened("a.txt", "a");
+        editor.closing(new Closing(8, 1, a, false, Purpose.SWITCH, null));
+        assertTrue(sent.contains(new Settled(8, Purpose.SWITCH, true)), "nothing unsaved: it goes at once");
+        sent.clear();
+
+        editor.edited(new Edited(a, true));
+        editor.closing(new Closing(9, 1, a, true, Purpose.SWITCH, null));
+        Ask ask = took(Ask.class).getFirst();
+        editor.answer(new Answer(ask.question(), Choice.CANCEL));
+        assertTrue(sent.contains(new Settled(9, Purpose.SWITCH, false)));
+        sent.clear();
+
+        editor.closing(new Closing(10, 1, a, true, Purpose.SWITCH, null));
+        editor.answer(new Answer(took(Ask.class).getFirst().question(), Choice.OTHER));
+        assertEquals(List.of(new Read(file("a.txt"), Why.REVERT, false, a)), took(Read.class),
+                "Discard puts the tab back as the disk has it, before git changes the disk");
+    }
+
+    @Test
+    void afterASwitchTheTabsUnderTheRepositoryAreReadAgainAndOnesWithNoFileAreClosed() {
+        long a = opened("a.txt", "a");
+        long b = opened("b.txt", "b");
+        long typed = opened("typed.txt", "t");
+        editor.edited(new Edited(typed, true));
+        untitled();
+        sent.clear();
+
+        editor.reload(new Reload(dir));
+        assertEquals(List.of(new Read(file("a.txt"), Why.RELOAD, false, a),
+                        new Read(file("b.txt"), Why.RELOAD, false, b)), took(Read.class),
+                "not one with unsaved work, and not one with no file");
+
+        editor.read(new FileRead(file("a.txt"), Why.RELOAD, false, a, "a on feature", true, "", ""));
+        assertEquals(List.of(new Revert(a, "a on feature", true)), took(Revert.class));
+        editor.read(new FileRead(file("b.txt"), Why.RELOAD, false, b, "", false, "", "No such file"));
+        assertTrue(sent.contains(new CloseTab(b)));
+        assertTrue(sent.contains(new Status("Closed b.txt, which is not on this branch", false)));
     }
 
     @Test

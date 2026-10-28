@@ -22,6 +22,9 @@ import dev.sibarum.suite.git.Diff;
 import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
 import dev.vexelray.demo.editor.core.Messages.GitCommitted;
+import dev.vexelray.demo.editor.core.Messages.GitPushed;
+import dev.vexelray.demo.editor.core.Messages.PushBranch;
+import dev.vexelray.demo.editor.core.Messages.SwitchBranch;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitHistory;
 import dev.vexelray.demo.editor.core.Messages.ShowDiff;
@@ -122,7 +125,8 @@ import java.util.function.Consumer;
 @Publishes({Messages.OPEN, Messages.NEW_FILE, Messages.OPEN_TEXT, Messages.FRONTED, Messages.EDITED,
         Messages.DROPPED, Messages.CLOSING, Messages.SAVE, Messages.SAVE_AS, Messages.ANSWER, Messages.PLACED,
         Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Messages.GIT_WATCH,
-        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Messages.STAGE, Messages.COMMIT, Intent.TOPIC})
+        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Messages.STAGE, Messages.COMMIT, Messages.PUSH,
+        Messages.SWITCH, Intent.TOPIC})
 final class View {
 
     private static final Log LOG = Log.of("editor.files");
@@ -185,6 +189,9 @@ final class View {
     private record Staging(String path, boolean on, Path covers) {
     }
 
+    /** Branches to switch to, from the history, each held under a ticket while the tabs under the repository settle. */
+    private final Map<Long, String> switches = new ConcurrentHashMap<>();
+
     View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, ProjectIndex concordance,
          Preferences prefs, KronoGui krono) {
         this.gui = gui;
@@ -219,6 +226,8 @@ final class View {
         nav.onGitOpen(file -> openFromGit(file, 0));
         nav.onGitStage(this::askToStage);
         nav.onGitCommit(text -> bus.publish(Messages.COMMIT_TOPIC, new CommitStaged(text)));
+        nav.onGitPush(() -> bus.publish(Messages.PUSH_TOPIC, new PushBranch()));
+        ui.history().onSwitch(this::askToSwitch);
         ui.gitStage().onOpenAt(this::openFromGit);
         ui.gitStage().onClose(this::closeDiff);
         ui.history().onClose(this::closeHistory);
@@ -505,6 +514,37 @@ final class View {
         rollCall(inside, ticket, Purpose.STAGE, null);
     }
 
+    /** A branch picked in the history to switch to. On a worker: the rest is this lane's, via a ticket. */
+    private void askToSwitch(String branch) {
+        long ticket = tickets.incrementAndGet();
+        switches.put(ticket, branch);
+        tell(Command.SWITCH, ticket);
+    }
+
+    /**
+     * Switch, once the tabs under the repository have nothing unsaved: git rewrites their files, and work only on the
+     * screen would be lost or left over the other branch's. The editor asks whether to save it or throw it away
+     * ({@link Purpose#SWITCH}); cancelled, nothing is switched. Afterwards the editor reads the tabs again.
+     */
+    void switchBranch(long ticket) {
+        Path top = nav.gitTop();
+        if (top == null || !switches.containsKey(ticket)) {
+            switches.remove(ticket);
+            return;
+        }
+        Path under = top.toAbsolutePath().normalize();
+        List<Buffer> inside = ws.all().stream()
+                .filter(b -> b.path() != null && b.path().toAbsolutePath().normalize().startsWith(under))
+                .toList();
+        rollCall(inside, ticket, Purpose.SWITCH, null);
+    }
+
+    /** How a push went, from the {@code Repository}: Push can be pressed again. */
+    @Subscribe(topic = Messages.GIT_PUSHED)
+    public void gitPushed(GitPushed m) {
+        nav.gitPushed(m);
+    }
+
     /** Open {@code file} from Git mode, at 1-based {@code line}, or as it opens for 0: on this lane, via a ticket. */
     private void openFromGit(Path file, int line) {
         long ticket = tickets.incrementAndGet();
@@ -608,8 +648,10 @@ final class View {
     @Subscribe(topic = Messages.REVERT)
     public void revert(Revert m) {
         Buffer b = ws.byId(m.id());
-        if (b != null) {
-            b.revert(new TextFile.Loaded(m.text(), m.crlf(), List.of()));
+        TextFile.Loaded content = new TextFile.Loaded(m.text(), m.crlf(), List.of());
+        // A file read again after a switch that came back the same is left alone, its undo and all.
+        if (b != null && !b.shows(content)) {
+            b.revert(content);
         }
     }
 
@@ -626,6 +668,11 @@ final class View {
             Staging s = stagings.remove(m.batch());
             if (s != null && m.go()) {
                 bus.publish(Messages.STAGE_TOPIC, new Stage(s.path(), true));
+            }
+        } else if (m.purpose() == Purpose.SWITCH) {
+            String branch = switches.remove(m.batch());
+            if (branch != null && m.go()) {
+                bus.publish(Messages.SWITCH_TOPIC, new SwitchBranch(branch));
             }
         } else {
             gates.answer(m.batch(), m.go());

@@ -2,6 +2,7 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Make;
 import dev.vexelray.demo.editor.core.Messages.GitCommitted;
+import dev.vexelray.demo.editor.core.Messages.GitPushed;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
 import dev.vexelray.demo.editor.core.Messages.Made;
@@ -666,6 +667,16 @@ final class Navigator {
     /** How a commit went, for the message box. */
     void gitCommitted(GitCommitted c) {
         gitPane.committed(c);
+    }
+
+    /** Be asked to push the branch checked out: Push. */
+    void onGitPush(Runnable handler) {
+        gitPane.onPush(handler);
+    }
+
+    /** How a push went, for Push. */
+    void gitPushed(GitPushed p) {
+        gitPane.pushed(p);
     }
 
     /** The Git mode row picked, staged if it is not and unstaged if it is: the diff's Stage or Unstage. */

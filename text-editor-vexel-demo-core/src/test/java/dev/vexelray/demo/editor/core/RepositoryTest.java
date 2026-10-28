@@ -4,6 +4,10 @@ import dev.sibarum.suite.git.Diff;
 import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.DiffAsk;
 import dev.vexelray.demo.editor.core.Messages.GitCommitted;
+import dev.vexelray.demo.editor.core.Messages.GitPushed;
+import dev.vexelray.demo.editor.core.Messages.PushBranch;
+import dev.vexelray.demo.editor.core.Messages.Reload;
+import dev.vexelray.demo.editor.core.Messages.SwitchBranch;
 import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
@@ -67,6 +71,8 @@ class RepositoryTest {
         bus.subscribe(Messages.GIT_COMMITTED_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_HISTORY_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_HISTORY_SHOWN_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_PUSHED_TOPIC, sent::add);
+        bus.subscribe(Messages.RELOAD_TOPIC, sent::add);
     }
 
     @Test
@@ -397,6 +403,105 @@ class RepositoryTest {
         repository.folder(new ShowFolder(ROOT));
         repository.stage(new Stage("a", true));
         assertEquals(List.of(), took(GitRun.class));
+    }
+
+    @Test
+    void aPushWaitsBehindTheCommitBeforeItAndSaysHowItWent() {
+        long g = shown();
+        repository.commit(new CommitStaged("Change"));
+        repository.push(new PushBranch());
+        assertEquals(new Status("Pushing main to origin/main…", false), took(Status.class).getFirst());
+        assertEquals(List.of(GitOp.COMMIT), took(GitRun.class).stream().map(GitRun::op).toList());
+        repository.ran(new GitRan(g, GitOp.COMMIT, null, true, "git commit -F -", ""));
+        assertEquals(List.of(new GitRun(g, ROOT, GitOp.PUSH, null)), took(GitRun.class));
+        repository.read(main(g, 0));   // the status asked after the commit
+        sent.clear();
+        repository.ran(new GitRan(g, GitOp.PUSH, null, true, "git push", ""));
+        assertEquals(List.of(new GitPushed(true)), took(GitPushed.class));
+        assertEquals(new Status("Pushed main to origin/main", false), took(Status.class).getFirst());
+        assertEquals(1, took(GitAsk.class).size(), "the branch is asked about again, no longer ahead");
+    }
+
+    @Test
+    void aPushThatFailsSaysWhyAndPushCanBePressedAgain() {
+        long g = shown();
+        repository.push(new PushBranch());
+        sent.clear();
+        repository.ran(new GitRan(g, GitOp.PUSH, null, false, "git push", "rejected main -> main (fetch first)"));
+        assertEquals(List.of(new GitPushed(false)), took(GitPushed.class));
+        assertEquals(new Status("Could not push: rejected main -> main (fetch first)", true),
+                took(Status.class).getFirst());
+        repository.push(new PushBranch());
+        assertEquals(1, took(GitRun.class).size());
+    }
+
+    @Test
+    void aPushThatCannotGoIsRefusedAtOnce() {
+        repository.folder(new ShowFolder(ROOT));
+        repository.push(new PushBranch());
+        assertEquals("Not in a repository", took(Status.class).getFirst().message());
+        long g = took(GitAsk.class).getFirst().generation();
+        repository.read(answer(g, "main", 0, 0, 0, "s"));
+        repository.push(new PushBranch());
+        assertEquals("Nothing to push: main is where origin/main is", took(Status.class).getFirst().message());
+        repository.read(new GitRead(g, true, "spike", "", 0, 0, 0, 0, 0, ROOT, GIT_DIR, "s", "", "", ""));
+        repository.push(new PushBranch());
+        assertEquals("spike has no upstream to push to", took(Status.class).getFirst().message());
+        repository.read(answer(g, "main", 1, 0, 0, "s"));
+        repository.push(new PushBranch());
+        repository.push(new PushBranch());
+        assertEquals("A push is already going", took(Status.class).getLast().message());
+        assertEquals(1, took(GitRun.class).size());
+        assertEquals(List.of(new GitPushed(false), new GitPushed(false), new GitPushed(false), new GitPushed(false)),
+                took(GitPushed.class));
+        assertTrue(Repository.pushable("origin/main", 1));
+        assertTrue(!Repository.pushable("", 3), "nowhere to push to");
+    }
+
+    @Test
+    void aPushOutWhenTheRootChangesLetsPushGo() {
+        shown();
+        repository.push(new PushBranch());
+        took(GitPushed.class);
+        repository.folder(new ShowFolder(OTHER));
+        assertEquals(List.of(new GitPushed(false)), took(GitPushed.class));
+    }
+
+    @Test
+    void aSwitchIsAWriteAndTheTabsUnderTheRepositoryAreReadAgain() {
+        long g = shown();
+        repository.switchTo(new SwitchBranch("main"));
+        assertEquals(new Status("Already on main", false), took(Status.class).getFirst());
+        assertEquals(List.of(), took(GitRun.class));
+
+        repository.switchTo(new SwitchBranch("feature"));
+        assertEquals(List.of(new GitRun(g, ROOT, GitOp.SWITCH, "feature")), took(GitRun.class));
+        repository.ran(new GitRan(g, GitOp.SWITCH, "feature", true, "git switch feature", ""));
+        assertEquals(new Status("Switched to feature", false), took(Status.class).getFirst());
+        assertEquals(List.of(new Reload(ROOT)), took(Reload.class));
+        assertEquals(1, took(GitAsk.class).size());
+
+        repository.switchTo(new SwitchBranch("spike"));
+        took(GitRun.class);
+        repository.ran(new GitRan(g, GitOp.SWITCH, "spike", false, "git switch spike",
+                "Your local changes to the following files would be overwritten by checkout:"));
+        assertEquals(new Status("Could not switch to spike: Your local changes to the following files would be "
+                + "overwritten by checkout:", true), took(Status.class).getFirst());
+        assertEquals(List.of(), took(Reload.class), "nothing was rewritten");
+    }
+
+    @Test
+    void aPushFailureIsSaidAsTheRemoteSaidIt() {
+        assertEquals("rejected main -> main (fetch first)", RunGit.pushLine(
+                "To C:/work/origin.git\n ! [rejected]        main -> main (fetch first)\n"
+                        + "error: failed to push some refs to 'C:/work/origin.git'\nhint: Updates were rejected\n"));
+        assertEquals("remote rejected main -> main (pre-receive hook declined)", RunGit.pushLine(
+                "To host:x.git\n ! [remote rejected] main -> main (pre-receive hook declined)\n"));
+        assertEquals("Authentication failed for 'https://github.com/sibarum/vex.git/'", RunGit.pushLine(
+                "fatal: Authentication failed for 'https://github.com/sibarum/vex.git/'\n"));
+        assertEquals("git@github.com: Permission denied (publickey).", RunGit.pushLine(
+                "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n"));
+        assertEquals("git failed", RunGit.pushLine(""));
     }
 
     @Test

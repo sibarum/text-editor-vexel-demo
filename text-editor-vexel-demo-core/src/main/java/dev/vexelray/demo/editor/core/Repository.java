@@ -4,6 +4,10 @@ import dev.sibarum.suite.git.Diff;
 import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.DiffAsk;
 import dev.vexelray.demo.editor.core.Messages.GitCommitted;
+import dev.vexelray.demo.editor.core.Messages.GitPushed;
+import dev.vexelray.demo.editor.core.Messages.PushBranch;
+import dev.vexelray.demo.editor.core.Messages.Reload;
+import dev.vexelray.demo.editor.core.Messages.SwitchBranch;
 import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
@@ -75,6 +79,13 @@ import java.util.Deque;
  * the stages asked for before it, one at a time; whether it can go at all is decided here ({@link #committable}), and
  * the view is told how it went ({@link GitCommitted}) so the message box is emptied or given back.
  *
+ * <p>A push ({@link PushBranch}) is a write in the same queue, one at a time, decided here as a commit is
+ * ({@link #pushable}) and answered with {@link GitPushed}. How it reaches the remote is the library's: an installed SSH
+ * key first, Git Credential Manager after. A switch of branch ({@link SwitchBranch}) is a write too, made once the view
+ * has had the tabs under the root saved or put back; git refuses one that would overwrite a change not committed, and
+ * says which files. One that is made rewrites files under open tabs, so the editor is told to read them again
+ * ({@link Reload}).
+ *
  * <h2>Watching, while Git mode is up</h2>
  *
  * <p>Git is also used from a prompt, and a commit made there should show without a click. While Git mode is up
@@ -85,7 +96,7 @@ import java.util.Deque;
 @Component(lane = "git")
 @Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_DIFF, Messages.GIT_RUN, Messages.GIT_HEAD,
         Messages.GIT_TREE, Messages.GIT_DIFF_SHOWN, Messages.GIT_COMMITTED, Messages.GIT_HISTORY,
-        Messages.GIT_HISTORY_SHOWN, Messages.STATUS})
+        Messages.GIT_HISTORY_SHOWN, Messages.GIT_PUSHED, Messages.RELOAD, Messages.STATUS})
 public final class Repository {
 
     /** How often git is looked at while Git mode is up. */
@@ -131,6 +142,12 @@ public final class Repository {
     private int staged;
     /** The subject of the commit queued or out; null while none is. One at a time: a second would find nothing. */
     private String committing;
+    /** The branch checked out, what it tracks and how far ahead, from the last answer: what a push would send. */
+    private String branch = "";
+    private String upstream = "";
+    private int ahead;
+    /** Whether a push is queued or out. One at a time: a second would find nothing to send. */
+    private boolean pushing;
 
     public Repository(Atchung bus) {
         this.bus = bus;
@@ -211,6 +228,9 @@ public final class Repository {
         stamp = r.stamp();
         root = r.root();
         staged = r.staged();
+        branch = r.branch();
+        upstream = r.upstream();
+        ahead = r.ahead();
         bus.publish(Messages.GIT_HEAD_TOPIC, head(r));
         if (r.repository()) {
             bus.publish(Messages.GIT_TREE_TOPIC,
@@ -290,6 +310,41 @@ public final class Repository {
         write();
     }
 
+    /**
+     * Push the branch checked out: queued behind any write still to run, so a commit pressed before it is in it. One
+     * that cannot go is answered at once, with why on the status line.
+     */
+    @Subscribe(topic = Messages.PUSH)
+    public void push(PushBranch m) {
+        String refused = root == null ? "Not in a repository"
+                : pushing ? "A push is already going"
+                : upstream.isEmpty() ? branch + " has no upstream to push to"
+                : !pushable(upstream, ahead) ? "Nothing to push: " + branch + " is where " + upstream + " is" : null;
+        if (refused != null) {
+            bus.publish(Messages.STATUS_TOPIC, new Status(refused, true));
+            bus.publish(Messages.GIT_PUSHED_TOPIC, new GitPushed(false));
+            return;
+        }
+        pushing = true;
+        bus.publish(Messages.STATUS_TOPIC, new Status("Pushing " + branch + " to " + upstream + "…", false));
+        writes.add(new GitRun(generation, root, GitOp.PUSH, null));
+        write();
+    }
+
+    /** Switch to a branch: queued behind any write still to run. The view has settled the tabs under the root. */
+    @Subscribe(topic = Messages.SWITCH)
+    public void switchTo(SwitchBranch m) {
+        if (root == null || m.branch() == null || m.branch().isBlank()) {
+            return;
+        }
+        if (m.branch().equals(branch)) {
+            bus.publish(Messages.STATUS_TOPIC, new Status("Already on " + branch, false));
+            return;
+        }
+        writes.add(new GitRun(generation, root, GitOp.SWITCH, m.branch()));
+        write();
+    }
+
     /** A write is done. Whatever it did, git is asked again; what went wrong is said on the status line. */
     @Subscribe(topic = Messages.GIT_RAN)
     public void ran(GitRan r) {
@@ -303,6 +358,22 @@ public final class Repository {
             bus.publish(Messages.STATUS_TOPIC, r.ok() ? new Status("Committed: " + subject, false)
                     : new Status("Could not commit: " + r.error(), true));
             bus.publish(Messages.GIT_COMMITTED_TOPIC, new GitCommitted(r.ok(), subject));
+        } else if (r.op() == GitOp.PUSH) {
+            pushing = false;
+            bus.publish(Messages.STATUS_TOPIC, r.ok() ? new Status("Pushed " + branch + " to " + upstream, false)
+                    : new Status("Could not push: " + r.error(), true));
+            bus.publish(Messages.GIT_PUSHED_TOPIC, new GitPushed(r.ok()));
+        } else if (r.op() == GitOp.SWITCH) {
+            if (r.ok()) {
+                bus.publish(Messages.STATUS_TOPIC, new Status("Switched to " + r.path(), false));
+                // The files under the open tabs are the other branch's now.
+                if (root != null) {
+                    bus.publish(Messages.RELOAD_TOPIC, new Reload(root));
+                }
+            } else {
+                bus.publish(Messages.STATUS_TOPIC,
+                        new Status("Could not switch to " + r.path() + ": " + r.error(), true));
+            }
         } else if (!r.ok()) {
             String what = ".".equals(r.path()) ? "everything" : r.path();
             String verb = r.op() == GitOp.STAGE ? "stage " : "unstage ";
@@ -350,6 +421,19 @@ public final class Repository {
             committing = null;
             bus.publish(Messages.GIT_COMMITTED_TOPIC, new GitCommitted(false, ""));
         }
+        branch = "";
+        upstream = "";
+        ahead = 0;
+        if (pushing) {
+            // Push is waiting on it, as the message box waits on a commit.
+            pushing = false;
+            bus.publish(Messages.GIT_PUSHED_TOPIC, new GitPushed(false));
+        }
+    }
+
+    /** Whether a push can go: the branch tracks something, and has commits it does not. */
+    public static boolean pushable(String upstream, int ahead) {
+        return upstream != null && !upstream.isEmpty() && ahead > 0;
     }
 
     /** Whether a commit can go: something is staged, and the message has a line that says something. */

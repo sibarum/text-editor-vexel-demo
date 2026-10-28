@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.sibarum.suite.git.Ref;
 import dev.vexelray.gui.core.style.Role;
 import org.junit.jupiter.api.Test;
 
@@ -36,5 +37,13 @@ class HistoryStageTest {
         assertEquals(Role.SUCCESS, HistoryStage.chipRole("feature/x", remotes));
         assertEquals(Role.FAINT, HistoryStage.chipRole("origin/main", remotes));
         assertEquals(Role.CAUTION, HistoryStage.chipRole("tag: v1", remotes));
+    }
+
+    @Test
+    void aRemotesBranchIsSwitchedToByItsOwnNameAndALocalOneByItsWholeName() {
+        assertEquals("feature/x",
+                HistoryStage.switchName(new Ref("feature/x", false, false, "abc", null, 0, 0, false)));
+        assertEquals("feature/x", HistoryStage.switchName(new Ref("origin/feature/x", true, false, "abc", null, 0, 0,
+                false)));
     }
 }

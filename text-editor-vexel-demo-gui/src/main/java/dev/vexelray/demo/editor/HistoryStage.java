@@ -24,12 +24,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
  * What stands where the editor does in Git mode while no row is picked: the changesets, newest first from
  * {@code HEAD}, each with the refs at it, and beside them every branch with how far it stands from what it tracks.
- * Read-only: switching branch is a later slice of {@code docs/git-mode.md}.
+ * A branch activated, Enter or a double click, is switched to; the changesets are only shown.
  *
  * <p>It shows what it is given ({@link GitHistory}, as {@code Log.text} and {@code Refs.text} wrote it, read here with
  * their {@code parse}) and keeps nothing else. Both are {@link ListView}s. Close, or Escape, brings the editor back;
@@ -50,6 +51,7 @@ final class HistoryStage {
     private final ListView<Commit> log;
     private final ListView<Ref> branches;
     private volatile Runnable closed = () -> { };
+    private volatile Consumer<String> switching = b -> { };
     /** The remote branches' names, from the last branches shown. */
     private volatile Set<String> remotes = Set.of();
 
@@ -80,6 +82,12 @@ final class HistoryStage {
         for (ListView<?> list : List.of(log, branches)) {
             gui.claim(list.node(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, () -> closed.run());
         }
+        // Enter or a double click on a branch switches to it; the one checked out is where it is already.
+        branches.onActivate(r -> {
+            if (!r.head()) {
+                switching.accept(switchName(r));
+            }
+        });
         empty = gui.text("No commits yet.").font(Type.UI).textSize(Type.LABEL)
                 .textColor(gui.theme().color(Role.DIM)).padding(Type.WIDE, Type.WIDE).wordWrap(false)
                 .visible(false);
@@ -195,6 +203,19 @@ final class HistoryStage {
         return root;
     }
 
+    /**
+     * What a branch is switched to by: its name, or a remote's without the remote, {@code origin/x} as {@code x}, which
+     * git makes a local branch tracking it, or switches to the local one if there is one.
+     */
+    static String switchName(Ref r) {
+        return r.remote() ? r.name().substring(r.name().indexOf('/') + 1) : r.name();
+    }
+
+    /** Be asked to switch to a branch, by the name git switches to it by. Runs on whichever thread activated it. */
+    void onSwitch(Consumer<String> handler) {
+        this.switching = handler == null ? b -> { } : handler;
+    }
+
     /** Be told the history was closed: Close, or Escape. Runs on a worker. */
     void onClose(Runnable handler) {
         this.closed = handler == null ? () -> { } : handler;
@@ -210,7 +231,7 @@ final class HistoryStage {
         about.text(h.root().getFileName() + " · " + (commits.size() == 1 ? "1 changeset" : commits.size()
                 + " changesets") + " · " + (local == 1 ? "1 branch" : local + " branches"));
         changesetsLabel.text("Changesets  " + commits.size());
-        branchesLabel.text("Branches  " + refs.size());
+        branchesLabel.text("Branches  " + refs.size() + "  ·  Enter or double-click switches");
         empty.visible(commits.isEmpty());
         log.node().visible(!commits.isEmpty());
         log.items(commits);
