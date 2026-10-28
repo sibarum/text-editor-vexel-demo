@@ -411,7 +411,11 @@ in — and whether `rect()` stays px for applications at all — is cheap only b
 
 ## The blocks
 
-Open pictures a folder with no build as blocks (`Blocks`, `BlockView`): its files as cubes whose volume is their
+*Retired 2026-10-28:* the blocks were hard to read (no names, sizes flattened by the cube root, tops hidden behind
+taller blocks), and as an image they took no part in the window's motion. Open now lists such a folder file by file
+(`Listing`, `ListingView`) and no longer draws a mesh. What the blocks found about the engine still stands, below.
+
+Open pictured a folder with no build as blocks (`Blocks`, `BlockView`): its files as cubes whose volume is their
 size, standing on its folders' plates. It is the first thing in the suite drawn by `vexelray-technique-mesh`, hosted
 in a GUI region by `vexelray-engine-embedded`'s `SampledTechniqueHost` (into `GuiApp.viewport(w, h, true)`, shown as
 the node's image), and drawn from a `@BeforeFrame` hook on what a `@MainThread` recipe built. That route worked as

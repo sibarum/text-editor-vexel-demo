@@ -62,19 +62,6 @@
             <artifactId>vexelray-gui-file-icons</artifactId>
             <version>${vexelray-gui.version}</version>
         </dependency>
-        <!-- Open's picture of a folder with no build in it: its files as blocks, drawn as polygon meshes through the
-             rasteriser (vexelray-technique-mesh) into a viewport the GUI samples as a box (vexelray-engine-embedded's
-             SampledTechniqueHost). Light: the engine's API, its shader IR and Vulkan, which -gui already brings. -->
-        <dependency>
-            <groupId>dev.vexelray</groupId>
-            <artifactId>vexelray-technique-mesh</artifactId>
-            <version>${vexelray.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.vexelray</groupId>
-            <artifactId>vexelray-engine-embedded</artifactId>
-            <version>${vexelray.version}</version>
-        </dependency>
         <!-- The clock. Motion enters at the application edge and nowhere else: -widget declares seams shaped
              out of JDK types and this module satisfies them, so a widget animates without naming Kronometer. -->
         <dependency>

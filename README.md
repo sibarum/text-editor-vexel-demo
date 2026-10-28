@@ -113,13 +113,13 @@ file count, how many Java files, classes, records, interfaces and enums it holds
 annotations as bars against each other. The look is bounded (`Survey`: 6,000 files, 900 Java files read), so a
 home folder answers as quickly as a module.
 
-A folder with no pom and fewer than a dozen Java files has no build to describe, so it is pictured as **blocks**
-instead, in 3D: every file a cube whose volume is its size (its side is the cube root of its bytes), every folder a
-square plate its contents stand on, so the folders inside it rise from it a level at a time. Files are coloured by
-their family, as the suite's file icons are, and the larger blocks whose tops can be seen carry their icon. The
-view is a long lens from above at three quarters, close to orthographic, so sizes compare across the picture. It
-is drawn with the engine's polygon meshes (`BlockView`, through `vexelray-technique-mesh`), only when the folder
-or the size of the panel changes. The walk is bounded too (`Blocks`: 1,500 files, eight folders deep).
+A folder with no pom and fewer than a dozen Java files has no build to describe, so its **files are listed**
+instead, exploded the way an archive lists its contents: a row per file, its icon, its path relative to the folder
+(the folder part dimmed, the name in ink), a bar of its size against the largest file's, coloured by its family
+as the suite's file icons are, and the size in figures. Rows are in path order, a folder's own files ahead of the
+folders inside it; the first 120 are listed and the rest counted. The rows are reused nodes, so moving from one
+folder to the next moves them with the window's own motion. The walk is bounded too (`Listing`: 1,500 files,
+eight folders deep).
 
 **Scratches** are files that belong to no project: a note, a pasted log, a snippet being worked out, not to be
 deleted and with nowhere in particular to save it. They live in the editor's own folder, beside its settings
@@ -323,7 +323,6 @@ Installed locally rather than downloaded, so `mvn install` in each sibling has t
 | `vexelray-gui-widget`, `-krono`, `-automation` | the widgets (`Tabs`, `TreeView`, `TextField`, `SplitPane`, `StatusBar`), the clock, the driver |
 | `vexelray-gui-nfd` | the OS's file dialogs |
 | `vexelray-gui-file-icons` | the file-type family icons and their colours, on the navigator's rows and Open's blocks |
-| `vexelray-technique-mesh`, `vexelray-engine-embedded` (repo `vexelray`) | Open's blocks: polygon meshes through the rasteriser, composited into a viewport the GUI samples |
 | `vex-suite-common` (its `tty` package; the picture decoder excluded) | the console's terminal, shared with MainFrame |
 | `vex-suite-common-git` (in `-core`) | git, run as a process, and its answers read into records; its own module, with no widget, so `-core` still builds against none |
 | `org.netbeans.external:org.eclipse.tm4e.core-0.14.0` + `gson`, `joni`, `snakeyaml-engine` | the TextMate tokenizer and the runtime dependencies it does not declare |

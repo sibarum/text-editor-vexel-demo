@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class Preview {
 
-    /** Fewer Java files than this, and no pom, and the folder is pictured as blocks: there is no build to describe. */
+    /** Fewer Java files than this, and no pom, and the folder is listed file by file: there is no build to describe. */
     static final int FEW_JAVA = 12;
     private static final int MODULES = 10;
     private static final int LANGUAGES = 6;
@@ -54,8 +54,8 @@ final class Preview {
     });
     private final AtomicLong generation = new AtomicLong();
     private final Map<Path, Survey> seen = new ConcurrentHashMap<>();
-    private final Map<Path, Blocks.Scene> scenes = new ConcurrentHashMap<>();
-    private final BlockView blocks;
+    private final Map<Path, Listing> listings = new ConcurrentHashMap<>();
+    private final ListingView listing;
     private volatile Path showing;
 
     private final Node root;
@@ -135,7 +135,7 @@ final class Preview {
 
         // Not a sentence about what to do: an empty folder simply looks empty, a dash where the numbers would be.
         empty = gui.text("—").font(Type.UI).textSize(Type.FIGURE).textColor(theme.color(Role.FAINT)).visible(false);
-        blocks = new BlockView(gui);
+        listing = new ListingView(gui);
 
         body = column().width(Length.FILL).gap(Type.EDGE).alignItems(AlignItems.STRETCH)
                 .children(build, figures, column().gap(Type.GAP).alignItems(AlignItems.STRETCH)
@@ -153,7 +153,7 @@ final class Preview {
                 .scroll(false, true)
                 .clip(true)
                 .visible(false)
-                .children(name, path, body, blocks.node());
+                .children(name, path, body, listing.node());
         gui.landmark(Landmarks.PREVIEW, root);
     }
 
@@ -161,12 +161,7 @@ final class Preview {
         return root;
     }
 
-    /** The blocks a folder with no build is pictured as. */
-    BlockView blocks() {
-        return blocks;
-    }
-
-    /** Whether {@code s} has so little build to describe that the folder is pictured as blocks instead. */
+    /** Whether {@code s} has so little build to describe that the folder is listed file by file instead. */
     static boolean pictured(Survey s) {
         return !s.maven() && s.javaFiles() < FEW_JAVA;
     }
@@ -179,7 +174,7 @@ final class Preview {
     /** Forget what was surveyed: a new visit to Open looks at the disk again. */
     void forget() {
         seen.clear();
-        scenes.clear();
+        listings.clear();
     }
 
     /** Picture {@code folder}: its name now, the rest when the survey lands. Null is ignored. */
@@ -197,11 +192,11 @@ final class Preview {
         name.text(fileName == null ? dir.toString() : fileName.toString());
         path.text(dir.toString());
         Survey known = seen.get(dir);
-        Blocks.Scene knownScene = scenes.get(dir);
+        Listing knownListing = listings.get(dir);
         if (known != null) {
             draw(known);
-            picture(knownScene);
-            if (knownScene != null || !pictured(known)) {
+            picture(knownListing);
+            if (knownListing != null || !pictured(known)) {
                 return;
             }
         } else {
@@ -227,26 +222,25 @@ final class Preview {
                 }
             }
             // A folder with a build is described by it. One without is read again, for sizes this time, and
-            // pictured as blocks: the survey has already said there is little else to show.
+            // listed file by file: the survey has already said there is little else to show.
             if (!pictured(s)) {
                 return;
             }
-            Blocks.Walked walked = Blocks.walk(dir, () -> generation.get() == mine);
-            if (walked == null) {
+            Listing l = Listing.of(dir, () -> generation.get() == mine);
+            if (l == null) {
                 return;
             }
-            Blocks.Scene scene = walked.scene();
-            scenes.put(dir, scene);
+            listings.put(dir, l);
             if (generation.get() == mine) {
-                picture(scene);
+                picture(l);
             }
         });
     }
 
-    /** Show {@code scene}'s blocks in place of the dash an empty survey leaves, or no blocks for null. */
-    private void picture(Blocks.Scene scene) {
-        blocks.show(scene);
-        if (scene != null) {
+    /** List {@code l}'s files in place of the dash an empty survey leaves, or no list for null. */
+    private void picture(Listing l) {
+        listing.show(l);
+        if (l != null && l.files() > 0) {
             empty.visible(false);
         }
     }
@@ -260,7 +254,7 @@ final class Preview {
                 languageLegend, modulesSection, annotationsSection, empty}) {
             n.visible(false);
         }
-        blocks.show(null);
+        listing.show(null);
     }
 
     /**
@@ -280,7 +274,7 @@ final class Preview {
         repoChip.text("git");
 
         int java = s.javaFiles();
-        // A folder pictured as blocks has too little Java to describe: the room goes to the blocks instead.
+        // A folder listed file by file has too little Java to describe: the room goes to the list instead.
         boolean blocky = pictured(s);
         figures.visible(java > 0 && !blocky);
         int[] values = {java, s.classes(), s.records(), s.interfaces(), s.enums()};

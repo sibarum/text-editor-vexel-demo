@@ -17,10 +17,6 @@ Keep an entry short enough that it does not need editing, and delete it when it 
       question, Ctrl+Tab round the bar. Today they are checked by reading the claim rules, not by pressing.
 - [ ] Notice a file changing on disk under an open, clean tab, and reload it; ask if the tab is dirty.
 - [ ] Remember the navigator's width and whether it is shown, beside the session.
-- [ ] Build `-Pnative` and open Open's blocks in it: `vexelray-technique-mesh` and `-engine-embedded` arrived after
-      the metadata was traced, and nothing has drawn a mesh in the native image yet.
-- [ ] Open's blocks: drag to turn them (the camera is two angles), and a name on hover. Today a block shows only
-      its colour and, if it is large enough, its icon.
 - [ ] The window wears the executable's icon (`src/main/rc/vex-window.svg`, from the suite icon canvas) once a
       generated wiring can name an icon (FN-2).
 
