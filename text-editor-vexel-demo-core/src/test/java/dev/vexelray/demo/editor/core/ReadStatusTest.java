@@ -124,6 +124,34 @@ class ReadStatusTest {
     }
 
     @Test
+    void runGitCommitsAndSaysWhatAFailingHookOrAnEmptyIndexSaid() throws IOException {
+        Path repo = repository();
+        git(repo, "config", "user.email", "t@t");
+        git(repo, "config", "user.name", "t");
+        Path root = new ReadStatus().run(new GitAsk(1, repo)).root();
+
+        GitRan nothing = new RunGit().run(new GitRun(1, root, GitOp.COMMIT, null, "Nothing"));
+        assertFalse(nothing.ok());
+        assertTrue(nothing.error().contains("nothing"), "said on standard output, and still read: " + nothing.error());
+
+        Files.writeString(repo.resolve("a.txt"), "changed\n");
+        git(repo, "add", "a.txt");
+        Path hook = root.resolve(".git/hooks/pre-commit");
+        Files.writeString(hook, "#!/bin/sh\necho 'lint: a.txt is wrong' >&2\nexit 1\n");
+        GitRan refused = new RunGit().run(new GitRun(1, root, GitOp.COMMIT, null, "Change a"));
+        assertFalse(refused.ok());
+        assertEquals("lint: a.txt is wrong", refused.error());
+        assertEquals(1, new ReadStatus().run(new GitAsk(1, repo)).staged(), "everything as it was");
+
+        Files.delete(hook);
+        GitRan made = new RunGit().run(new GitRun(1, root, GitOp.COMMIT, null, "Change a\n\nWhy.\n"));
+        assertTrue(made.ok(), made.error());
+        GitRead after = new ReadStatus().run(new GitAsk(1, repo));
+        assertEquals(0, after.staged());
+        assertEquals("Change a", git.log(root, null, 1).getFirst().subject());
+    }
+
+    @Test
     void readsADiffOnEachSide() throws IOException {
         Path repo = repository();
         Files.writeString(repo.resolve("a.txt"), "b\n");

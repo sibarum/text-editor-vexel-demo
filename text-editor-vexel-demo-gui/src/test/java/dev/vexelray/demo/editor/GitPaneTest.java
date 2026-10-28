@@ -74,4 +74,13 @@ class GitPaneTest {
         assertEquals("bin", new Row("p.png", null, 'A', Numstat.BINARY, true).counts());
         assertEquals("−3", new Row("x", null, 'M', new Numstat.Lines(0, 3, false), false).counts());
     }
+
+    @Test
+    void theCountIsTheFirstLinesLengthAsAPersonCountsIt() {
+        assertEquals(0, GitPane.firstLine(""));
+        assertEquals(8, GitPane.firstLine("Change a\r\n\nWhy."));
+        assertEquals(8, GitPane.firstLine("Change a"));
+        assertEquals(3, GitPane.firstLine("a😀b\nmore"), "an emoji is one character, not two");
+        assertEquals(0, GitPane.firstLine("\nSubject on the second line"));
+    }
 }

@@ -19,7 +19,9 @@ import dev.vexelray.demo.editor.core.Messages.Flush;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.sibarum.suite.git.Diff;
+import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
+import dev.vexelray.demo.editor.core.Messages.GitCommitted;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.ShowDiff;
 import dev.vexelray.demo.editor.core.Messages.Stage;
@@ -119,7 +121,7 @@ import java.util.function.Consumer;
 @Publishes({Messages.OPEN, Messages.NEW_FILE, Messages.OPEN_TEXT, Messages.FRONTED, Messages.EDITED,
         Messages.DROPPED, Messages.CLOSING, Messages.SAVE, Messages.SAVE_AS, Messages.ANSWER, Messages.PLACED,
         Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Messages.GIT_WATCH,
-        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Messages.STAGE, Intent.TOPIC})
+        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Messages.STAGE, Messages.COMMIT, Intent.TOPIC})
 final class View {
 
     private static final Log LOG = Log.of("editor.files");
@@ -215,6 +217,7 @@ final class View {
         nav.onGitPick(this::gitPicked);
         nav.onGitOpen(file -> openFromGit(file, 0));
         nav.onGitStage(this::askToStage);
+        nav.onGitCommit(text -> bus.publish(Messages.COMMIT_TOPIC, new CommitStaged(text)));
         ui.gitStage().onOpenAt(this::openFromGit);
         ui.gitStage().onClose(this::closeDiff);
         ui.gitStage().onMove(nav::gitMovePicked);
@@ -378,6 +381,12 @@ final class View {
     @Subscribe(topic = Messages.GIT_TREE)
     public void gitTree(GitTree m) {
         nav.gitTree(m);
+    }
+
+    /** How a commit went, from the {@code Repository}: the message box is emptied, or given back as typed. */
+    @Subscribe(topic = Messages.GIT_COMMITTED)
+    public void gitCommitted(GitCommitted m) {
+        nav.gitCommitted(m);
     }
 
     /**

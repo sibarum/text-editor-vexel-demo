@@ -2,10 +2,15 @@ package dev.vexelray.demo.editor;
 
 import dev.sibarum.suite.git.Numstat;
 import dev.sibarum.suite.git.Status;
+import dev.vexelray.demo.editor.core.Messages.GitCommitted;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
+import dev.vexelray.demo.editor.core.Repository;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.edit.History;
+import dev.vexelray.gui.core.input.ClaimScope;
+import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -14,6 +19,9 @@ import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.IconButton;
 import dev.vexelray.gui.widget.ListView;
 import dev.vexelray.gui.widget.SelectionModel;
+import dev.vexelray.gui.widget.TextField;
+import sibarum.tactroller.api.Key;
+import sibarum.tactroller.api.Modifier;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,12 +38,16 @@ import java.util.function.Consumer;
  * {@link ListView}s, so a repository with thousands of untracked files costs a screenful of rows.
  *
  * <p>A row picked shows its diff where the editor stands ({@link GitStage}); Enter or a double click opens its file.
- * Read-only for now: staging and the commit are later slices of {@code docs/git-mode.md}.
+ * Each row's + or − stages or unstages it. Below the lists is the commit's message, with how long its first line is,
+ * and Commit; whether a commit can go is the {@code Repository}'s to say ({@link Repository#committable}), asked here
+ * only to enable the button.
  */
 final class GitPane {
 
     /** A row's height, in rem: two lines of the UI face would not fit the name and its folder side by side. */
     private static final float ROW_REM = 1.75f;
+    /** How long a commit's first line should be, at most: what {@code git log --oneline} and most tools show whole. */
+    static final int SUBJECT = 72;
 
     /**
      * One row: a path on one side.
@@ -104,6 +116,15 @@ final class GitPane {
     private final Button unstageAll;
     /** Asked to stage ({@code true}) or unstage a row, or everything for a null row. */
     private volatile BiConsumer<Row, Boolean> staging = (r, on) -> { };
+    private final TextField message;
+    private final Node count;
+    private final Button commit;
+    /** Asked to commit what is staged, with the message as typed. */
+    private volatile Consumer<String> committing = m -> { };
+    /** How many paths are staged, from the last head. */
+    private volatile int stagedCount;
+    /** Whether a commit is out: Commit waits for its answer, so it is never pressed twice for one. */
+    private volatile boolean out;
 
     /** The repository's top, which every row's path is relative to; null before the first status. */
     private volatile Path top;
@@ -147,6 +168,22 @@ final class GitPane {
         gui.landmark(Landmarks.GIT_STAGE_ALL, stageAll.node());
         gui.landmark(Landmarks.GIT_UNSTAGE_ALL, unstageAll.node());
 
+        // The message: several lines, with a past of its own, and not wrapped, so its first line is a line on screen
+        // too. Ctrl+Enter commits from it, as Enter cannot: Enter is the next line.
+        message = new TextField(gui, "").history(new History()).multiline(true).wordWrap(false)
+                .onChange(text -> typed());
+        message.node().width(Length.FILL).height(Length.rem(5)).font(Type.UI).textSize(Type.LABEL);
+        gui.claim(message.node(), Shortcut.of(Key.ENTER, Modifier.CONTROL), ClaimScope.FOCUSED, this::commit);
+        gui.claim(message.node(), Shortcut.of(Key.NUMPAD_ENTER, Modifier.CONTROL), ClaimScope.FOCUSED, this::commit);
+        gui.landmark(Landmarks.GIT_MESSAGE, message.node());
+        count = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(gui.theme().color(Role.FAINT))
+                .wordWrap(false).width(Length.grow(1)).padding(Length.ZERO, Type.TIGHT);
+        gui.landmark(Landmarks.GIT_COUNT, count);
+        commit = new Button(gui, "Commit").kind(Button.Kind.PRIMARY).onPress(this::commit);
+        gui.landmark(Landmarks.GIT_COMMIT, commit.node());
+        Node commitRow = gui.row().width(Length.FILL).alignItems(AlignItems.CENTER).gap(Type.TIGHT)
+                .children(count, commit.node());
+
         root = gui.column()
                 .width(Length.FILL).height(Length.grow(1))
                 .gap(Type.TIGHT)
@@ -154,8 +191,56 @@ final class GitPane {
                 .visible(false)
                 .children(head, gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
                         heading(unstagedLabel, stageAll), unstagedEmpty, unstaged.node(),
-                        heading(stagedLabel, unstageAll), stagedEmpty, staged.node());
+                        heading(stagedLabel, unstageAll), stagedEmpty, staged.node(),
+                        gui.box().height(Type.RULE).background(gui.theme().color(Look.RIM)),
+                        message.node(), commitRow);
         show(List.of(), List.of());
+        typed();
+    }
+
+    /** The message changed, or what is staged did: the count says how long the first line is, and Commit whether. */
+    private void typed() {
+        String text = message.text();
+        int n = firstLine(text);
+        count.text(n + " / " + SUBJECT);
+        count.textColor(gui.theme().color(n > SUBJECT ? Role.CAUTION : Role.FAINT));
+        commit.enabled(!out && Repository.committable(stagedCount, text));
+    }
+
+    /** How long a message's first line is, in characters as a person counts them. */
+    static int firstLine(String message) {
+        int end = message.indexOf('\n');
+        String line = end < 0 ? message : message.substring(0, end);
+        if (line.endsWith("\r")) {
+            line = line.substring(0, line.length() - 1);
+        }
+        return line.codePointCount(0, line.length());
+    }
+
+    /** Commit, or Ctrl+Enter in the message: sent if it can go, and Commit waits for how it went. */
+    private void commit() {
+        String text = message.text();
+        if (out || !Repository.committable(stagedCount, text)) {
+            return;
+        }
+        out = true;
+        typed();
+        committing.accept(text);
+    }
+
+    /** How a commit went: made, the message is emptied; not, it is left as typed, and the status line says why. */
+    void committed(GitCommitted c) {
+        out = false;
+        if (c.ok()) {
+            message.text("");
+            message.history().clear();
+        }
+        typed();
+    }
+
+    /** Be asked to commit what is staged, with the message as typed. Runs on whichever thread pressed it. */
+    void onCommit(Consumer<String> handler) {
+        this.committing = handler == null ? m -> { } : handler;
     }
 
     /** A list's heading: its name and count, and the button that moves all of it to the other side. */
@@ -305,6 +390,8 @@ final class GitPane {
     void head(GitHead h) {
         branch.text(h.chip());
         upstream.text(h.upstream().isEmpty() ? "no upstream" : "tracking " + h.upstream());
+        stagedCount = h.staged();
+        typed();
     }
 
     /** Every changed path, as git wrote it: read, sorted into the two sides, and shown. */

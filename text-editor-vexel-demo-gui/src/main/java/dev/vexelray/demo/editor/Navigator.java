@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Make;
+import dev.vexelray.demo.editor.core.Messages.GitCommitted;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
 import dev.vexelray.demo.editor.core.Messages.GitTree;
 import dev.vexelray.demo.editor.core.Messages.Made;
@@ -650,6 +651,16 @@ final class Navigator {
     /** Be asked to stage ({@code true}) or unstage a Git mode row, or everything for a null row. Runs on a worker. */
     void onGitStage(BiConsumer<GitPane.Row, Boolean> handler) {
         gitPane.onStage(handler);
+    }
+
+    /** Be asked to commit what is staged, with the message as typed. Runs on whichever thread pressed Commit. */
+    void onGitCommit(Consumer<String> handler) {
+        gitPane.onCommit(handler);
+    }
+
+    /** How a commit went, for the message box. */
+    void gitCommitted(GitCommitted c) {
+        gitPane.committed(c);
     }
 
     /** The Git mode row picked, staged if it is not and unstaged if it is: the diff's Stage or Unstage. */

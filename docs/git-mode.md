@@ -1,7 +1,7 @@
 # Git mode: the build plan
 
-Status: **slices 0 to 4 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode,
-diffs, and staging. The look is the
+Status: **slices 0 to 5 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode,
+diffs, staging, and committing. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -97,7 +97,7 @@ later one changes only this repository, except where it says otherwise.
 | 2 | **Git mode, read-only:** `Mode.GIT`, the branch chip, the Unstaged and Staged lists, Refresh, the `.git/index` check | core, gui | The mode switches in and out. The lists match `git status`. A commit made in a terminal shows up within 2 s. |
 | 3 | **Diffs:** `ReadDiff`, the diff view in `GitStage`, opening the file at a line | core, gui | Click a row to see its diff. Covers modified, added, deleted, untracked and renamed files. |
 | 4 | **Staging:** the stage and unstage commands (library), the +/− buttons, stage all, results in the console | lib, core, gui | Stage, unstage and partly staged files. Git's errors appear in the console. Built: `RunGit`, writes queued one at a time in the `Repository`, the diff's Stage/Unstage, save-first. Git's error goes to the status line, not the console, which is for runs. |
-| 5 | **Commit:** the message box, the 72-character count, commit with hooks and a longer timeout | lib, core, gui | Committing empties Staged and the branch goes one ahead. A failing hook leaves everything as it was and says why. |
+| 5 | **Commit:** the message box, the 72-character count, commit with hooks and a longer timeout | lib, core, gui | Committing empties Staged and the branch goes one ahead. A failing hook leaves everything as it was and says why. Built: `Git.commit` (`-F -`, `COMMIT_TIMEOUT` 5 min), `CommitStaged` queued behind the stages asked before it, one commit at a time, `Repository.committable` deciding for both the button and the controller, `GitCommitted` emptying the box or giving it back. Ctrl+Enter in the message commits. A failure is said on the status line as its first line (a hook's, or the last of git's standard output when standard error is silent). |
 | 6 | **History and branches**, read-only on `GitStage` | core, gui | Changesets with `HEAD` and `origin/…` marked, and branches with their ahead/behind. |
 | 7 | **Push, and switching branch** | lib, core, gui | Push, and what happens when it fails. Switching branch reloads the open tabs whose files changed on disk. |
 

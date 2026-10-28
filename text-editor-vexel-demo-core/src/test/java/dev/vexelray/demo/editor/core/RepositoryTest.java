@@ -1,7 +1,9 @@
 package dev.vexelray.demo.editor.core;
 
 import dev.sibarum.suite.git.Diff;
+import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.DiffAsk;
+import dev.vexelray.demo.editor.core.Messages.GitCommitted;
 import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
@@ -59,6 +61,7 @@ class RepositoryTest {
         bus.subscribe(Messages.GIT_DIFF_SHOWN_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_RUN_TOPIC, sent::add);
         bus.subscribe(Messages.STATUS_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_COMMITTED_TOPIC, sent::add);
     }
 
     private <T> List<T> took(Class<T> kind) {
@@ -290,6 +293,66 @@ class RepositoryTest {
         repository.folder(new ShowFolder(OTHER));
         repository.ran(new GitRan(g, GitOp.STAGE, "a", true, "", ""));
         assertEquals(List.of(), took(GitRun.class));
+    }
+
+    @Test
+    void aCommitWaitsBehindTheStagesAskedBeforeItAndSaysHowItWent() {
+        long g = shown();
+        repository.stage(new Stage("src/Ui.java", true));
+        repository.commit(new CommitStaged("\n  Change the UI  \n\nWhy.\n"));
+        took(GitRun.class);
+        repository.ran(new GitRan(g, GitOp.STAGE, "src/Ui.java", true, "git add", ""));
+        assertEquals(List.of(new GitRun(g, ROOT, GitOp.COMMIT, null, "\n  Change the UI  \n\nWhy.\n")),
+                took(GitRun.class), "the message goes as it was typed; git cleans it up");
+        repository.ran(new GitRan(g, GitOp.COMMIT, null, true, "git commit -F -", ""));
+        assertEquals(List.of(new GitCommitted(true, "Change the UI")), took(GitCommitted.class));
+        assertEquals(new Status("Committed: Change the UI", false), took(Status.class).getFirst());
+        assertEquals(1, took(GitAsk.class).size());
+    }
+
+    @Test
+    void aCommitThatFailsGivesTheMessageBackAndSaysWhy() {
+        long g = shown();
+        repository.commit(new CommitStaged("Change"));
+        took(GitRun.class);
+        repository.ran(new GitRan(g, GitOp.COMMIT, null, false, "git commit -F -", "lint: a.txt is wrong"));
+        assertEquals(List.of(new GitCommitted(false, "Change")), took(GitCommitted.class));
+        assertEquals(new Status("Could not commit: lint: a.txt is wrong", true), took(Status.class).getFirst());
+    }
+
+    @Test
+    void aCommitThatCannotGoIsRefusedAtOnce() {
+        repository.folder(new ShowFolder(ROOT));
+        repository.commit(new CommitStaged("Change"));
+        assertEquals("Not in a repository", took(Status.class).getFirst().message());
+        long g = took(GitAsk.class).getFirst().generation();
+        repository.read(answer(g, "main", 0, 0, 1, "s"));
+        repository.commit(new CommitStaged(" \n \n"));
+        assertEquals("A commit needs a message", took(Status.class).getFirst().message());
+        repository.commit(new CommitStaged("One"));
+        repository.commit(new CommitStaged("Two"));
+        assertEquals("A commit is already being made", took(Status.class).getFirst().message());
+        assertEquals(1, took(GitRun.class).size());
+        assertEquals(List.of(new GitCommitted(false, ""), new GitCommitted(false, ""), new GitCommitted(false, "")),
+                took(GitCommitted.class));
+        assertTrue(!Repository.committable(0, "One"), "nothing staged");
+    }
+
+    @Test
+    void aCommitOutWhenTheRootChangesGivesTheBoxBack() {
+        shown();
+        repository.commit(new CommitStaged("Change"));
+        took(GitCommitted.class);
+        repository.folder(new ShowFolder(OTHER));
+        assertEquals(List.of(new GitCommitted(false, "")), took(GitCommitted.class));
+    }
+
+    @Test
+    void aSubjectIsTheFirstLineThatSaysSomething() {
+        assertEquals("Fix it", Repository.subject("\n\n  Fix it \r\nmore"));
+        assertEquals("", Repository.subject(""));
+        assertEquals("", Repository.subject(null));
+        assertTrue(Repository.committable(1, "x"));
     }
 
     @Test

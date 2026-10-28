@@ -604,19 +604,45 @@ public final class Messages {
     public record Stage(String path, boolean on) {
     }
 
-    /** A write {@link RunGit} makes. */
-    public enum GitOp {
-        STAGE, UNSTAGE
+    /**
+     * Commit what is staged, with {@code message} as it was typed: Git mode's Commit. The {@code Repository} decides
+     * whether it can go ({@code Repository.committable}) and answers with {@link GitCommitted} either way.
+     */
+    public static final String COMMIT = "git.commit";
+    public static final Topic<CommitStaged> COMMIT_TOPIC = Topic.of(COMMIT, CommitStaged.class);
+
+    public record CommitStaged(String message) {
     }
 
     /**
-     * Run a write ({@link RunGit}) in {@code dir}: {@code path} relative to it, or {@code "."} for everything under it.
-     * One at a time, so two never meet at git's {@code index.lock}.
+     * How a commit went, for the message box: {@code ok}, it is emptied; not, it keeps what was typed, and the status
+     * line says why. {@code subject} is the commit's first line.
+     */
+    public static final String GIT_COMMITTED = "view.git-committed";
+    public static final Topic<GitCommitted> GIT_COMMITTED_TOPIC = Topic.of(GIT_COMMITTED, GitCommitted.class);
+
+    public record GitCommitted(boolean ok, String subject) {
+    }
+
+    /** A write {@link RunGit} makes. */
+    public enum GitOp {
+        STAGE, UNSTAGE, COMMIT
+    }
+
+    /**
+     * Run a write ({@link RunGit}) in {@code dir}: {@code path} relative to it, or {@code "."} for everything under it;
+     * a commit has no path, and has its {@code message}. One at a time, so two never meet at git's
+     * {@code index.lock}.
      */
     public static final String GIT_RUN = "git.run";
     public static final Topic<GitRun> GIT_RUN_TOPIC = Topic.of(GIT_RUN, GitRun.class);
 
-    public record GitRun(long generation, Path dir, GitOp op, String path) {
+    public record GitRun(long generation, Path dir, GitOp op, String path, String message) {
+
+        /** A stage or an unstage, which has no message. */
+        public GitRun(long generation, Path dir, GitOp op, String path) {
+            this(generation, dir, op, path, null);
+        }
     }
 
     /**

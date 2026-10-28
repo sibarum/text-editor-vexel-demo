@@ -1,7 +1,9 @@
 package dev.vexelray.demo.editor.core;
 
 import dev.sibarum.suite.git.Diff;
+import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.DiffAsk;
+import dev.vexelray.demo.editor.core.Messages.GitCommitted;
 import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
@@ -59,7 +61,9 @@ import java.util.Deque;
  *
  * <p>Staging and unstaging ({@link Stage}) are run by {@link RunGit}, one at a time from a queue, since two runs of
  * {@code git add} at once meet at {@code index.lock} and the second fails. Each is followed by a fresh status; one that
- * failed is said on the status line in git's own words.
+ * failed is said on the status line in git's own words. A commit ({@link CommitStaged}) joins the same queue, after
+ * the stages asked for before it, one at a time; whether it can go at all is decided here ({@link #committable}), and
+ * the view is told how it went ({@link GitCommitted}) so the message box is emptied or given back.
  *
  * <h2>Watching, while Git mode is up</h2>
  *
@@ -70,7 +74,7 @@ import java.util.Deque;
  */
 @Component(lane = "git")
 @Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_DIFF, Messages.GIT_RUN, Messages.GIT_HEAD,
-        Messages.GIT_TREE, Messages.GIT_DIFF_SHOWN, Messages.STATUS})
+        Messages.GIT_TREE, Messages.GIT_DIFF_SHOWN, Messages.GIT_COMMITTED, Messages.STATUS})
 public final class Repository {
 
     /** How often git is looked at while Git mode is up. */
@@ -105,6 +109,10 @@ public final class Repository {
     private final Deque<GitRun> writes = new ArrayDeque<>();
     /** Whether a write is out. */
     private boolean writing;
+    /** How many paths are staged, from the last answer: nothing staged is nothing to commit. */
+    private int staged;
+    /** The subject of the commit queued or out; null while none is. One at a time: a second would find nothing. */
+    private String committing;
 
     public Repository(Atchung bus) {
         this.bus = bus;
@@ -182,6 +190,7 @@ public final class Repository {
         gitDir = r.gitDir();
         stamp = r.stamp();
         root = r.root();
+        staged = r.staged();
         bus.publish(Messages.GIT_HEAD_TOPIC, head(r));
         if (r.repository()) {
             bus.publish(Messages.GIT_TREE_TOPIC,
@@ -227,6 +236,26 @@ public final class Repository {
         write();
     }
 
+    /**
+     * Commit what is staged: queued behind any stage still to run, so it commits what the person staged before they
+     * pressed it. One that cannot go is answered at once, with why on the status line.
+     */
+    @Subscribe(topic = Messages.COMMIT)
+    public void commit(CommitStaged m) {
+        String refused = root == null ? "Not in a repository"
+                : committing != null ? "A commit is already being made"
+                : staged == 0 ? "Nothing is staged to commit"
+                : !committable(staged, m.message()) ? "A commit needs a message" : null;
+        if (refused != null) {
+            bus.publish(Messages.STATUS_TOPIC, new Status(refused, true));
+            bus.publish(Messages.GIT_COMMITTED_TOPIC, new GitCommitted(false, ""));
+            return;
+        }
+        committing = subject(m.message());
+        writes.add(new GitRun(generation, root, GitOp.COMMIT, null, m.message()));
+        write();
+    }
+
     /** A write is done. Whatever it did, git is asked again; what went wrong is said on the status line. */
     @Subscribe(topic = Messages.GIT_RAN)
     public void ran(GitRan r) {
@@ -234,7 +263,13 @@ public final class Repository {
             return;
         }
         writing = false;
-        if (!r.ok()) {
+        if (r.op() == GitOp.COMMIT) {
+            String subject = committing;
+            committing = null;
+            bus.publish(Messages.STATUS_TOPIC, r.ok() ? new Status("Committed: " + subject, false)
+                    : new Status("Could not commit: " + r.error(), true));
+            bus.publish(Messages.GIT_COMMITTED_TOPIC, new GitCommitted(r.ok(), subject));
+        } else if (!r.ok()) {
             String what = ".".equals(r.path()) ? "everything" : r.path();
             String verb = r.op() == GitOp.STAGE ? "stage " : "unstage ";
             bus.publish(Messages.STATUS_TOPIC, new Status("Could not " + verb + what + ": " + r.error(), true));
@@ -273,6 +308,29 @@ public final class Repository {
         // Writes for the old root are not made in the new one; one already out finishes there, and is not heard.
         writes.clear();
         writing = false;
+        staged = 0;
+        if (committing != null) {
+            // The message box is waiting on it: it was not made here, and the box is the person's again.
+            committing = null;
+            bus.publish(Messages.GIT_COMMITTED_TOPIC, new GitCommitted(false, ""));
+        }
+    }
+
+    /** Whether a commit can go: something is staged, and the message has a line that says something. */
+    public static boolean committable(int staged, String message) {
+        return staged > 0 && !subject(message).isEmpty();
+    }
+
+    /** A message's subject, as git takes it: its first line that is not blank, without the spaces around it. */
+    public static String subject(String message) {
+        if (message != null) {
+            for (String line : message.split("\\R")) {
+                if (!line.isBlank()) {
+                    return line.strip();
+                }
+            }
+        }
+        return "";
     }
 
     /** Ask git again: now, or when the question that is out comes back. */

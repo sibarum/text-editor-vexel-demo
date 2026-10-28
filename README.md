@@ -153,8 +153,14 @@ A row's **+** stages it and **−** unstages it; *Stage all* and *Unstage all* s
 diff has *Stage* or *Unstage* at its top, the diff following the file to its new side. Staging saves the tabs it
 covers first, as Run does, so what is staged is what is on the screen; a save that fails stages nothing. A
 conflicted file has no **+**: staging it would mark it resolved, markers and all, so that is done at a prompt. What
-git refuses (an `index.lock` left by another git, say) is said on the status line in git's words. Committing and
-history are the next slices of [docs/git-mode.md](docs/git-mode.md).
+git refuses (an `index.lock` left by another git, say) is said on the status line in git's words.
+
+Below the lists is the **commit message**, with how long its first line is (`48 / 72`, amber past 72, which is
+allowed), and **Commit**, enabled when something is staged and the message has a line that says something.
+Ctrl+Enter in the message commits too; Enter is a new line. The message goes to git as typed, on its standard input,
+and the repository's hooks run (for up to five minutes). Made, the box empties and the lists follow; refused, by a
+hook or by git, nothing changes, the message stays, and the status line says why. History, branches and push are the
+next slices of [docs/git-mode.md](docs/git-mode.md).
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -261,7 +267,7 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily; Add, on a folder's menu |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
-| `GitPane.java` | Git mode's card: the branch, then Unstaged and Staged, read from the git text the repository sends |
+| `GitPane.java` | Git mode's card: the branch, then Unstaged and Staged, read from the git text the repository sends, and the commit message with its first line's count and Commit |
 | `GitStage.java` | what stands where the editor does while a Git mode row is picked: its diff, a line of which opens the file there |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |

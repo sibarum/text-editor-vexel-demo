@@ -77,6 +77,15 @@ final class Landmarks {
     /** Git mode's Unstage all, beside Staged's heading. */
     static final String GIT_UNSTAGE_ALL = "git.unstage-all";
 
+    /** Git mode's commit message, below Staged: Ctrl+Enter in it commits. */
+    static final String GIT_MESSAGE = "git.message";
+
+    /** How long the message's first line is, {@code 12 / 72}: past 72 it is shown as too long, and still allowed. */
+    static final String GIT_COUNT = "git.count";
+
+    /** Git mode's Commit: enabled with something staged and a message. */
+    static final String GIT_COMMIT = "git.commit";
+
     /** The diff's Stage or Unstage: the row picked, moved to the other side. */
     static final String DIFF_STAGE = "stage.stage";
 
