@@ -145,9 +145,15 @@ branch and what it tracks, then *Unstaged* (changed, deleted, untracked, conflic
 its letter, its folder and the lines it adds and removes. A row picked, by a click or the arrows, stands its diff
 where the editor was: the old and new line numbers, added lines on green and removed on red, under each hunk's
 header. Enter or a double click on a line opens the file there (a removed line, where it was); on a row, it opens
-the file. *Close* or Escape brings the editor back, as leaving Git mode does. While Git mode is up a commit or a
-checkout made at a prompt shows within two seconds, the diff on show with it; a file changed by another program
-shows after *Refresh*.
+the file. *Close* or Escape puts the diff away. While Git mode is up a commit or a checkout made at a prompt shows
+within two seconds, the diff on show with it; a file changed by another program shows after *Refresh*.
+
+With no row picked, the **history** stands where the editor was: the last 200 changesets from `HEAD`, each with the
+refs at it (`HEAD`, branches, `origin/…` faint, tags amber), its subject, author, how long ago and short hash; and
+beside them every branch, local then remote, the checked-out one marked, with how far it is ahead of or behind what
+it tracks. It is read-only. *Close* or Escape on it, or opening a file, brings the editor back; *History*, beside
+*Refresh*, brings it back again. It is read again when git has done something (a commit, a stage, a checkout), not
+on a save; a fetch made at a prompt shows after *Refresh*.
 
 A row's **+** stages it and **−** unstages it; *Stage all* and *Unstage all* sit beside the lists' headings, and the
 diff has *Stage* or *Unstage* at its top, the diff following the file to its new side. Staging saves the tabs it
@@ -159,8 +165,8 @@ Below the lists is the **commit message**, with how long its first line is (`48 
 allowed), and **Commit**, enabled when something is staged and the message has a line that says something.
 Ctrl+Enter in the message commits too; Enter is a new line. The message goes to git as typed, on its standard input,
 and the repository's hooks run (for up to five minutes). Made, the box empties and the lists follow; refused, by a
-hook or by git, nothing changes, the message stays, and the status line says why. History, branches and push are the
-next slices of [docs/git-mode.md](docs/git-mode.md).
+hook or by git, nothing changes, the message stays, and the status line says why. Push and switching branch are the
+last slice of [docs/git-mode.md](docs/git-mode.md).
 
 A tab's menu has Close, Close others, Close all, Reveal in navigator, Open in Vexplore and Copy path. *Open in
 Vexplore* starts `vexplore <file>`, a new Vexplore window on the file's folder with the file selected (a folder in
@@ -244,7 +250,7 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Editor.java` | **the controller**, a component on the `editor` lane: every decision. What is open and which tab is in front, when closing, quitting, picking a root or running needs a question first, where an Untitled document is saved, which tabs each root keeps, what the status line and the title bar say, what comes back next time. It owns the session and needs no lock, because nothing else can reach it |
 | `Doc.java` | the shape of the session — which documents, which in front, which unsaved, which folder — as one immutable value in one field of the editor's |
 | `Repository.java` | **the controller for git**, a component on the `git` lane: follows the root the editor shows, asks git where it stands when the root changes and after the editor writes or makes something, one question at a time, and tells the view what the status line's Git slot says (`develop ↑8 · 10 changed`) and every changed path, as git's own text. While Git mode is up it looks every 2 s whether git did anything, and asks only when it did ([docs/git-mode.md](docs/git-mode.md)) |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java`, `ReadStamp.java`, `ReadDiff.java`, `RunGit.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `MakeScratch.java`, `NameScratch.java`, `DropScratch.java`, `Make.java`, `ReadStatus.java`, `ReadStamp.java`, `ReadDiff.java`, `ReadHistory.java`, `RunGit.java` | the jobs: every touch of the disk, and every run of git, the controllers ask for, on the offload lane. What can go wrong is part of the reply |
 | `Core.java` | the list of this module's components and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it |
 | `TextFile.java` | the policy between bytes on disk and text in a field |
 | `Markdown.java` | Markdown as blocks and inlines, for the formatted view: a pure function |
@@ -269,6 +275,7 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |
 | `GitPane.java` | Git mode's card: the branch, then Unstaged and Staged, read from the git text the repository sends, and the commit message with its first line's count and Commit |
 | `GitStage.java` | what stands where the editor does while a Git mode row is picked: its diff, a line of which opens the file there |
+| `HistoryStage.java` | what stands there in Git mode while no row is: the changesets with the refs at each, and the branches with their ahead and behind |
 | `Highlighter.java` | TextMate grammars (TM4E) to colour spans, off the GUI thread |
 | `Motion.java` | the one tempo: the ramps the tab bar, the tree and the cues move with, on the framework's clock |
 | `Look.java`, `Type.java`, `Landmarks.java` | colour, size, and the names an automation script may use |

@@ -1,7 +1,7 @@
 # Git mode: the build plan
 
-Status: **slices 0 to 5 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode,
-diffs, staging, and committing. The look is the
+Status: **slices 0 to 6 built**, 2026-10-27: the library's read side, the branch in the status line, Git mode,
+diffs, staging, committing, and history and branches. The look is the
 [Vex Git Mode design](https://claude.ai/artifact/JFtP9yLvLHnnrcPEcTK3Sg) (2026-10-17): a fourth navigator mode,
 the working tree's changes on the left, and history, branches or a file's diff where the editor stands.
 
@@ -98,7 +98,7 @@ later one changes only this repository, except where it says otherwise.
 | 3 | **Diffs:** `ReadDiff`, the diff view in `GitStage`, opening the file at a line | core, gui | Click a row to see its diff. Covers modified, added, deleted, untracked and renamed files. |
 | 4 | **Staging:** the stage and unstage commands (library), the +/− buttons, stage all, results in the console | lib, core, gui | Stage, unstage and partly staged files. Git's errors appear in the console. Built: `RunGit`, writes queued one at a time in the `Repository`, the diff's Stage/Unstage, save-first. Git's error goes to the status line, not the console, which is for runs. |
 | 5 | **Commit:** the message box, the 72-character count, commit with hooks and a longer timeout | lib, core, gui | Committing empties Staged and the branch goes one ahead. A failing hook leaves everything as it was and says why. Built: `Git.commit` (`-F -`, `COMMIT_TIMEOUT` 5 min), `CommitStaged` queued behind the stages asked before it, one commit at a time, `Repository.committable` deciding for both the button and the controller, `GitCommitted` emptying the box or giving it back. Ctrl+Enter in the message commits. A failure is said on the status line as its first line (a hook's, or the last of git's standard output when standard error is silent). |
-| 6 | **History and branches**, read-only on `GitStage` | core, gui | Changesets with `HEAD` and `origin/…` marked, and branches with their ahead/behind. |
+| 6 | **History and branches**, read-only on `GitStage` | core, gui | Changesets with `HEAD` and `origin/…` marked, and branches with their ahead/behind. Built: one job, `ReadHistory` (200 commits and every branch), not `ReadLog` and `ReadBranches`; both cross as text (`Log.text`, `Refs.text`, read back with `parse`), so the library changed too. Asked while Git mode is up, with a status whose stamp moved, on coming up and on Refresh; not on a save. `HistoryStage` stands where the editor does with no row picked, Changesets beside Branches; Close on a diff comes back to it, its own Close or opening a file brings the editor, and *History* in the pane brings it back. |
 | 7 | **Push, and switching branch** | lib, core, gui | Push, and what happens when it fails. Switching branch reloads the open tabs whose files changed on disk. |
 
 Slice 7 is last because it is the only one that reaches the network and the only one that changes files under open

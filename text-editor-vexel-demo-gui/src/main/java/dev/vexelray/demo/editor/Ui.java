@@ -43,8 +43,11 @@ final class Ui {
     private final Navigator navigator;
     private final Preview preview;
     private final GitStage gitStage;
+    private final HistoryStage history;
     /** Whether a diff stands where the editor does. */
     private volatile boolean diffing;
+    /** Whether the history stands there while no diff does. */
+    private volatile boolean showingHistory;
     private final SplitPane split;
     private final Motion motion;
     private final Color danger;
@@ -102,25 +105,24 @@ final class Ui {
         });
 
         // In Open the editor steps aside for a picture of the folder being considered, and in Git mode for the diff of
-        // the row picked: the three share the place beside the navigator, one showing at a time, and the tabs keep
-        // everything they had while hidden.
+        // the row picked, or with none picked for the history: the four share the place beside the navigator, one
+        // showing at a time, and the tabs keep everything they had while hidden.
         preview = new Preview(gui);
         gitStage = new GitStage(gui);
+        history = new HistoryStage(gui);
         Node stage = gui.column().width(Length.FILL).height(Length.FILL).scroll(false, false)
                 .alignItems(AlignItems.STRETCH)
-                .children(workspace.node(), preview.node(), gitStage.node());
+                .children(workspace.node(), preview.node(), gitStage.node(), history.node());
         navigator.onPreview(preview::show);
         navigator.onMode(m -> {
-            boolean open = m == Navigator.Mode.OPEN;
-            if (open) {
+            if (m == Navigator.Mode.OPEN) {
                 preview.forget();
             }
             if (m != Navigator.Mode.GIT) {
                 diffing = false;
-                gitStage.node().visible(false);
+                showingHistory = false;
             }
-            workspace.node().visible(!open && !diffing);
-            preview.node().visible(open);
+            place(m);
         });
 
         split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), stage)
@@ -213,14 +215,33 @@ final class Ui {
         return gitStage;
     }
 
+    HistoryStage history() {
+        return history;
+    }
+
     /**
-     * Stand the diff where the editor does, or bring the editor back. Only in Git mode: leaving it puts the diff away
-     * by itself ({@code onMode} above).
+     * Stand the diff where the editor does, or take it away: then the history stands there if it was, and otherwise
+     * the editor is back. Only in Git mode: leaving it puts both away by itself ({@code onMode} above).
      */
     void showDiff(boolean on) {
         diffing = on && navigator.mode() == Navigator.Mode.GIT;
-        gitStage.node().visible(diffing);
-        workspace.node().visible(!diffing && navigator.mode() != Navigator.Mode.OPEN);
+        place(navigator.mode());
+    }
+
+    /** Stand the history where the editor does while no diff is shown, or bring the editor back. Git mode only. */
+    void showHistory(boolean on) {
+        showingHistory = on && navigator.mode() == Navigator.Mode.GIT;
+        place(navigator.mode());
+    }
+
+    /** Which one stands beside the navigator: the preview in Open, a diff, the history, or the editor. */
+    private synchronized void place(Navigator.Mode m) {
+        boolean open = m == Navigator.Mode.OPEN;
+        boolean git = m == Navigator.Mode.GIT;
+        gitStage.node().visible(git && diffing);
+        history.node().visible(git && !diffing && showingHistory);
+        workspace.node().visible(!open && !(git && (diffing || showingHistory)));
+        preview.node().visible(open);
     }
 
     /**

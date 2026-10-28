@@ -104,6 +104,21 @@ final class Landmarks {
     /** The stage's Close: the editor comes back. */
     static final String DIFF_CLOSE = "stage.close";
 
+    /** What stands where the editor does in Git mode while no row is picked: the history and the branches. */
+    static final String HISTORY = "history";
+
+    /** The history's changesets, newest first, from {@code HEAD}. */
+    static final String HISTORY_LOG = "history.log";
+
+    /** Every branch, local then remote, with how far each stands from what it tracks. */
+    static final String HISTORY_BRANCHES = "history.branches";
+
+    /** The history's Close: the editor comes back, in Git mode still. */
+    static final String HISTORY_CLOSE = "history.close";
+
+    /** Git mode's History, beside Refresh: the history comes back where the editor stands. */
+    static final String GIT_HISTORY = "git.history";
+
     /** The status line, and its five slots. The slot keys are landmarks too, so a script can read each. */
     static final String STATUS = "status";
     /** Where the root stands in git — {@code main ↑2 · 3 changed} — inside a repository; empty otherwise. */

@@ -14,6 +14,9 @@ import dev.vexelray.demo.editor.core.Messages.ShowDiff;
 import dev.vexelray.demo.editor.core.Messages.Stage;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
+import dev.vexelray.demo.editor.core.Messages.GitHistory;
+import dev.vexelray.demo.editor.core.Messages.HistoryAsk;
+import dev.vexelray.demo.editor.core.Messages.HistoryRead;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
 import dev.vexelray.demo.editor.core.Messages.GitStamp;
@@ -62,6 +65,40 @@ class RepositoryTest {
         bus.subscribe(Messages.GIT_RUN_TOPIC, sent::add);
         bus.subscribe(Messages.STATUS_TOPIC, sent::add);
         bus.subscribe(Messages.GIT_COMMITTED_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_HISTORY_TOPIC, sent::add);
+        bus.subscribe(Messages.GIT_HISTORY_SHOWN_TOPIC, sent::add);
+    }
+
+    @Test
+    void inGitModeTheHistoryIsAskedWhenGitDidSomethingAndOnlyTheLatestShown() {
+        long g = shown();
+        assertEquals(List.of(), took(HistoryAsk.class), "not in Git mode, so not asked");
+        repository.watch(new GitWatch(true));
+        repository.read(main(took(GitAsk.class).getFirst().generation(), 3));
+        HistoryAsk first = took(HistoryAsk.class).getFirst();
+        assertEquals(ROOT, first.root());
+
+        repository.changed(new Relist(null));
+        repository.read(main(took(GitAsk.class).getFirst().generation(), 3));
+        assertEquals(List.of(), took(HistoryAsk.class), "a save moves no stamp, and asks nothing");
+
+        repository.changed(new Relist(null));
+        repository.read(answer(g, "main", 3, 0, 2, "stamp-2"));
+        HistoryAsk second = took(HistoryAsk.class).getFirst();
+
+        repository.refresh(new GitRefresh());
+        repository.read(answer(g, "main", 3, 0, 2, "stamp-2"));
+        HistoryAsk third = took(HistoryAsk.class).getFirst();
+        assertTrue(third.ticket() > second.ticket(), "Refresh asks whatever the stamp says");
+
+        repository.historyRead(new HistoryRead(second.ticket(), "old", "old"));
+        assertEquals(List.of(), took(GitHistory.class), "an answer overtaken is dropped");
+        repository.historyRead(new HistoryRead(third.ticket(), "log", "branches"));
+        assertEquals(List.of(new GitHistory(ROOT, "log", "branches")), took(GitHistory.class));
+
+        repository.folder(new ShowFolder(OTHER));
+        repository.historyRead(new HistoryRead(third.ticket(), "log", "branches"));
+        assertEquals(List.of(), took(GitHistory.class), "about a root since left");
     }
 
     private <T> List<T> took(Class<T> kind) {

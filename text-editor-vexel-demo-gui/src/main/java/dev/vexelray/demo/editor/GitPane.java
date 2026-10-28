@@ -116,6 +116,7 @@ final class GitPane {
     private final Button unstageAll;
     /** Asked to stage ({@code true}) or unstage a row, or everything for a null row. */
     private volatile BiConsumer<Row, Boolean> staging = (r, on) -> { };
+    private volatile Runnable history = () -> { };
     private final TextField message;
     private final Node count;
     private final Button commit;
@@ -144,11 +145,14 @@ final class GitPane {
                 .wordWrap(false).clip(true);
         Button again = new Button(gui, "Refresh").kind(Button.Kind.GHOST).onPress(() -> refresh.run());
         gui.landmark(Landmarks.GIT_REFRESH, again.node());
+        // The history stands where the editor does when Git mode comes up; once a file is opened, this brings it back.
+        Button past = new Button(gui, "History").kind(Button.Kind.GHOST).onPress(() -> history.run());
+        gui.landmark(Landmarks.GIT_HISTORY, past.node());
         Node names = gui.column().width(Length.grow(1)).alignItems(AlignItems.STRETCH).clip(true)
                 .children(branch, upstream);
         Node head = gui.row().width(Length.FILL).gap(Type.TIGHT).alignItems(AlignItems.CENTER)
                 .padding(Length.ZERO, Type.TIGHT)
-                .children(names, again.node());
+                .children(names, past.node(), again.node());
         gui.landmark(Landmarks.GIT_BRANCH, branch);
 
         unstagedLabel = label();
@@ -315,6 +319,7 @@ final class GitPane {
         Node folder = g.text(r.folder()).font(Type.UI).textSize(Type.SMALL).textColor(g.theme().color(Role.FAINT))
                 .wordWrap(false);
         Node names = g.row().width(Length.grow(1)).gap(Type.TIGHT).alignItems(AlignItems.CENTER).clip(true)
+                .scroll(false, false)
                 .children(name, folder);
         Node counts = g.text(r.counts()).font(Type.MONO).textSize(Type.SMALL)
                 .textColor(g.theme().color(Role.DIM)).wordWrap(false);
@@ -384,6 +389,11 @@ final class GitPane {
     /** Be asked to ask git again: Refresh. Runs on a worker. */
     void onRefresh(Runnable handler) {
         this.refresh = handler == null ? () -> { } : handler;
+    }
+
+    /** Be asked to show the history where the editor stands: History. Runs on a worker. */
+    void onHistory(Runnable handler) {
+        this.history = handler == null ? () -> { } : handler;
     }
 
     /** Where the root stands: the branch and its distance, and what it tracks. */

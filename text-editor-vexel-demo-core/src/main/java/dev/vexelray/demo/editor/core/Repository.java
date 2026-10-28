@@ -8,6 +8,9 @@ import dev.vexelray.demo.editor.core.Messages.DiffRead;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
+import dev.vexelray.demo.editor.core.Messages.GitHistory;
+import dev.vexelray.demo.editor.core.Messages.HistoryAsk;
+import dev.vexelray.demo.editor.core.Messages.HistoryRead;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
 import dev.vexelray.demo.editor.core.Messages.GitStamp;
@@ -57,6 +60,13 @@ import java.util.Deque;
  * ({@link GitDiff}). The diff on show is asked for again with every new status, since whatever changed the status may
  * have changed it, and only the answer to the latest ask is sent on: rows picked fast show the last one.
  *
+ * <h2>History and branches</h2>
+ *
+ * <p>While Git mode is up, the history and the branches ({@link ReadHistory}, sent on as {@link GitHistory}) are asked
+ * for with a status whose stamp differs from the one they were last asked at: a commit, a stage, a switch of branch.
+ * A save changes none of that, and asks nothing. Coming up, and Refresh, ask whatever the stamp says, since a fetch
+ * moves remote branches where the stamp does not look.
+ *
  * <h2>Writes</h2>
  *
  * <p>Staging and unstaging ({@link Stage}) are run by {@link RunGit}, one at a time from a queue, since two runs of
@@ -74,7 +84,8 @@ import java.util.Deque;
  */
 @Component(lane = "git")
 @Publishes({Messages.GIT_STATUS, Messages.GIT_STAMP, Messages.GIT_DIFF, Messages.GIT_RUN, Messages.GIT_HEAD,
-        Messages.GIT_TREE, Messages.GIT_DIFF_SHOWN, Messages.GIT_COMMITTED, Messages.STATUS})
+        Messages.GIT_TREE, Messages.GIT_DIFF_SHOWN, Messages.GIT_COMMITTED, Messages.GIT_HISTORY,
+        Messages.GIT_HISTORY_SHOWN, Messages.STATUS})
 public final class Repository {
 
     /** How often git is looked at while Git mode is up. */
@@ -105,6 +116,13 @@ public final class Repository {
     private Diff.Side diffSide;
     /** Counts the diffs asked for: only the answer to the latest is shown, however fast rows are picked. */
     private long diffTicket;
+    /** Counts the histories asked for: only the answer to the latest is shown. */
+    private long historyTicket;
+    /**
+     * The stamp the history on show was asked at; null when it must be asked whatever the stamp says: Git mode just
+     * came up, or Refresh, which is how a fetch at a prompt (which the stamp does not see) shows.
+     */
+    private String historyStamp;
     /** Writes waiting their turn: one is out at a time, so two never meet at git's {@code index.lock}. */
     private final Deque<GitRun> writes = new ArrayDeque<>();
     /** Whether a write is out. */
@@ -148,6 +166,7 @@ public final class Repository {
     /** Git mode's Refresh. */
     @Subscribe(topic = Messages.GIT_REFRESH)
     public void refresh(GitRefresh m) {
+        historyStamp = null;
         refresh();
     }
 
@@ -155,6 +174,7 @@ public final class Repository {
     @Subscribe(topic = Messages.GIT_WATCH)
     public void watch(GitWatch m) {
         watching = m.on();
+        historyStamp = null;
         if (watching) {
             refresh();
         }
@@ -197,6 +217,12 @@ public final class Repository {
                     new GitTree(r.root(), r.status(), r.unstagedLines(), r.stagedLines()));
             // What changed the status may have changed the diff on show.
             askDiff();
+            // The history changes only when git did something, which the stamp says; a save is not that.
+            if (watching && !r.stamp().equals(historyStamp)) {
+                historyStamp = r.stamp();
+                historyTicket++;
+                bus.publish(Messages.GIT_HISTORY_TOPIC, new HistoryAsk(historyTicket, r.root()));
+            }
         }
         if (again) {
             again = false;
@@ -211,6 +237,14 @@ public final class Repository {
         diffSide = m.side();
         diffTicket++;
         askDiff();
+    }
+
+    @Subscribe(topic = Messages.GIT_HISTORY_READ)
+    public void historyRead(HistoryRead h) {
+        if (h.ticket() != historyTicket || root == null) {
+            return;
+        }
+        bus.publish(Messages.GIT_HISTORY_SHOWN_TOPIC, new GitHistory(root, h.log(), h.branches()));
     }
 
     @Subscribe(topic = Messages.GIT_DIFF_READ)
@@ -305,6 +339,8 @@ public final class Repository {
         root = null;
         diffPath = null;
         diffTicket++;
+        historyTicket++;
+        historyStamp = null;
         // Writes for the old root are not made in the new one; one already out finishes there, and is not heard.
         writes.clear();
         writing = false;

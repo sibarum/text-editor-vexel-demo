@@ -570,6 +570,32 @@ public final class Messages {
     public record DiffRead(long ticket, String path, Diff.Side side, String text) {
     }
 
+    /** The history and the branches, for the stage ({@link ReadHistory}); {@code ticket} as for a diff. */
+    public static final String GIT_HISTORY = "git.history";
+    public static final Topic<HistoryAsk> GIT_HISTORY_TOPIC = Topic.of(GIT_HISTORY, HistoryAsk.class);
+
+    public record HistoryAsk(long ticket, Path root) {
+    }
+
+    /**
+     * What {@link ReadHistory} found: the newest commits from {@code HEAD} as {@code Log.text} writes them, and every
+     * branch as {@code Refs.text} does. Both empty before the first commit, or for a git that failed.
+     */
+    public static final String GIT_HISTORY_READ = "git.history-read";
+
+    public record HistoryRead(long ticket, String log, String branches) {
+    }
+
+    /**
+     * The history and the branches to show, as {@link HistoryRead} has them, read by the view with {@code Log.parse}
+     * and {@code Refs.parse}.
+     */
+    public static final String GIT_HISTORY_SHOWN = "view.git-history";
+    public static final Topic<GitHistory> GIT_HISTORY_SHOWN_TOPIC = Topic.of(GIT_HISTORY_SHOWN, GitHistory.class);
+
+    public record GitHistory(Path root, String log, String branches) {
+    }
+
     // ------------------------------------------------------------------ diffs, between the view and the repository
 
     /**

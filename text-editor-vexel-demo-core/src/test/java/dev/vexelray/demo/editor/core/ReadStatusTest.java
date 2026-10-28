@@ -1,10 +1,14 @@
 package dev.vexelray.demo.editor.core;
 
+import dev.sibarum.suite.git.Commit;
 import dev.sibarum.suite.git.Diff;
 import dev.sibarum.suite.git.Git;
 import dev.vexelray.demo.editor.core.Messages.DiffAsk;
 import dev.vexelray.demo.editor.core.Messages.DiffRead;
+import dev.sibarum.suite.git.Log;
 import dev.sibarum.suite.git.Numstat;
+import dev.sibarum.suite.git.Ref;
+import dev.sibarum.suite.git.Refs;
 import dev.sibarum.suite.git.Status;
 import dev.vexelray.demo.editor.core.Messages.GitAsk;
 import dev.vexelray.demo.editor.core.Messages.GitOp;
@@ -13,6 +17,8 @@ import dev.vexelray.demo.editor.core.Messages.GitRun;
 import dev.vexelray.demo.editor.core.Messages.GitRead;
 import dev.vexelray.demo.editor.core.Messages.GitStamp;
 import dev.vexelray.demo.editor.core.Messages.GitStampAsk;
+import dev.vexelray.demo.editor.core.Messages.HistoryAsk;
+import dev.vexelray.demo.editor.core.Messages.HistoryRead;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -149,6 +155,30 @@ class ReadStatusTest {
         GitRead after = new ReadStatus().run(new GitAsk(1, repo));
         assertEquals(0, after.staged());
         assertEquals("Change a", git.log(root, null, 1).getFirst().subject());
+    }
+
+    @Test
+    void readsTheHistoryAndTheBranchesAsTextTheViewReadsBack() throws IOException {
+        Path repo = repository();
+        git(repo, "branch", "feature");
+        Files.writeString(repo.resolve("a.txt"), "b\n");
+        git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-am", "second");
+        Path root = new ReadStatus().run(new GitAsk(1, repo)).root();
+
+        HistoryRead h = new ReadHistory().run(new HistoryAsk(7, root));
+        assertEquals(7, h.ticket());
+        List<Commit> log = Log.parse(h.log());
+        assertEquals(List.of("second", "init"), log.stream().map(Commit::subject).toList());
+        assertTrue(log.getFirst().head());
+        List<Ref> refs = Refs.parse(h.branches());
+        assertEquals(List.of("feature", "main"), refs.stream().map(Ref::name).toList());
+        assertTrue(refs.get(1).head());
+
+        Path fresh = Files.createDirectories(dir.resolve("fresh"));
+        git(fresh, "init", "-q", "-b", "main", ".");
+        HistoryRead none = new ReadHistory().run(new HistoryAsk(1, fresh));
+        assertEquals(List.of(), Log.parse(none.log()), "no commit yet is nothing to list, not an error");
+        assertEquals(List.of(), Refs.parse(none.branches()));
     }
 
     @Test

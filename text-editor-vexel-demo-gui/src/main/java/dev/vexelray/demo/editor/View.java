@@ -23,6 +23,7 @@ import dev.vexelray.demo.editor.core.Messages.CommitStaged;
 import dev.vexelray.demo.editor.core.Messages.GitDiff;
 import dev.vexelray.demo.editor.core.Messages.GitCommitted;
 import dev.vexelray.demo.editor.core.Messages.GitHead;
+import dev.vexelray.demo.editor.core.Messages.GitHistory;
 import dev.vexelray.demo.editor.core.Messages.ShowDiff;
 import dev.vexelray.demo.editor.core.Messages.Stage;
 import dev.vexelray.demo.editor.core.Messages.GitRefresh;
@@ -220,6 +221,8 @@ final class View {
         nav.onGitCommit(text -> bus.publish(Messages.COMMIT_TOPIC, new CommitStaged(text)));
         ui.gitStage().onOpenAt(this::openFromGit);
         ui.gitStage().onClose(this::closeDiff);
+        ui.history().onClose(this::closeHistory);
+        nav.onGitHistory(this::showHistory);
         ui.gitStage().onMove(nav::gitMovePicked);
         // A build or a script writes files the tree has not listed; its end is when they are all there.
         console.onEnded(nav::refresh);
@@ -402,6 +405,8 @@ final class View {
         if (on) {
             watching = krono.every("git-watch", Dur.ms(Repository.WATCH.toMillis()),
                     () -> bus.publish(Messages.GIT_TICK_TOPIC, new GitTick()));
+            // With no row picked, the history stands where the editor does; the repository sends it on GIT_WATCH.
+            ui.showHistory(true);
         } else {
             // The navigator's mode change has put the diff away already; the repository stops asking for it.
             nav.gitUnpick();
@@ -430,11 +435,37 @@ final class View {
         ui.showDiff(true);
     }
 
-    /** Close, or Escape on the diff: the editor comes back, and the keyboard goes to the row that was picked. */
+    /**
+     * Close, or Escape on the diff: what stood there before comes back, the history or the editor, and the keyboard
+     * goes to the row that was picked.
+     */
     private void closeDiff() {
         ui.showDiff(false);
         nav.gitUnpick();
         bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
+        nav.focus();
+    }
+
+    /** The history and the branches, from the {@code Repository}, while Git mode is up. */
+    @Subscribe(topic = Messages.GIT_HISTORY_SHOWN)
+    public void gitHistory(GitHistory m) {
+        if (nav.mode() == Navigator.Mode.GIT) {
+            ui.history().show(m);
+        }
+    }
+
+    /** Git mode's History: any diff is put away, and the history stands where the editor does. */
+    private void showHistory() {
+        ui.showDiff(false);
+        nav.gitUnpick();
+        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
+        ui.showHistory(true);
+        ui.history().focus();
+    }
+
+    /** Close, or Escape on the history: the editor comes back, in Git mode still. */
+    private void closeHistory() {
+        ui.showHistory(false);
         nav.focus();
     }
 
@@ -491,6 +522,7 @@ final class View {
             return;
         }
         ui.showDiff(false);
+        ui.showHistory(false);
         nav.gitUnpick();
         bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
         Buffer open = ws.find(at.file());

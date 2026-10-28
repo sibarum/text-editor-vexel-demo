@@ -633,6 +633,11 @@ final class Navigator {
         gitPane.onRefresh(handler);
     }
 
+    /** Be asked to show the history where the editor stands: Git mode's History. Runs on a worker. */
+    void onGitHistory(Runnable handler) {
+        gitPane.onHistory(handler);
+    }
+
     /** Be told a Git mode row was picked, to show its diff. */
     void onGitPick(Consumer<GitPane.Row> handler) {
         gitPane.onPick(handler);
