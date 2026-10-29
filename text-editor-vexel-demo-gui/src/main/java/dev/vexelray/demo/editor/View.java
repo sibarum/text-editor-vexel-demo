@@ -146,6 +146,7 @@ final class View {
     private final Dialogs dialogs;
     private final Gates gates;
     private final Console console;
+    private final RunDialog runDialog;
     private final ProjectIndex concordance;
     private final Preferences prefs;
     private final KronoGui krono;
@@ -192,8 +193,8 @@ final class View {
     /** Branches to switch to, from the history, each held under a ticket while the tabs under the repository settle. */
     private final Map<Long, String> switches = new ConcurrentHashMap<>();
 
-    View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, ProjectIndex concordance,
-         Preferences prefs, KronoGui krono) {
+    View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, RunDialog runDialog,
+         ProjectIndex concordance, Preferences prefs, KronoGui krono) {
         this.gui = gui;
         this.krono = krono;
         this.ui = ui;
@@ -203,6 +204,7 @@ final class View {
         this.dialogs = dialogs;
         this.gates = gates;
         this.console = console;
+        this.runDialog = runDialog;
         this.concordance = concordance;
         this.prefs = prefs;
         this.io = gui.offload();
@@ -236,6 +238,7 @@ final class View {
         // A build or a script writes files the tree has not listed; its end is when they are all there.
         console.onEnded(nav::refresh);
         ws.runButton().onPress(this::runMenu);
+        runDialog.onRun(this::run);
         ws.formattedButton().onPress(this::toggleFormatted);
         ws.tabs().onContextMenu((index, menu) -> {
             List<Buffer> all = ws.all();
@@ -870,7 +873,8 @@ final class View {
 
     /**
      * The Run button, and F5: what can be run for the folder and the document in front ({@link Runs}), as a menu under
-     * the button. Worked out on the offload lane, since it reads the disk.
+     * the button, and last, Run…, for a command typed ({@link RunDialog}). Worked out on the offload lane, since it
+     * reads the disk.
      */
     void runMenu() {
         Buffer b = ws.front();
@@ -882,9 +886,11 @@ final class View {
             for (Runs.Run r : Runs.offered(project, file, text)) {
                 items.add(r == null ? MenuItem.SEPARATOR : MenuItem.of(r.label(), () -> run(r)));
             }
-            if (items.isEmpty()) {
-                items.add(MenuItem.disabled("Nothing to run here"));
+            if (!items.isEmpty()) {
+                items.add(MenuItem.SEPARATOR);
             }
+            Path folder = project != null ? project : file != null ? file.getParent() : null;
+            items.add(MenuItem.of("Run…", () -> runDialog.show(folder)));
             Node button = ws.runButton().node();
             NodeLayout at = button.layout();
             float x = at.present() ? at.rect().x() : 0f;

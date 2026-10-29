@@ -2,13 +2,16 @@ package dev.vexelray.demo.editor;
 
 import dev.sibarum.suite.tty.PtyPlatform;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,7 +35,8 @@ import java.util.stream.Stream;
  * </ul>
  *
  * <p>Every command is a line for the platform's shell ({@link Run#line}), run in a folder ({@link Run#dir}): what
- * runs is what the console shows at its top, so it can be copied and run again by hand.
+ * runs is what the console shows at its top, so it can be copied and run again by hand. That holds for one typed into
+ * the Run dialog too ({@link #typed}): its environment is set in the line, not handed to the program beside it.
  */
 final class Runs {
 
@@ -251,6 +255,64 @@ final class Runs {
             return "java -jar " + quote(p.toAbsolutePath().toString());
         }
         return PLATFORM.programLine(p).orElse(quote(p.toAbsolutePath().toString()));
+    }
+
+    // -- typed into Run… -------------------------------------------------------------------------------------
+
+    /** How long a typed command's label may be before it is cut, since it is a console tab's title. */
+    private static final int LABEL_MAX = 40;
+    private static final Pattern NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    /**
+     * A command typed into the Run dialog, run in {@code dir} with {@code environment} set and {@code path}'s folders
+     * put before the {@code PATH}. The settings go in the line itself, ahead of the command, so the console's first
+     * line is still all of what ran: {@code set "NAME=value" && …} for {@code cmd}, {@code export NAME=value && …}
+     * for {@code sh}. A value is the shell's to read, so on Windows {@code %OTHER%} in it is expanded, as of before
+     * the line ran.
+     */
+    static Run typed(String command, Path dir, Map<String, String> environment, List<String> path) {
+        boolean cmd = File.pathSeparatorChar == ';';
+        StringBuilder line = new StringBuilder();
+        environment.forEach((name, value) -> line.append(cmd ? "set \"" + name + "=" + value + "\""
+                : "export " + name + "=" + quote(value)).append(" && "));
+        if (!path.isEmpty()) {
+            List<String> folders = cmd ? path : path.stream().map(Runs::quote).toList();
+            line.append(cmd ? "set \"PATH=" + String.join(";", folders) + ";%PATH%\""
+                    : "export PATH=" + String.join(":", folders) + ":\"$PATH\"").append(" && ");
+        }
+        String what = command.strip();
+        line.append(what);
+        String label = what.length() > LABEL_MAX ? what.substring(0, LABEL_MAX - 1).strip() + "…" : what;
+        return new Run(label, line.toString(), dir);
+    }
+
+    /**
+     * The Run dialog's environment, one {@code NAME=value} a line, in order; blank lines and lines starting {@code #}
+     * are skipped. A value may be empty, and is kept as typed after the {@code =}.
+     *
+     * @throws IllegalArgumentException naming the line, for one that is not a {@code NAME=value}
+     */
+    static Map<String, String> environment(String text) {
+        Map<String, String> env = new LinkedHashMap<>();
+        String[] lines = text.split("\\R");
+        for (int i = 0; i < lines.length; i++) {
+            String l = lines[i].strip();
+            if (l.isEmpty() || l.startsWith("#")) {
+                continue;
+            }
+            int eq = l.indexOf('=');
+            String name = eq < 0 ? l : l.substring(0, eq).strip();
+            if (eq < 0 || !NAME.matcher(name).matches()) {
+                throw new IllegalArgumentException("Line " + (i + 1) + " of the environment is not NAME=value: " + l);
+            }
+            env.put(name, l.substring(eq + 1));
+        }
+        return env;
+    }
+
+    /** The Run dialog's folders for the {@code PATH}, one a line, blank lines skipped. */
+    static List<String> folders(String text) {
+        return text.lines().map(String::strip).filter(l -> !l.isEmpty()).toList();
     }
 
     // -- plumbing ---------------------------------------------------------------------------------------------

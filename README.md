@@ -228,6 +228,14 @@ document in front (`Runs`):
 - On Windows, the programs in the project, four folders deep at most and without the folders the navigator leaves
   out: executables that really are ones, PowerShell scripts and batch files. A script in front is offered first.
 
+- **Run…**, always last: a window (`RunDialog`) for a command of your own, with the folder it runs in (the
+  navigator's, or Browse…), environment variables one `NAME=value` a line, and folders to put ahead of the `PATH`,
+  one a line. Enter in the command or the folder runs it, as does Ctrl+Enter anywhere; Escape closes. It remembers
+  what it last ran. The variables and the `PATH` are set in the line itself (`set "NAME=value" && … && command`
+  for `cmd`, `export` for `sh`), so the console's first line is still the whole of what ran and Run again repeats
+  it. On Windows `cmd` expands a `%NAME%` in the command before the `set`s run, so the command itself sees the
+  old value; the program it starts sees the new one.
+
 Before anything runs, every document with a file and unsaved work is saved, since what runs is what is on disk.
 
 Runs are shown in the **console**, a window of its own in a neutral grey with one tab per run, the newest in front;
@@ -244,7 +252,8 @@ minutes, 30 (the default), 2 hours or never. The tab in front is never closed un
 Closing the console window asks before stopping anything still running, and clears it.
 
 To a script, the button is the landmark `run`, the console is `ottermate --window console` (or `window console`),
-its tabs `console.tabs` and its settings button `console.settings`.
+its tabs `console.tabs` and its settings button `console.settings`. Run… is the menu's `menu.run`, and its window
+`window run`, with `run.command`, `run.dir`, `run.environment`, `run.path` and the Run button `run.go`.
 
 ## How it is put together
 
@@ -281,7 +290,8 @@ in and a reply out), and **recipes** (a part built once and handed to whoever ta
 | `Ui.java` | the window: title bar, navigator beside the tabs, status line. Holds no state; it shows what the view hands it |
 | `Workspace.java` | the Run button, the tab bar and one `Buffer` per tab, kept in step |
 | `Buffer.java` | one document: its `TextField`, its highlighter, its path |
-| `Runs.java` | what the Run menu offers for a folder and a document, worked out from what is on disk |
+| `Runs.java` | what the Run menu offers for a folder and a document, worked out from what is on disk; and the line for a command typed into Run… |
+| `RunDialog.java` | Run…'s window: a command, its folder, its environment and `PATH`, remembered in the settings |
 | `Console.java`, `Job.java` | the console window and its tabs, and one run in it: a program on a pseudoconsole, its output kept after it ends |
 | `Navigator.java`, `FolderSource.java`, `RootSource.java` | the file tree and, in Open, the folders a root is picked from, over the disk, read lazily; Add, on a folder's menu |
 | `Preview.java`, `Survey.java` | what stands in the editor's place in Open: the folder under the pointer, surveyed for clues that it is a project's root |

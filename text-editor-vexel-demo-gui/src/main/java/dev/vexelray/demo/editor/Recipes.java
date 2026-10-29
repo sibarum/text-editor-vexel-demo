@@ -107,6 +107,12 @@ final class Recipes {
         return new Console(windows.named(Console.DECLARED), settings, dialogs);
     }
 
+    /** Run…'s dialog, where a command is typed: a satellite window, declared now and opened from the Run menu. */
+    @Provides
+    RunDialog runDialog(Windows windows, Settings settings, Dialogs dialogs) {
+        return new RunDialog(windows.named(RunDialog.DECLARED), settings, dialogs);
+    }
+
     /** The close gate and the navigator's, as messages: built here so the view can answer them and the start arm one. */
     @Provides
     Gates gates(Atchung bus) {

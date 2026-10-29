@@ -147,6 +147,15 @@ final class Landmarks {
     /** The console's settings button, which says when finished runs close. */
     static final String CONSOLE_SETTINGS = "console.settings";
 
+    /** The Run dialog's fields, Run… on the Run menu: {@code window run}. Enter in either one-line field runs. */
+    static final String RUN_COMMAND = "run.command";
+    static final String RUN_DIR = "run.dir";
+    static final String RUN_ENVIRONMENT = "run.environment";
+    static final String RUN_PATH = "run.path";
+
+    /** The Run dialog's Run button. */
+    static final String RUN_GO = "run.go";
+
     private Landmarks() {
     }
 }

@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
@@ -19,6 +20,7 @@ import java.util.jar.Manifest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** What the Run menu offers, from what is on disk. */
@@ -159,6 +161,42 @@ class RunsTest {
     void aDurationReadsInSecondsThenMinutes() {
         assertEquals("1.5 s", Job.duration(1_500_000_000L));
         assertEquals("2 min 5 s", Job.duration(125_000_000_000L));
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void aTypedCommandSetsItsEnvironmentAndPathInTheLineForCmd() {
+        Runs.Run run = Runs.typed("  mvn -v ", dir, Runs.environment("JAVA_HOME=C:\\jdk 25\n\n# skipped\nEMPTY="),
+                Runs.folders("C:\\tools\n\n  C:\\more bin  \n"));
+        assertEquals("set \"JAVA_HOME=C:\\jdk 25\" && set \"EMPTY=\" && set \"PATH=C:\\tools;C:\\more bin;%PATH%\" "
+                + "&& mvn -v", run.line());
+        assertEquals("mvn -v", run.label());
+        assertEquals(dir, run.dir());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void aTypedCommandSetsItsEnvironmentAndPathInTheLineForSh() {
+        Runs.Run run = Runs.typed("make", dir, Runs.environment("GREETING=hello world"), List.of("/opt/bin"));
+        assertEquals("export GREETING='hello world' && export PATH=/opt/bin:\"$PATH\" && make", run.line());
+    }
+
+    @Test
+    void aTypedCommandAloneIsJustTheCommandAndALongOneIsCutForItsLabel() {
+        String longer = "java -jar some/rather/long/path/to/a/program-1.0.0.jar --and --flags";
+        Runs.Run run = Runs.typed(longer, dir, Map.of(), List.of());
+        assertEquals(longer, run.line());
+        assertEquals(40, run.label().length());
+        assertTrue(run.label().endsWith("…"), run.label());
+    }
+
+    @Test
+    void anEnvironmentLineThatIsNotNameEqualsValueIsRefusedByItsNumber() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Runs.environment("A=1\nnot a setting"));
+        assertTrue(e.getMessage().startsWith("Line 2 "), e.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> Runs.environment("MY VAR=1"));
+        assertEquals("x=y", Runs.environment("A=x=y").get("A"), "only the first = splits");
     }
 
     // -- fixtures ---------------------------------------------------------------------------------------------
