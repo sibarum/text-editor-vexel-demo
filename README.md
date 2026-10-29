@@ -228,7 +228,7 @@ document in front (`Runs`):
 - On Windows, the programs in the project, four folders deep at most and without the folders the navigator leaves
   out: executables that really are ones, PowerShell scripts and batch files. A script in front is offered first.
 
-- **Run…**, always last: a window (`RunDialog`) for a command of your own, with the folder it runs in (the
+- **Run…**, always first: a window (`RunDialog`) for a command of your own, with the folder it runs in (the
   navigator's, or Browse…), environment variables one `NAME=value` a line, and folders to put ahead of the `PATH`,
   one a line. Enter in the command or the folder runs it, as does Ctrl+Enter anywhere; Escape closes. It remembers
   what it last ran. The variables and the `PATH` are set in the line itself (`set "NAME=value" && … && command`

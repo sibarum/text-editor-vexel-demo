@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Run…, the last item of the Run menu: a command typed rather than offered, with the folder it runs in, variables set
+ * Run…, the first item of the Run menu: a command typed rather than offered, with the folder it runs in, variables set
  * for it, and folders put before the {@code PATH}. What it makes is a {@link Runs.Run} like any the menu offers
  * ({@link Runs#typed}), run the same way: the documents saved, then a tab in the console.
  *

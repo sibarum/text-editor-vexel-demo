@@ -10,18 +10,19 @@ import dev.vexelray.framework.api.Provides;
 import dev.vexelray.framework.api.Publishes;
 import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.framework.shell.Dialogs;
+import dev.vexelray.framework.shell.NamedWindow;
 import dev.vexelray.framework.shell.Shell;
+import dev.vexelray.framework.shell.Window;
 import dev.vexelray.framework.shell.Windows;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.krono.KronoGui;
 import dev.vexelray.gui.widget.TitleBar;
+import dev.vexelray.gui.widget.ZoomKeys;
 import dev.vexelray.text.FontSet;
 import sibarum.atchung.Atchung;
 import sibarum.concordance.index.JarCache;
-import sibarum.tactroller.api.Key;
-import sibarum.tactroller.api.Modifier;
 
 /**
  * What this module builds — one recipe per part — and nothing about when.
@@ -93,7 +94,7 @@ final class Recipes {
     @Provides
     Ui ui(Gui gui, KronoGui krono, TitleBar titleBar, Scratches scratches) {
         Ui ui = new Ui(gui, new Motion(krono), titleBar, scratches);
-        zoomShortcuts(gui);
+        ZoomKeys.bind(gui);
         return ui;
     }
 
@@ -104,13 +105,13 @@ final class Recipes {
      */
     @Provides
     Console console(Windows windows, Settings settings, Dialogs dialogs) {
-        return new Console(windows.named(Console.DECLARED), settings, dialogs);
+        return new Console(named(windows, Console.DECLARED), settings, dialogs);
     }
 
     /** Run…'s dialog, where a command is typed: a satellite window, declared now and opened from the Run menu. */
     @Provides
     RunDialog runDialog(Windows windows, Settings settings, Dialogs dialogs) {
-        return new RunDialog(windows.named(RunDialog.DECLARED), settings, dialogs);
+        return new RunDialog(named(windows, RunDialog.DECLARED), settings, dialogs);
     }
 
     /** The close gate and the navigator's, as messages: built here so the view can answer them and the start arm one. */
@@ -139,15 +140,15 @@ final class Recipes {
     }
 
     /**
-     * Ctrl+= / Ctrl+- / Ctrl+0, and the numpad's three. Which chord zooms is the application's decision; how far
-     * the zoom goes is {@code Appearance.ZoomRange}, applied by the framework.
+     * Every window beside the main one is declared through here, so each has the zoom chords the main one has. The
+     * framework gives a named window the zoom range but leaves the chords to the application
+     * ({@code Appearance.ZoomRange}), so a window declared without this zooms with nothing, and a person who zoomed the
+     * main window to read it has the same need in the next. The chords are the suite's {@link ZoomKeys}: Ctrl+=,
+     * Ctrl+- and Ctrl+0, and the numpad's three.
      */
-    private static void zoomShortcuts(Gui gui) {
-        gui.shortcut(Key.EQUAL, gui::zoomIn, Modifier.CONTROL);
-        gui.shortcut(Key.MINUS, gui::zoomOut, Modifier.CONTROL);
-        gui.shortcut(Key.DIGIT_0, gui::resetZoom, Modifier.CONTROL);
-        gui.shortcut(Key.NUMPAD_ADD, gui::zoomIn, Modifier.CONTROL);
-        gui.shortcut(Key.NUMPAD_SUBTRACT, gui::zoomOut, Modifier.CONTROL);
-        gui.shortcut(Key.NUMPAD_0, gui::resetZoom, Modifier.CONTROL);
+    private static Window named(Windows windows, NamedWindow declared) {
+        Window window = windows.named(declared);
+        ZoomKeys.bind(window.gui());
+        return window;
     }
 }

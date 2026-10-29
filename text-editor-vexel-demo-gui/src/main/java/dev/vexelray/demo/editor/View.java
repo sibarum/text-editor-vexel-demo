@@ -873,7 +873,7 @@ final class View {
 
     /**
      * The Run button, and F5: what can be run for the folder and the document in front ({@link Runs}), as a menu under
-     * the button, and last, Run…, for a command typed ({@link RunDialog}). Worked out on the offload lane, since it
+     * the button, and first, Run…, for a command typed ({@link RunDialog}). Worked out on the offload lane, since it
      * reads the disk.
      */
     void runMenu() {
@@ -883,14 +883,15 @@ final class View {
         String text = b == null ? null : b.field.text();
         io.execute(() -> {
             List<MenuItem> items = new ArrayList<>();
-            for (Runs.Run r : Runs.offered(project, file, text)) {
-                items.add(r == null ? MenuItem.SEPARATOR : MenuItem.of(r.label(), () -> run(r)));
-            }
-            if (!items.isEmpty()) {
-                items.add(MenuItem.SEPARATOR);
-            }
             Path folder = project != null ? project : file != null ? file.getParent() : null;
             items.add(MenuItem.of("Run…", () -> runDialog.show(folder)));
+            List<Runs.Run> offered = Runs.offered(project, file, text);
+            if (!offered.isEmpty()) {
+                items.add(MenuItem.SEPARATOR);
+            }
+            for (Runs.Run r : offered) {
+                items.add(r == null ? MenuItem.SEPARATOR : MenuItem.of(r.label(), () -> run(r)));
+            }
             Node button = ws.runButton().node();
             NodeLayout at = button.layout();
             float x = at.present() ? at.rect().x() : 0f;
