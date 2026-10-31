@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.framework.api.Configuration;
 import dev.vexelray.framework.api.Provides;
 import dev.vexelray.framework.shell.Appearance;
@@ -58,6 +59,16 @@ final class Recipes {
     @Provides
     Ui ui(Gui gui, TitleBar titleBar) {
         return new Ui(gui, new Motion(gui), titleBar);
+    }
+
+    /**
+     * The grammars, in this look's code colours, for {@code MarkText} to colour documents with. A part rather than
+     * the job's own state, because parsing a grammar is slow and a job keeps nothing between requests. Built from
+     * nothing the framework makes, so first; it parses no grammar until a document wants one.
+     */
+    @Provides
+    Grammars grammars() {
+        return new Grammars(Look.CODE);
     }
 
 }

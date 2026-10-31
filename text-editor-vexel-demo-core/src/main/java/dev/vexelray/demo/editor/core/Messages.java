@@ -283,10 +283,13 @@ public final class Messages {
         }
     }
 
-    /** Colour a Markdown document ({@link MarkText}): its text as of {@code version}, and the colours to use. */
+    /**
+     * Colour a document ({@link MarkText}): its text as of {@code version}, in the grammar for {@code scope}
+     * ({@link Grammars#scopeFor}). The colours are the {@link Grammars}' own, so the request is only what changes.
+     */
     public static final Topic<Mark> MARK_TOPIC = Topic.edge(Mark.class);
 
-    public record Mark(String field, String text, long version, Markdown.Style style) {
+    public record Mark(String field, String text, long version, String scope) {
     }
 
     public static final Topic<Marked> MARKED_TOPIC = Topic.edge(Marked.class);

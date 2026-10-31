@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.demo.editor.core.Markdown;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.layout.LayoutEnums.Direction;
@@ -56,18 +55,7 @@ final class Ui {
             gui.landmark(slot, status.slot(slot));
         }
 
-        // Markdown's colours are the theme's roles, and one of this application's own (Look.EMPHASIS). Resolved
-        // once, here, because a role resolves at the moment it is asked and the theme does not change under us.
-        Markdown.Style markup = new Markdown.Style(
-                gui.theme().color(Role.ACCENT),
-                gui.theme().color(Role.FAINT),
-                Look.EMPHASIS,
-                gui.theme().color(Role.ACCENT),
-                gui.theme().color(Role.DIM),
-                gui.theme().color(Role.INK),
-                gui.theme().color(Role.PANEL));
-
-        workspace = new Workspace(gui, motion, markup);
+        workspace = new Workspace(gui, motion);
         navigator = new Navigator(gui, motion);
 
         SplitPane split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), workspace.node())

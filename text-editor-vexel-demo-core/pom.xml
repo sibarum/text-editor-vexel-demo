@@ -43,6 +43,29 @@
             <artifactId>vexelray-gui-core</artifactId>
             <version>${vexelray-gui.version}</version>
         </dependency>
+        <!-- Syntax highlighting (Grammars): TM4E's TextMate tokenizer, the NetBeans repack of org.eclipse.tm4e.core,
+             which is the only current release on Maven Central, and the three runtime dependencies it does not
+             declare. A tokenizer and no widget, so it belongs on this side of the line. -->
+        <dependency>
+            <groupId>org.netbeans.external</groupId>
+            <artifactId>org.eclipse.tm4e.core-0.14.0</artifactId>
+            <version>RELEASE260</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jruby.joni</groupId>
+            <artifactId>joni</artifactId>
+            <version>2.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.snakeyaml</groupId>
+            <artifactId>snakeyaml-engine</artifactId>
+            <version>2.7</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

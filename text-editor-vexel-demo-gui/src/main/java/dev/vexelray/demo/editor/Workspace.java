@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.demo.editor.core.Markdown;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
@@ -44,7 +43,6 @@ final class Workspace {
 
     private final Gui gui;
     private final Motion motion;
-    private final Markdown.Style markup;
     private final Tabs tabs;
     private final Node hint;
     private final Node root;
@@ -55,10 +53,9 @@ final class Workspace {
     private final Map<Long, Buffer> byId = new HashMap<>();
     private final Map<String, Buffer> byField = new HashMap<>();
 
-    Workspace(Gui gui, Motion motion, Markdown.Style markup) {
+    Workspace(Gui gui, Motion motion) {
         this.gui = gui;
         this.motion = motion;
-        this.markup = markup;
         this.accent = gui.theme().color(Role.ACCENT);
 
         tabs = new Tabs(gui).name("documents").closable(false).slide(motion.change)
@@ -93,8 +90,7 @@ final class Workspace {
 
     /** Open {@code text} as {@code path} in a new tab, in front. {@code focus}: whether it takes the keyboard. */
     Buffer add(long id, Path path, String text, boolean focus) {
-        Buffer buffer = new Buffer(gui, id, path, text,
-                Markdown.handles(String.valueOf(path.getFileName())) ? markup : null);
+        Buffer buffer = new Buffer(gui, id, path, text);
         tabs.add(buffer.name(), buffer.field.node());
         buffers.add(buffer);
         byId.put(id, buffer);

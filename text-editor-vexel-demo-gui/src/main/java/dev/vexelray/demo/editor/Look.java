@@ -1,11 +1,14 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
 import dev.vexelray.gui.core.style.Relief;
 import dev.vexelray.gui.core.style.Shading;
 import dev.vexelray.gui.core.style.Theme;
+
+import java.util.List;
 
 /**
  * The palette, as anchors.
@@ -72,11 +75,52 @@ final class Look {
     // ---------------------------------------------------------------- roles of our own
 
     /**
-     * Emphasis in Markdown, which the framework does not name: a warm gold at the accent's lightness, so it reads
-     * as a second voice beside the accent's headings and links rather than as another shade of them. The atlas has
-     * one weight, so emphasis is a colour rather than a bold face.
+     * The code colours: a TextMate scope prefix and its colour, the first rule naming a token's most specific scope
+     * winning ({@link Grammars}). The design's, measured where it shows them -- keywords (#8aa9f0), types (#7dd3e6),
+     * numbers (#e5a477), comments (#7f8994), plain names and punctuation -- and the rest moved to sit with those.
+     * Comments are italic in the design; a span carries no style, so they are not. Carried from the 0.1 editor.
      */
-    static final Color EMPHASIS = Oklab.polar(0.8200, 0.1100, 85.00).toColor();
+    static final List<Grammars.Colour> CODE = List.of(
+            code("comment", 0x7f8994),
+            code("string", 0xa6d189),
+            code("constant.numeric", 0xe5a477),
+            code("constant.language", 0xe5a477),
+            // CSS keeps its interesting values here: #fff, auto, print, and the rest of the keyword values.
+            code("constant.other", 0xe5a477),
+            code("support.constant", 0xe5a477),
+            code("keyword", 0x8aa9f0),
+            code("storage", 0x8aa9f0),
+            code("entity.name.function", 0xe3c08d),
+            code("entity.name.type", 0x7dd3e6),
+            code("support.type", 0x7dd3e6),
+            code("support.class", 0x7dd3e6),
+            code("variable.parameter", 0xe8d4b0),
+            // Shell and PowerShell are mostly variables, and an uncoloured $name reads as prose. This sits a step off
+            // the default ink rather than shouting, and it tints plain identifiers in JS and Java too.
+            code("variable.other", 0xc8d3e2),
+            code("entity.name.section", 0x8aa9f0),
+            code("entity.name.tag", 0xf7768e),
+            code("entity.other.attribute-name", 0x7dcfff),
+            code("support.function", 0x7dd3e6),
+            code("markup.heading", 0x8aa9f0),
+            code("markup.bold", 0xe3c08d),
+            code("markup.italic", 0x8aa9f0),
+            code("markup.inline.raw", 0x7dd3e6),
+            code("markup.fenced_code", 0x7dd3e6),
+            code("markup.underline.link", 0x73daca),
+            code("markup.quote", 0x7f8994),
+            // A diff without red and green is not a diff. These three carry .diff files, and Markdown's ```diff
+            // fences with them.
+            code("markup.inserted", 0xa6d189),
+            code("markup.deleted", 0xf7768e),
+            code("markup.changed", 0xe3c08d),
+            // The ---/+++/@@ furniture around the hunks, which the grammar scopes as meta, not markup.
+            code("meta.diff", 0x8aa9f0),
+            code("punctuation", 0x8b95a1));
+
+    private static Grammars.Colour code(String scope, int rgb) {
+        return new Grammars.Colour(scope, Color.rgb(rgb));
+    }
 
     private Look() {
     }

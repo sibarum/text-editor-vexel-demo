@@ -194,11 +194,14 @@ class ViewTest {
         assertEquals(2, ws.all().size());
     }
 
+    /** A format with a grammar is coloured by MarkText, through the Grammars part the recipe builds; plain text is not. */
     @Test
-    void aMarkdownFileIsGivenSpansAndATextFileIsNot() throws Exception {
+    void aFileInAKnownFormatIsGivenSpansAndATextFileIsNot() throws Exception {
         Buffer md = opened(Files.writeString(dir.resolve("notes.md"), "# Title\n\nSome *emphasis*."));
+        Buffer java = opened(Files.writeString(dir.resolve("A.java"), "final class A { int n = 4; }"));
         Buffer txt = opened(Files.writeString(dir.resolve("notes.txt"), "# Title\n\nSome *emphasis*."));
         eventually("the markdown to be marked", () -> !md.field.spans().isEmpty());
+        eventually("the java to be marked", () -> !java.field.spans().isEmpty());
         assertTrue(txt.field.spans().isEmpty());
     }
 

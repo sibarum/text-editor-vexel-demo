@@ -69,7 +69,7 @@ import java.util.List;
  *
  * <h2>Slow work is a job</h2>
  *
- * <p>Reading a folder for the tree and colouring a Markdown file are the jobs' ({@code ListFolder},
+ * <p>Reading a folder for the tree and colouring a document are the jobs' ({@code ListFolder},
  * {@code MarkText}): the view asks and acts on the answer, because its time is the frame's.
  */
 @dev.vexelray.framework.api.View
