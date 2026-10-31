@@ -45,6 +45,12 @@ record Intent(Command command) {
                 view.toggleFormatted();
             }
         },
+        TOGGLE_NAVIGATOR {
+            @Override
+            void on(View view) {
+                view.toggleNavigator();
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

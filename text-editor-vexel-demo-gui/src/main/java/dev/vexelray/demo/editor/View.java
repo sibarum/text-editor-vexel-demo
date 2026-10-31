@@ -18,6 +18,7 @@ import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Open;
+import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
@@ -130,6 +131,7 @@ final class View {
         chord(Shortcut.of(Key.L, Modifier.CONTROL), Command.FOCUS_PATH);
         chord(Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT), Command.FOCUS_TREE);
         chord(Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT), Command.TOGGLE_FORMATTED);
+        chord(Shortcut.of(Key.B, Modifier.CONTROL), Command.TOGGLE_NAVIGATOR);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
         chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
@@ -153,9 +155,17 @@ final class View {
 
     // ------------------------------------------------------------------ what the editor says
 
+    /** A folder to show: the navigator shows it, and comes back if it was hidden, which is how a plain window ends. */
     @Subscribe
     public void showFolder(ShowFolder m) {
         nav.show(m.path());
+        ui.showNavigator(true);
+    }
+
+    /** A window on files alone: the navigator out of the way until a folder is shown or Ctrl+B asks for it. */
+    @Subscribe
+    public void plain(Plain m) {
+        ui.showNavigator(false);
     }
 
     @Subscribe
@@ -274,8 +284,12 @@ final class View {
             close(rest);
         } else if (m.action().equals(Workspace.CLOSE_ALL)) {
             close(ws.all());
-        } else if (m.action().equals(Workspace.REVEAL) && !nav.reveal(b.path)) {
-            ui.status(b.name() + " is not inside the folder shown", false);
+        } else if (m.action().equals(Workspace.REVEAL)) {
+            if (nav.reveal(b.path)) {
+                ui.showNavigator(true);
+            } else {
+                ui.status(b.name() + " is not inside the folder shown", false);
+            }
         } else if (m.action().equals(Workspace.FORMAT)) {
             toggleFormatted(b);
         }
@@ -428,11 +442,25 @@ final class View {
         ws.cycle(delta);
     }
 
+    /** Ctrl+B: the navigator, or the whole window for the files; the keyboard goes where the eye is. */
+    void toggleNavigator() {
+        boolean show = !ui.navigatorShown();
+        ui.showNavigator(show);
+        if (show) {
+            nav.focusTree();
+        } else if (ws.front() != null) {
+            gui.focus(ws.front().keyboard());
+        }
+    }
+
+    /** The path bar and the tree are the navigator's, so asking for either brings it back if it was hidden. */
     void focusPath() {
+        ui.showNavigator(true);
         nav.focusPath();
     }
 
     void focusTree() {
+        ui.showNavigator(true);
         nav.focusTree();
     }
 

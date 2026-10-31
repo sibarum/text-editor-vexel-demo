@@ -37,6 +37,9 @@ final class Ui {
     private final StatusBar status;
     private final Workspace workspace;
     private final Navigator navigator;
+    private final SplitPane split;
+    /** Set only by {@link #showNavigator}, from the view, on the GUI thread. */
+    private boolean navigatorShown = true;
     private final Motion motion;
     private final Color danger;
 
@@ -60,7 +63,7 @@ final class Ui {
         workspace = new Workspace(gui, motion);
         navigator = new Navigator(gui, motion);
 
-        SplitPane split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), workspace.node())
+        split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), workspace.node())
                 .size(NAVIGATOR);
         split.node().width(Length.FILL).height(Length.grow(1f));
 
@@ -75,6 +78,21 @@ final class Ui {
 
     Navigator navigator() {
         return navigator;
+    }
+
+    /**
+     * Show or hide the navigator. Hidden is out of the layout, divider and all, so the editor has the whole window:
+     * what a window on files alone starts as ({@code Plain}), and what Ctrl+B does. The split keeps the width it had,
+     * so the navigator comes back as it was.
+     */
+    void showNavigator(boolean show) {
+        navigatorShown = show;
+        split.alone(show ? null : SplitPane.Pane.SECOND);
+    }
+
+    /** Whether the navigator is on screen: the split's own answer, which it does not give, kept here beside it. */
+    boolean navigatorShown() {
+        return navigatorShown;
     }
 
     /** The front file's title, dot and all, in the title bar and the status line; empty when nothing is open. */

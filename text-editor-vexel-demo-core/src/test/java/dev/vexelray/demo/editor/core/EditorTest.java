@@ -15,6 +15,7 @@ import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
 import dev.vexelray.demo.editor.core.Messages.Open;
+import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recall;
 import dev.vexelray.demo.editor.core.Messages.Recalled;
@@ -84,7 +85,7 @@ class EditorTest {
                 Messages.CLOSE_TABS_TOPIC, Messages.RETITLE_TOPIC, Messages.CAPTION_TOPIC, Messages.STATUS_TOPIC,
                 Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
-                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC)) {
+                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -377,5 +378,34 @@ class EditorTest {
         assertEquals(1, took(Remember.class).size());
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.GO, Kind.FOLDER));
         assertTrue(took(Remember.class).isEmpty(), "the same folder again is the same session");
+    }
+
+    /**
+     * A window the command line named a file for is about that file: plain, said before anything is looked at; the last
+     * session is not brought back; and nothing it does is remembered, not even a folder shown in it later.
+     */
+    @Test
+    void aWindowOnFilesAloneIsPlainAndKeepsNoSession() {
+        Path a = file("a.txt");
+        Path b = file("b.txt");
+        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(b), Optional.of(b), List.of(a), dir));
+        assertEquals(List.of(new Plain(), new Find(a, Why.ARGUMENT)), List.copyOf(sent),
+                "plain first, then only the argument: no folder, no remembered files");
+        sent.clear();
+        tell(Messages.FOUND_TOPIC, new Found(a, Why.ARGUMENT, Kind.FILE));
+        assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class));
+        tell(Messages.FILE_READ_TOPIC, new FileRead(a, Why.RESTORE_FILE, true, "a", false, "", ""));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.GO, Kind.FOLDER));
+        assertEquals(1, sent.stream().filter(ShowFolder.class::isInstance).count(), "a folder still shows");
+        assertTrue(took(Remember.class).isEmpty(), "nothing is remembered");
+    }
+
+    /** A folder among the arguments is shown, which is what brings a plain window's navigator back. */
+    @Test
+    void aFolderArgumentIsShown() {
+        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.empty(), List.of(), Optional.empty(), List.of(dir), dir));
+        assertEquals(List.of(new Find(dir, Why.ARGUMENT)), took(Find.class));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.ARGUMENT, Kind.FOLDER));
+        assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));
     }
 }

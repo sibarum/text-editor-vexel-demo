@@ -89,6 +89,15 @@ public final class Messages {
 
     // ------------------------------------------------------------------ the editor tells the view
 
+    /**
+     * A window on files alone ({@code vex notes.md}): the navigator out of the layout, so the editor has the whole
+     * window, until a folder is shown.
+     */
+    public static final Topic<Plain> PLAIN_TOPIC = Topic.edge(Plain.class);
+
+    public record Plain() {
+    }
+
     /** Point the navigator at a folder, or list it again. */
     public static final Topic<ShowFolder> SHOW_FOLDER_TOPIC = Topic.edge(ShowFolder.class);
 

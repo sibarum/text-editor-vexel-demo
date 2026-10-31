@@ -18,6 +18,7 @@ import dev.vexelray.demo.editor.core.Messages.Kind;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recall;
+import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Recalled;
 import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
@@ -105,7 +106,7 @@ import java.util.Set;
         Close.class, CloseRequested.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
-        Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class})
+        Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class})
 public final class Editor {
 
     /**
@@ -131,10 +132,12 @@ public final class Editor {
      * @param front     the tab to put in front when the restore is done
      * @param started   the folder the application started in, shown when there is no other
      * @param armed     whether the restore is done: before then a write would overwrite what is being restored
+     * @param keeps     whether this window's session is kept: not when the command line named what to open
      * @param last      the session last sent to be remembered, so an unchanged one is not written again
      */
     record State(Doc doc, long ids, Set<Path> reading, Map<Long, Closing> closings, List<Restore> restoring,
-                 Optional<Path> front, Optional<Path> started, boolean armed, Optional<Remember> last) {
+                 Optional<Path> front, Optional<Path> started, boolean armed, boolean keeps,
+                 Optional<Remember> last) {
 
         State {
             reading = Set.copyOf(reading);
@@ -144,16 +147,16 @@ public final class Editor {
 
         static State initial() {
             return new State(Doc.initial(), 0, Set.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(),
-                    false, Optional.empty());
+                    false, true, Optional.empty());
         }
 
         State withDoc(Doc value) {
-            return new State(value, ids, reading, closings, restoring, front, started, armed, last);
+            return new State(value, ids, reading, closings, restoring, front, started, armed, keeps, last);
         }
 
         /** A new tab's id, taken. */
         State withNextId() {
-            return new State(doc, ids + 1, reading, closings, restoring, front, started, armed, last);
+            return new State(doc, ids + 1, reading, closings, restoring, front, started, armed, keeps, last);
         }
 
         State reading(Path file, boolean asked) {
@@ -163,35 +166,35 @@ public final class Editor {
             } else {
                 next.remove(file);
             }
-            return new State(doc, ids, next, closings, restoring, front, started, armed, last);
+            return new State(doc, ids, next, closings, restoring, front, started, armed, keeps, last);
         }
 
         State withClosing(long run, Closing value) {
             Map<Long, Closing> next = new HashMap<>(closings);
             next.put(run, value);
-            return new State(doc, ids, reading, next, restoring, front, started, armed, last);
+            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last);
         }
 
         State withoutClosing(long run) {
             Map<Long, Closing> next = new HashMap<>(closings);
             next.remove(run);
-            return new State(doc, ids, reading, next, restoring, front, started, armed, last);
+            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last);
         }
 
-        State withRestoring(List<Restore> steps, Optional<Path> inFront, Path startedIn) {
-            return new State(doc, ids, reading, closings, steps, inFront, Optional.of(startedIn), armed, last);
+        State withRestoring(List<Restore> steps, Optional<Path> inFront, Path startedIn, boolean keeping) {
+            return new State(doc, ids, reading, closings, steps, inFront, Optional.of(startedIn), armed, keeping, last);
         }
 
         State withRestoring(List<Restore> steps) {
-            return new State(doc, ids, reading, closings, steps, front, started, armed, last);
+            return new State(doc, ids, reading, closings, steps, front, started, armed, keeps, last);
         }
 
         State withArmed() {
-            return new State(doc, ids, reading, closings, restoring, Optional.empty(), started, true, last);
+            return new State(doc, ids, reading, closings, restoring, Optional.empty(), started, true, keeps, last);
         }
 
         State withLast(Remember value) {
-            return new State(doc, ids, reading, closings, restoring, front, started, armed, Optional.of(value));
+            return new State(doc, ids, reading, closings, restoring, front, started, armed, keeps, Optional.of(value));
         }
     }
 
@@ -369,12 +372,24 @@ public final class Editor {
     }
 
     /**
-     * Bring back the folder, then the files that were open, then what the command line named, in that order and one
-     * at a time, so the tabs come back as they were. A remembered file that has gone is skipped and a folder that has
-     * gone is forgotten; the person moved them, and an editor should not complain about it.
+     * Bring back the folder, then the files that were open, in that order and one at a time, so the tabs come back as
+     * they were. A remembered file that has gone is skipped and a folder that has gone is forgotten; the person moved
+     * them, and an editor should not complain about it.
+     *
+     * <p>A window the command line named things for ({@code vex notes.md}) is about those, not the last session: it
+     * brings nothing back and keeps nothing, so opening a file from a shell leaves the session alone. It is plain, the
+     * navigator out of the way, until a folder is shown in it, which a folder among the arguments does. Said before the
+     * first argument is looked at, so the navigator is never seen to go.
      */
     private static State recalled(State s, Recalled r, Out out) {
         List<Restore> steps = new ArrayList<>();
+        if (!r.arguments().isEmpty()) {
+            out.send(Messages.PLAIN_TOPIC, new Plain());
+            for (Path p : r.arguments()) {
+                steps.add(new Restore(Why.ARGUMENT, p));
+            }
+            return next(s.withRestoring(steps, Optional.empty(), r.started(), false), out);
+        }
         State next = s;
         if (r.folder().isPresent()) {
             steps.add(new Restore(Why.RESTORE_FOLDER, r.folder().get()));
@@ -384,11 +399,7 @@ public final class Editor {
         for (Path p : r.files()) {
             steps.add(new Restore(Why.RESTORE_FILE, p));
         }
-        for (Path p : r.arguments()) {
-            steps.add(new Restore(Why.ARGUMENT, p));
-        }
-        Optional<Path> front = r.arguments().isEmpty() ? r.front() : Optional.empty();
-        return next(next.withRestoring(steps, front, r.started()), out);
+        return next(next.withRestoring(steps, r.front(), r.started(), true), out);
     }
 
     /** The restore's next request, or, when there is none left, the front tab and the end of the restore. */
@@ -418,7 +429,7 @@ public final class Editor {
      * this runs when the set of files, the one in front or the folder changes, not on every keystroke.
      */
     private static State remember(State s, Out out) {
-        if (!s.armed()) {
+        if (!s.armed() || !s.keeps()) {
             return s;
         }
         Doc d = s.doc();

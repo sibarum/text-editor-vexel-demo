@@ -243,6 +243,21 @@ class ViewTest {
         assertFalse(md.showingFormatted());
     }
 
+    /** Plain puts the navigator out of the way; Ctrl+B brings it back, and so does a folder being shown. */
+    @Test
+    void aPlainWindowHidesTheNavigatorUntilAskedOrAFolderIsShown() throws Exception {
+        Ui ui = wiring.ui();
+        shell.bus().publish(Messages.PLAIN_TOPIC, new Messages.Plain());
+        eventually("the navigator to go", () -> !ui.navigatorShown());
+        tell(Intent.Command.TOGGLE_NAVIGATOR);
+        eventually("Ctrl+B to bring it back", ui::navigatorShown);
+
+        shell.bus().publish(Messages.PLAIN_TOPIC, new Messages.Plain());
+        eventually("the navigator to go", () -> !ui.navigatorShown());
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        eventually("a folder to bring it back", ui::navigatorShown);
+    }
+
     @Test
     void thePathBarCreatesAFileThatIsNotThereYet() throws Exception {
         shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
