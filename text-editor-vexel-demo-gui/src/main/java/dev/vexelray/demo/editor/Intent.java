@@ -39,6 +39,12 @@ record Intent(Command command) {
                 view.cycle(-1);
             }
         },
+        TOGGLE_FORMATTED {
+            @Override
+            void on(View view) {
+                view.toggleFormatted();
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

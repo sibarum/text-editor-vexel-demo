@@ -40,6 +40,7 @@ final class Workspace {
     static final String CLOSE_OTHERS = "close-others";
     static final String CLOSE_ALL = "close-all";
     static final String REVEAL = "reveal";
+    static final String FORMAT = "format";
 
     private final Gui gui;
     private final Motion motion;
@@ -63,7 +64,8 @@ final class Workspace {
                 .action(MenuAction.of(CLOSE, "Close"))
                 .action(MenuAction.of(CLOSE_OTHERS, "Close others"))
                 .action(MenuAction.of(CLOSE_ALL, "Close all"))
-                .action(MenuAction.of(REVEAL, "Reveal in navigator"));
+                .action(MenuAction.of(REVEAL, "Reveal in navigator"))
+                .action(MenuAction.of(FORMAT, "Formatted or source (Ctrl+Shift+V)"));
         tabs.node().width(Length.FILL).height(Length.grow(1f)).visible(false);
         gui.landmark(Landmarks.TABS, tabs.node());
 
@@ -91,14 +93,14 @@ final class Workspace {
     /** Open {@code text} as {@code path} in a new tab, in front. {@code focus}: whether it takes the keyboard. */
     Buffer add(long id, Path path, String text, boolean focus) {
         Buffer buffer = new Buffer(gui, id, path, text);
-        tabs.add(buffer.name(), buffer.field.node());
+        tabs.add(buffer.name(), buffer.node());
         buffers.add(buffer);
         byId.put(id, buffer);
         byField.put(buffer.address(), buffer);
         tabs.select(buffers.size() - 1);
         showing(true);
         if (focus) {
-            gui.focus(buffer.field.node());
+            gui.focus(buffer.keyboard());
         }
         return buffer;
     }
@@ -170,7 +172,7 @@ final class Workspace {
         tabs.select(i);
         motion.cues.play(tabs.header(i), Cue.ring(accent, 1));
         if (focus) {
-            gui.focus(buffer.field.node());
+            gui.focus(buffer.keyboard());
         }
     }
 
@@ -182,7 +184,7 @@ final class Workspace {
         }
         int i = Math.floorMod(tabs.selected() + delta, n);
         tabs.select(i);
-        gui.focus(buffers.get(i).field.node());
+        gui.focus(buffers.get(i).keyboard());
     }
 
     /** What a tab's header says, as the editor decided it. */

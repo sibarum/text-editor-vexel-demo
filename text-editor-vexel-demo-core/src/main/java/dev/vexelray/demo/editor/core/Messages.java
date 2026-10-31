@@ -299,4 +299,21 @@ public final class Messages {
             spans = List.copyOf(spans);
         }
     }
+
+    /**
+     * Read a Markdown document as blocks for its formatted view ({@link FormatText}): its text as of {@code version}.
+     * Asked when the view is switched on, and again when the text changes under it.
+     */
+    public static final Topic<Format> FORMAT_TOPIC = Topic.edge(Format.class);
+
+    public record Format(String field, String text, long version) {
+    }
+
+    public static final Topic<Formatted> FORMATTED_TOPIC = Topic.edge(Formatted.class);
+
+    public record Formatted(String field, long version, List<Markdown.Block> blocks) {
+        public Formatted {
+            blocks = List.copyOf(blocks);
+        }
+    }
 }

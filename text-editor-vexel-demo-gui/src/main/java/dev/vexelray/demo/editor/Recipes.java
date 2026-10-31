@@ -7,6 +7,7 @@ import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.widget.TitleBar;
+import dev.vexelray.text.FontSet;
 
 /**
  * What this module builds — one recipe per part — and nothing about when.
@@ -70,5 +71,18 @@ final class Recipes {
     Grammars grammars() {
         return new Grammars(Look.CODE);
     }
+
+    /**
+     * The fonts, as this project's own build bakes them (the {@code <families>} in pom.xml): Noto Sans in its four
+     * faces, for the formatted view's bold and italic, and Noto Sans Mono, each borrowing what it lacks from the
+     * other as the standard set's do.
+     */
+    @Provides
+    FontSet fonts() {
+        return FontSet.fromClassPath(FONTS).withFallback("sans", "mono");
+    }
+
+    /** Where the build writes the fonts' manifest, on the class path. */
+    static final String FONTS = "/dev/vexelray/demo/editor/fonts/fonts.json";
 
 }

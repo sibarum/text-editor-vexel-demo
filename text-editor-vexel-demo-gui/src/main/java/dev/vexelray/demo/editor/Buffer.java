@@ -1,9 +1,13 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Grammars;
+import dev.vexelray.demo.editor.core.Markdown;
+import dev.vexelray.demo.editor.core.Messages.Format;
+import dev.vexelray.demo.editor.core.Messages.Formatted;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.text.Whitespace;
@@ -39,6 +43,14 @@ final class Buffer implements AutoCloseable {
     final Path path;
     final TextField field;
 
+    /** What the tab shows: the field, or for Markdown the formatted view in its place. */
+    private final Node page;
+    /** Built only for Markdown, which is all that has a formatted view; null otherwise. */
+    private final FormattedView formatted;
+    /** Whether the formatted view is shown in place of the field. */
+    private boolean showingFormatted;
+    /** The text the formatted view was last asked for. */
+    private String formattedText;
     /** The TextMate scope of the file's format, or null for plain text. */
     private final String scope;
     /** The version of the field's last change, which a colouring has to match. */
@@ -65,6 +77,11 @@ final class Buffer implements AutoCloseable {
                 .lineNumbers(true).wordWrap(true).whitespace(Whitespace.BOUNDARY).lineEnds(true);
         field.node().width(Length.FILL).height(Length.FILL).font(scope != null ? Type.MONO : Type.UI)
                 .textSize(Type.CODE);
+        this.formatted = Markdown.handles(name()) ? new FormattedView(gui) : null;
+        this.page = gui.column().width(Length.FILL).height(Length.FILL).children(field.node());
+        if (formatted != null) {
+            page.append(formatted.node());
+        }
 
         // Content this field has no past with, so text() rather than replace(): the history starts here, and the
         // mark says this is what is on disk.
@@ -90,6 +107,66 @@ final class Buffer implements AutoCloseable {
         }
         marked = now;
         return new Mark(address(), now, at, scope);
+    }
+
+    /** What the tab shows: the field, or the formatted view in its place. */
+    Node node() {
+        return page;
+    }
+
+    /** What has the keyboard when this document is in front: the field, or the formatted view in its place. */
+    Node keyboard() {
+        return showingFormatted ? formatted.node() : field.node();
+    }
+
+    /** Whether this document has a formatted view: whether it is Markdown, by its name. */
+    boolean formattable() {
+        return formatted != null;
+    }
+
+    boolean showingFormatted() {
+        return showingFormatted;
+    }
+
+    /** The formatted view, or null when this is not Markdown. */
+    FormattedView formatted() {
+        return formatted;
+    }
+
+    /**
+     * Show the document formatted, or as its source: what to ask {@code FormatText} for, or null when going back to
+     * the source. The view keeps showing the last blocks it had until the answer lands, which on a switch back on is
+     * the right ones unless the text changed in between.
+     */
+    Format showFormatted(boolean on) {
+        showingFormatted = on;
+        field.node().visible(!on);
+        formatted.node().visible(on);
+        if (!on) {
+            return null;
+        }
+        formattedText = field.text();
+        return new Format(address(), formattedText, version);
+    }
+
+    /**
+     * The field changed under the formatted view (nothing is typed while it is shown, but a revert from disk still
+     * changes it): what to ask {@code FormatText} for again, or null when the source is what is shown or only the
+     * colours changed.
+     */
+    Format reformat(String now) {
+        if (!showingFormatted || now.equals(formattedText)) {
+            return null;
+        }
+        formattedText = now;
+        return new Format(address(), now, version);
+    }
+
+    /** {@code FormatText}'s answer: shown only if the field still says the text it was read from. */
+    void formatted(Formatted m) {
+        if (formatted != null && m.version() == version) {
+            formatted.show(m.blocks());
+        }
     }
 
     /** {@code MarkText}'s answer: applied only if the field still says the text it was worked out for. */
@@ -150,5 +227,8 @@ final class Buffer implements AutoCloseable {
     @Override
     public void close() {
         field.close();
+        if (formatted != null) {
+            formatted.close();
+        }
     }
 }

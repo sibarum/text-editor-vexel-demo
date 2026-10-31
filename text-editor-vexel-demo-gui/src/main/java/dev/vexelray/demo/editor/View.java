@@ -10,6 +10,8 @@ import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.Flush;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
+import dev.vexelray.demo.editor.core.Messages.Format;
+import dev.vexelray.demo.editor.core.Messages.Formatted;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
@@ -88,6 +90,7 @@ final class View {
     private final Sender<Save> save;
     private final Sender<Listing> listing;
     private final Sender<Mark> mark;
+    private final Sender<Format> format;
     private final Sender<TreeView.Children> children;
     private final Sender<Intent> intents;
 
@@ -96,7 +99,8 @@ final class View {
 
     View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
-         Sender<Listing> listing, Sender<Mark> mark, Sender<TreeView.Children> children, Sender<Intent> intents) {
+         Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
+         Sender<Intent> intents) {
         this.gui = gui;
         this.ui = ui;
         this.ws = ui.workspace();
@@ -109,6 +113,7 @@ final class View {
         this.save = save;
         this.listing = listing;
         this.mark = mark;
+        this.format = format;
         this.children = children;
         this.intents = intents;
         shortcuts();
@@ -124,6 +129,7 @@ final class View {
         chord(Shortcut.of(Key.W, Modifier.CONTROL), Command.CLOSE_FRONT);
         chord(Shortcut.of(Key.L, Modifier.CONTROL), Command.FOCUS_PATH);
         chord(Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT), Command.FOCUS_TREE);
+        chord(Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT), Command.TOGGLE_FORMATTED);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
         chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
@@ -226,6 +232,14 @@ final class View {
         }
     }
 
+    @Subscribe
+    public void formatted(Formatted m) {
+        Buffer b = ws.byField(m.field());
+        if (b != null) {
+            b.formatted(m);
+        }
+    }
+
     // ------------------------------------------------------------------ what the widgets say
 
     /**
@@ -262,6 +276,8 @@ final class View {
             close(ws.all());
         } else if (m.action().equals(Workspace.REVEAL) && !nav.reveal(b.path)) {
             ui.status(b.name() + " is not inside the folder shown", false);
+        } else if (m.action().equals(Workspace.FORMAT)) {
+            toggleFormatted(b);
         }
     }
 
@@ -276,6 +292,10 @@ final class View {
         Mark wanted = b.changed(m.text(), m.version());
         if (wanted != null) {
             mark.send(wanted);
+        }
+        Format again = b.reformat(m.text());
+        if (again != null) {
+            format.send(again);
         }
     }
 
@@ -379,6 +399,29 @@ final class View {
             ids.add(b.id);
         }
         close.send(new Close(ids));
+    }
+
+    void toggleFormatted() {
+        Buffer b = ws.front();
+        if (b != null) {
+            toggleFormatted(b);
+        }
+    }
+
+    /** Show {@code b} formatted, or as its source, and say which on the status line. */
+    private void toggleFormatted(Buffer b) {
+        if (!b.formattable()) {
+            ui.status("Only Markdown has a formatted view", false);
+            return;
+        }
+        Format wanted = b.showFormatted(!b.showingFormatted());
+        if (wanted != null) {
+            format.send(wanted);
+        }
+        if (b == ws.front()) {
+            gui.focus(b.keyboard());
+        }
+        ui.status(b.showingFormatted() ? "Formatted view" : "Source view", false);
     }
 
     void cycle(int delta) {

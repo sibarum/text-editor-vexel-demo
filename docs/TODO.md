@@ -9,13 +9,12 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 ## Next
 
 The 0.1 editor is being rebuilt on the v0.2 template, one milestone at a time: highlighting (done); editing details
-(whitespace dots, Find, word wrap, the formatted Markdown view, the tab menu, the plain window); the navigator's Add
+(whitespace dots, Find and the formatted Markdown view done; word wrap with preferences; the plain window); the navigator's Add
 menu, Open mode and folder pictures; scratches; preferences; running things and the console; Git mode; go to
 declaration. Its code is on `develop`, to copy from as each piece is rebuilt.
 
 - [ ] A native build with highlighting. TM4E reads its grammars by reflection: the 0.1 editor's metadata registered
       the `org.eclipse.tm4e.core.internal.grammar.raw.Raw*` classes, `grammars/*.json` and jcodings' `tables/*.bin`.
-- [ ] `Markdown.java` colours nothing now that the grammars do. Keep it for the formatted view, or delete it there.
 - [ ] Replace the palette anchors in `Look.java` with the design's, measured in Oklab. See the note in that file
       about which authored colours the construction can reproduce and which have to be declared.
 

@@ -32,6 +32,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -206,6 +207,40 @@ class ViewTest {
         assertEquals("Markdown", md.language());
         assertEquals("Java", java.language());
         assertEquals("Plain text", txt.language());
+    }
+
+    /** Ctrl+Shift+V on Markdown shows it formatted, read by FormatText; again, and it is the source once more. */
+    @Test
+    void markdownSwitchesToItsFormattedViewAndBack() throws Exception {
+        Buffer b = opened(Files.writeString(dir.resolve("README.md"), "# Title\n\nSome *emphasis*.\n\n- one\n- two\n"));
+        tell(Intent.Command.TOGGLE_FORMATTED);
+        eventually("the formatted view", () -> b.showingFormatted() && !b.formatted().texts().isEmpty());
+        assertEquals(List.of("Title", "Some emphasis.", "one", "two"), b.formatted().texts());
+
+        tell(Intent.Command.TOGGLE_FORMATTED);
+        eventually("the source", () -> !b.showingFormatted());
+    }
+
+    /** The text changing under the formatted view, as a revert would, reads it again. */
+    @Test
+    void theFormattedViewFollowsTheText() throws Exception {
+        Buffer b = opened(Files.writeString(dir.resolve("README.md"), "# Title\n"));
+        tell(Intent.Command.TOGGLE_FORMATTED);
+        eventually("the formatted view", () -> b.formatted().texts().equals(List.of("Title")));
+        b.field.text("# Other\n");
+        eventually("it to follow", () -> b.formatted().texts().equals(List.of("Other")));
+    }
+
+    /** A text file has no formatted view to switch to, so the switch leaves its source in front. */
+    @Test
+    void onlyMarkdownHasAFormattedView() throws Exception {
+        Buffer txt = opened(Files.writeString(dir.resolve("notes.txt"), "# Title"));
+        assertNull(txt.formatted());
+        tell(Intent.Command.TOGGLE_FORMATTED);
+        // A message after the intent, to wait on: the view hears them in order, so once this is in, so was that.
+        Buffer md = opened(Files.writeString(dir.resolve("README.md"), "# Title"));
+        assertFalse(txt.showingFormatted());
+        assertFalse(md.showingFormatted());
     }
 
     @Test

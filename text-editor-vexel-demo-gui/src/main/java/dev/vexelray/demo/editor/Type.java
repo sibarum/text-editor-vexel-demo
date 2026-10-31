@@ -37,8 +37,17 @@ final class Type {
 
     // --------------------------------------------------------------- gutters
 
+    /** A panel's padding, and the gap between a quote's bar and its text. */
+    static final Length WIDE = Length.dp(11.2f);
+
     /** A tight gap, and the navigator's padding. */
     static final Length TIGHT = Length.dp(5.6f);
+
+    /** A border. Not scaled by zoom; a hairline is a hairline. */
+    static final Length RULE = Length.dp(1);
+
+    /** The corner radius of a panel or a control. */
+    static final Length CORNER = Length.dp(6);
 
     private Type() {
     }
