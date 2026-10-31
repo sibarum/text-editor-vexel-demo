@@ -228,12 +228,16 @@ final class View {
 
     // ------------------------------------------------------------------ what the widgets say
 
-    /** The bar's selection moved: the editor hears which file is in front, and the status line where its caret is. */
+    /**
+     * The bar's selection moved: the editor hears which file is in front, and the status line its format and where
+     * its caret is.
+     */
     @Subscribe
     public void tabSelected(Tabs.Selected m) {
         Buffer b = m.tabs().equals(ws.address()) ? ws.at(m.index()) : null;
         if (b != null && b.id != front) {
             front = b.id;
+            ui.language(b.language());
             ui.position(b.position());
             fronted.send(new Fronted(b.id));
         }

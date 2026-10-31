@@ -108,6 +108,20 @@ final class GrammarsTest {
     }
 
     /** A whole name beats an extension, and it is the only thing that works for these two shapes of file. */
+    /** The status line says a language's name, never its scope: a grammar added without a name would show one. */
+    @Test
+    void everyMappedFormatHasAName() {
+        for (String extension : Grammars.extensions()) {
+            String scope = Grammars.scopeFor("sample." + extension);
+            assertFalse(Grammars.nameOf(scope).equals(scope), scope + " has no name");
+        }
+        for (String name : Grammars.fileNames()) {
+            String scope = Grammars.scopeFor(name);
+            assertFalse(Grammars.nameOf(scope).equals(scope), scope + " has no name");
+        }
+        assertEquals("Plain text", Grammars.nameOf(null));
+    }
+
     @Test
     void filesWithoutAUsableExtensionStillFindTheirGrammar() {
         assertEquals("source.dockerfile", Grammars.scopeFor("Dockerfile"), "no extension at all");

@@ -48,10 +48,12 @@ final class Ui {
         status = new StatusBar(gui)
                 .slot(Landmarks.STATUS_FILE, StatusBar.Side.LEFT, "")
                 .slot(Landmarks.STATUS_MESSAGE, StatusBar.Side.LEFT, "")
+                .slot(Landmarks.STATUS_LANGUAGE, StatusBar.Side.RIGHT, "")
                 .slot(Landmarks.STATUS_POSITION, StatusBar.Side.RIGHT, "")
                 .minWidth(Landmarks.STATUS_POSITION, Length.rem(7));
         gui.landmark(Landmarks.STATUS, status.node());
-        for (String slot : new String[] {Landmarks.STATUS_FILE, Landmarks.STATUS_MESSAGE, Landmarks.STATUS_POSITION}) {
+        for (String slot : new String[] {Landmarks.STATUS_FILE, Landmarks.STATUS_MESSAGE, Landmarks.STATUS_LANGUAGE,
+                Landmarks.STATUS_POSITION}) {
             gui.landmark(slot, status.slot(slot));
         }
 
@@ -80,8 +82,14 @@ final class Ui {
         titleBar.title(file.isEmpty() ? TextEditor.TITLE : file + " — " + TextEditor.TITLE);
         status.text(Landmarks.STATUS_FILE, file);
         if (file.isEmpty()) {
+            status.text(Landmarks.STATUS_LANGUAGE, "");
             status.text(Landmarks.STATUS_POSITION, "");
         }
+    }
+
+    /** The front file's format, on the status line. */
+    void language(String name) {
+        status.text(Landmarks.STATUS_LANGUAGE, name);
     }
 
     /** Where the caret is in the front file, on the status line. */

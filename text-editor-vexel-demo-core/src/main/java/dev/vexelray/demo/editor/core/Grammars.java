@@ -104,6 +104,25 @@ public final class Grammars {
     private static final List<String> FILES = List.of("java", "python", "JSON", "markdown", "xml", "html",
             "JavaScript", "css", "yaml", "JSONC", "diff", "ini", "docker", "shell-unix-bash", "powershell", "batchfile");
 
+    /** What the status line calls each scope. A scope's own segments say {@code basic} for HTML and {@code comments} for JSONC. */
+    private static final Map<String, String> NAMES = Map.ofEntries(
+            Map.entry("source.java", "Java"),
+            Map.entry("source.python", "Python"),
+            Map.entry("source.json", "JSON"),
+            Map.entry("source.json.comments", "JSON with comments"),
+            Map.entry("text.html.markdown", "Markdown"),
+            Map.entry("text.xml", "XML"),
+            Map.entry("text.html.basic", "HTML"),
+            Map.entry("source.js", "JavaScript"),
+            Map.entry("source.css", "CSS"),
+            Map.entry("source.yaml", "YAML"),
+            Map.entry("source.diff", "Diff"),
+            Map.entry("source.ini", "INI"),
+            Map.entry("source.shell", "Shell"),
+            Map.entry("source.powershell", "PowerShell"),
+            Map.entry("source.batchfile", "Batch"),
+            Map.entry("source.dockerfile", "Dockerfile"));
+
     private static final Duration LINE_TIME_LIMIT = Duration.ofMillis(200);
 
     /** Above these, a document is plain text rather than regexes ground over pathological input. */
@@ -142,6 +161,11 @@ public final class Grammars {
         }
         int dot = name.lastIndexOf('.');
         return dot < 0 ? null : BY_EXTENSION.get(name.substring(dot + 1));
+    }
+
+    /** What the status line calls {@code scope}: "Plain text" for none. */
+    public static String nameOf(String scope) {
+        return scope == null ? "Plain text" : NAMES.getOrDefault(scope, scope);
     }
 
     /** Every extension that maps to a grammar. */

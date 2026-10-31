@@ -203,6 +203,9 @@ class ViewTest {
         eventually("the markdown to be marked", () -> !md.field.spans().isEmpty());
         eventually("the java to be marked", () -> !java.field.spans().isEmpty());
         assertTrue(txt.field.spans().isEmpty());
+        assertEquals("Markdown", md.language());
+        assertEquals("Java", java.language());
+        assertEquals("Plain text", txt.language());
     }
 
     @Test

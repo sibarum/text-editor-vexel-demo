@@ -28,10 +28,11 @@ final class Landmarks {
     /** The navigator's tree. */
     static final String TREE = "navigator";
 
-    /** The status line, and its three slots. */
+    /** The status line, and its four slots. */
     static final String STATUS = "status";
     static final String STATUS_FILE = "status.file";
     static final String STATUS_MESSAGE = "status.message";
+    static final String STATUS_LANGUAGE = "status.language";
     static final String STATUS_POSITION = "status.position";
 
     private Landmarks() {

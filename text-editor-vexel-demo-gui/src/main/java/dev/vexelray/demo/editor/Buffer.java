@@ -6,6 +6,7 @@ import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.text.Whitespace;
 import dev.vexelray.gui.widget.TextField;
 
 import java.nio.file.Path;
@@ -58,8 +59,10 @@ final class Buffer implements AutoCloseable {
         this.scope = Grammars.scopeFor(String.valueOf(path.getFileName()));
         // A document: its past is its own, so Ctrl+Z in one file never reaches into another, and its save mark
         // says whether this file is saved rather than whether the window is. Named, so its messages say which.
+        // Multiline is also what gives it Ctrl+F. Whitespace dotted where it means something or hides a mistake:
+        // indentation, what trails a line, runs of blanks; and a ¬ at each line's end.
         this.field = new TextField(gui, "").name("buffer-" + id).history(new History()).multiline(true)
-                .lineNumbers(true).wordWrap(true);
+                .lineNumbers(true).wordWrap(true).whitespace(Whitespace.BOUNDARY).lineEnds(true);
         field.node().width(Length.FILL).height(Length.FILL).font(scope != null ? Type.MONO : Type.UI)
                 .textSize(Type.CODE);
 
@@ -105,6 +108,11 @@ final class Buffer implements AutoCloseable {
     /** Where the caret is, for the status line. */
     String position() {
         return "Ln " + line + ", Col " + column;
+    }
+
+    /** The file's format, for the status line: "Java", or "Plain text". */
+    String language() {
+        return Grammars.nameOf(scope);
     }
 
     /** Whether closing this would lose work. */
