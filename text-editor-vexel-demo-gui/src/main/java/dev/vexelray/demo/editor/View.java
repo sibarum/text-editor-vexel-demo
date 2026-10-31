@@ -1,714 +1,352 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.Intent.Command;
-import dev.vexelray.demo.editor.core.Make;
 import dev.vexelray.demo.editor.core.Messages;
-import dev.vexelray.demo.editor.core.Messages.Add;
 import dev.vexelray.demo.editor.core.Messages.AddTab;
-import dev.vexelray.demo.editor.core.Messages.Answer;
-import dev.vexelray.demo.editor.core.Messages.Ask;
-import dev.vexelray.demo.editor.core.Messages.AskWhere;
 import dev.vexelray.demo.editor.core.Messages.Caption;
-import dev.vexelray.demo.editor.core.Messages.Choice;
-import dev.vexelray.demo.editor.core.Messages.ChooseRoot;
-import dev.vexelray.demo.editor.core.Messages.CloseTab;
-import dev.vexelray.demo.editor.core.Messages.Closing;
-import dev.vexelray.demo.editor.core.Messages.Dropped;
+import dev.vexelray.demo.editor.core.Messages.Close;
+import dev.vexelray.demo.editor.core.Messages.CloseTabs;
 import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.Flush;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
-import dev.sibarum.suite.git.Diff;
-import dev.vexelray.demo.editor.core.Messages.CommitStaged;
-import dev.vexelray.demo.editor.core.Messages.GitDiff;
-import dev.vexelray.demo.editor.core.Messages.GitCommitted;
-import dev.vexelray.demo.editor.core.Messages.GitPushed;
-import dev.vexelray.demo.editor.core.Messages.PushBranch;
-import dev.vexelray.demo.editor.core.Messages.SwitchBranch;
-import dev.vexelray.demo.editor.core.Messages.GitHead;
-import dev.vexelray.demo.editor.core.Messages.GitHistory;
-import dev.vexelray.demo.editor.core.Messages.ShowDiff;
-import dev.vexelray.demo.editor.core.Messages.Stage;
-import dev.vexelray.demo.editor.core.Messages.GitRefresh;
-import dev.vexelray.demo.editor.core.Messages.GitTick;
-import dev.vexelray.demo.editor.core.Messages.GitTree;
-import dev.vexelray.demo.editor.core.Messages.GitWatch;
-import dev.vexelray.demo.editor.core.Repository;
-import dev.vexelray.gui.krono.KronoGui;
-import dev.vexelray.gui.krono.Scheduled;
-import sibarum.kronometer.Dur;
-import dev.vexelray.demo.editor.core.Messages.Made;
-import dev.vexelray.demo.editor.core.Messages.Moved;
-import dev.vexelray.demo.editor.core.Messages.NewFile;
-import dev.vexelray.demo.editor.core.Messages.NewScratch;
+import dev.vexelray.demo.editor.core.Messages.Go;
+import dev.vexelray.demo.editor.core.Messages.Listed;
+import dev.vexelray.demo.editor.core.Messages.Listing;
+import dev.vexelray.demo.editor.core.Messages.Mark;
+import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Open;
-import dev.vexelray.demo.editor.core.Messages.OpenText;
-import dev.vexelray.demo.editor.core.Messages.Placed;
-import dev.vexelray.demo.editor.core.Messages.Plain;
-import dev.vexelray.demo.editor.core.Messages.Purpose;
-import dev.vexelray.demo.editor.core.Messages.Recent;
-import dev.vexelray.demo.editor.core.Messages.Relist;
-import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
-import dev.vexelray.demo.editor.core.Messages.Revert;
 import dev.vexelray.demo.editor.core.Messages.Save;
-import dev.vexelray.demo.editor.core.Messages.SaveAs;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
-import dev.vexelray.demo.editor.core.Messages.Saved;
-import dev.vexelray.demo.editor.core.Messages.ScratchShown;
-import dev.vexelray.demo.editor.core.Messages.Settled;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
-import dev.vexelray.demo.editor.core.Messages.Template;
-import dev.vexelray.demo.editor.core.Messages.Tell;
-import dev.vexelray.demo.editor.core.Preferences;
-import dev.vexelray.demo.editor.core.ProjectIndex;
-import dev.vexelray.demo.editor.core.TextFile;
-import dev.vexelray.framework.api.Component;
-import dev.vexelray.framework.api.Publishes;
 import dev.vexelray.framework.api.Subscribe;
-import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.gui.core.Gui;
-import dev.vexelray.gui.core.Node;
-import dev.vexelray.gui.core.input.ClickEvent;
-import dev.vexelray.gui.core.input.MenuItem;
-import dev.vexelray.gui.core.layout.NodeLayout;
-import dev.vexelray.gui.icons.Icon;
-import dev.vexelray.gui.nfd.FileDialog;
-import dev.vexelray.gui.widget.Modal;
-import sibarum.atchung.Atchung;
-import sibarum.concordance.index.Index;
-import sibarum.concordance.index.Source;
-import sibarum.concordance.index.SourceRef;
-import sibarum.concordance.index.Symbol;
-import sibarum.probe.Log;
+import dev.vexelray.gui.core.input.Shortcut;
+import dev.vexelray.gui.widget.Tabs;
+import dev.vexelray.gui.widget.TextField;
+import dev.vexelray.gui.widget.TreeView;
+import sibarum.atchung.Sender;
 import sibarum.tactroller.api.Key;
 import sibarum.tactroller.api.Modifier;
-import sibarum.tactroller.api.MouseButton;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 
 /**
- * The view: what the editor decided, shown, and what the person did, told. On a lane of its own.
+ * The view: what the editor decided, shown, and what the person did, told. A {@code @View}, so it runs on the GUI
+ * thread, in each frame's widget tick (threading.md, T7.4).
  *
- * <h2>It decides nothing that is the editor's</h2>
+ * <h2>It decides nothing</h2>
  *
- * <p>Every decision about the session is the {@code Editor}'s, in {@code -core}: whether a file is already open,
- * whether closing needs a question, what a root keeps, where an Untitled document is saved. This turns the editor's
- * messages into widgets ({@code AddTab} is a tab, {@code Ask} is a dialog) and the person's gestures into messages
- * ({@code Open}, {@code Closing}, {@code Save}). What is left here is what only the window knows: the preferences menu,
- * the Run menu, the formatted view, and going to a declaration, which reads the text in front and the index.
+ * <p>Every decision is the {@code Editor}'s, in {@code -core}: whether a file is already open, what a typed path names,
+ * whether closing needs a question. This turns the editor's messages into widgets ({@code AddTab} is a tab) and the
+ * person's gestures into messages ({@code Open}, {@code Close}, {@code Save}). A question is not the view's: the editor
+ * sends the framework an {@code Ask}, and the framework shows it.
  *
- * <h2>Threads</h2>
+ * <h2>Everything it hears is a message, in the frame</h2>
  *
- * <p>Every {@code @Subscribe} here runs on the {@code view} lane, one at a time. Input arrives elsewhere: a chord or a
- * menu item on the handler lane, a dialog's answer on whichever thread presses it. Those only send an {@link Intent}
- * to this lane, or a message straight to the editor when nothing of the view's is needed to say it. Writing a widget
- * from here is the framework's idiom: a prop written off the GUI thread is queued and applied by the next drain.
+ * <p>Every {@code @Subscribe} here is drained on the GUI thread, after input is dispatched and before layout: what the
+ * editor and the jobs send, and what the widgets say they did (a tab selected, a tree's row clicked or its menu chosen,
+ * a field's text changed). So a click is heard, and what the view writes about it drawn, in the frame the click
+ * arrived, and the widgets, the {@link Workspace} and the {@link Navigator} are only ever touched here, with no lock.
+ * A widget's messages carry its address, and every widget of a kind shares a topic, so each handler first asks which
+ * of the view's widgets a message is about.
  *
- * <p>The disk is reached here only where the editor has no part in it: a preference written to a root's {@code .vex},
- * a library's source read for a declaration, the Run menu worked out. Those go to the framework's offload lane as
- * they did before the editor was split; making them jobs too is in docs/TODO.md.
+ * <h2>Gestures are declared, not handled</h2>
+ *
+ * <p>A chord, a menu item and a dialog's button each name the message they send ({@link Intent}, a
+ * {@code Messages} record) through a {@link Sender}; the dispatcher sends it, and nothing of the application's runs at
+ * the moment of the click (T7.5). What needs the view comes back to it as one of these handlers.
+ *
+ * <h2>What it sends is in its constructor</h2>
+ *
+ * <p>One {@link Sender} for each message it sends, and nothing else to send with: the wiring finds each one's topic by
+ * its payload, beside the record in {@code Messages}, so the processor sees every message the view can send without
+ * reading a line of its body (ROADMAP fork 5).
+ *
+ * <h2>Slow work is a job</h2>
+ *
+ * <p>Reading a folder for the tree and colouring a Markdown file are the jobs' ({@code ListFolder},
+ * {@code MarkText}): the view asks and acts on the answer, because its time is the frame's.
  */
-@Component(lane = "view")
-@Publishes({Messages.OPEN, Messages.NEW_FILE, Messages.OPEN_TEXT, Messages.FRONTED, Messages.EDITED,
-        Messages.DROPPED, Messages.CLOSING, Messages.SAVE, Messages.SAVE_AS, Messages.ANSWER, Messages.PLACED,
-        Messages.RELOCATED, Messages.NEW_SCRATCH, Messages.ADD, Messages.STATUS, Messages.GIT_WATCH,
-        Messages.GIT_REFRESH, Messages.GIT_TICK, Messages.SHOW_DIFF, Messages.STAGE, Messages.COMMIT, Messages.PUSH,
-        Messages.SWITCH, Intent.TOPIC})
+@dev.vexelray.framework.api.View
 final class View {
-
-    private static final Log LOG = Log.of("editor.files");
-
-    /** As the editor's: a whole set of tabs is a message each, and a full mailbox ends the application. */
-    static final int SET = 4096;
-
-    /** What Save As offers: every language the highlighter knows, by extension. */
-    private static final List<FileDialog.Filter> TEXT = List.of(FileDialog.Filter.of("Text files",
-            Highlighter.knownExtensions().stream().sorted().toArray(String[]::new)));
 
     private final Gui gui;
     private final Ui ui;
     private final Workspace ws;
     private final Navigator nav;
-    private final Atchung bus;
-    private final Dialogs dialogs;
-    private final Gates gates;
-    private final Console console;
-    private final RunDialog runDialog;
-    private final ProjectIndex concordance;
-    private final Preferences prefs;
-    private final KronoGui krono;
-    private final Executor io;
-    /** The tick that has the repository look at git, while Git mode is up; null while it is not. */
-    private volatile Scheduled watching;
 
-    /** Sets of tabs being closed, numbered. Only this lane counts them. */
-    private long batches;
-    /**
-     * Folders picked as the new root, and runs chosen from the Run menu, each held under a ticket while the editor
-     * decides about the unsaved work. Put from a worker, taken on this lane, so concurrent.
-     */
-    private final AtomicLong tickets = new AtomicLong();
-    private final Map<Long, Path> roots = new ConcurrentHashMap<>();
-    private final Map<Long, Runs.Run> runs = new ConcurrentHashMap<>();
-    /** Library sources read for a declaration, waiting for their tab, by their {@code OpenText}'s ticket. */
-    private final Map<Long, Library> libraries = new ConcurrentHashMap<>();
-    /** What to do once a file being opened for a declaration has its tab: select the declaration. This lane only. */
-    private final Map<Path, Consumer<Buffer>> selections = new HashMap<>();
+    private final Sender<Open> open;
+    private final Sender<Go> go;
+    private final Sender<Fronted> fronted;
+    private final Sender<Edited> edited;
+    private final Sender<Close> close;
+    private final Sender<Save> save;
+    private final Sender<Listing> listing;
+    private final Sender<Mark> mark;
+    private final Sender<TreeView.Children> children;
+    private final Sender<Intent> intents;
 
-    /** A library's source on its way to a tab, and what to do in that tab once it is there. */
-    private record Library(Source source, Consumer<Buffer> then) {
-    }
+    /** The tab in front, as the editor was last told. */
+    private long front = Messages.NO_TAB;
 
-    /** Files opened from Git mode, each held under a ticket until this lane takes it: where, and at which line. */
-    private final Map<Long, At> openings = new ConcurrentHashMap<>();
-    /** Whether the file of the Git mode row picked is on the disk to open: a deleted one is not. */
-    private volatile boolean pickedThere;
-
-    private record At(Path file, int line) {
-    }
-
-    /** Stagings asked for in Git mode, each held under a ticket while the tabs it covers are saved. */
-    private final Map<Long, Staging> stagings = new ConcurrentHashMap<>();
-
-    /**
-     * What to stage or unstage: {@code path} relative to the repository's top, or null for everything under the root;
-     * {@code covers} is where on the disk that is, so the tabs inside it can be saved first.
-     */
-    private record Staging(String path, boolean on, Path covers) {
-    }
-
-    /** Branches to switch to, from the history, each held under a ticket while the tabs under the repository settle. */
-    private final Map<Long, String> switches = new ConcurrentHashMap<>();
-
-    View(Gui gui, Ui ui, Atchung bus, Dialogs dialogs, Gates gates, Console console, RunDialog runDialog,
-         ProjectIndex concordance, Preferences prefs, KronoGui krono) {
+    View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
+         Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
+         Sender<Listing> listing, Sender<Mark> mark, Sender<TreeView.Children> children, Sender<Intent> intents) {
         this.gui = gui;
-        this.krono = krono;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
-        this.bus = bus;
-        this.dialogs = dialogs;
-        this.gates = gates;
-        this.console = console;
-        this.runDialog = runDialog;
-        this.concordance = concordance;
-        this.prefs = prefs;
-        this.io = gui.offload();
-        ws.wordWrap(prefs.wrap());
-        ui.onPreferences(e -> gui.menus().present(e, preferencesMenu()));
-        ws.onEdited((id, dirty) -> bus.publish(Messages.EDITED_TOPIC, new Edited(id, dirty)));
-        ws.onFronted(b -> {
-            bus.publish(Messages.FRONTED_TOPIC, new Fronted(b.id));
-            ui.language(b.language());
-        });
-        // From the navigator the keyboard stays in the navigator, so walking it with the arrows keeps walking.
-        nav.onOpenFile(file -> bus.publish(Messages.OPEN_TOPIC, new Open(file, false)));
-        nav.onOpenFolder(this::pickRoot);
-        nav.onNewScratch(folder -> bus.publish(Messages.NEW_SCRATCH_TOPIC, new NewScratch(folder)));
-        nav.onRelocated((from, to) -> bus.publish(Messages.RELOCATED_TOPIC, new Relocated(from, to)));
-        nav.onOpening(gates::settle);
-        nav.onAdd(this::add);
-        nav.onGit(this::gitShown);
-        nav.onGitRefresh(() -> bus.publish(Messages.GIT_REFRESH_TOPIC, new GitRefresh()));
-        nav.onGitPick(this::gitPicked);
-        nav.onGitOpen(file -> openFromGit(file, 0));
-        nav.onGitStage(this::askToStage);
-        nav.onGitCommit(text -> bus.publish(Messages.COMMIT_TOPIC, new CommitStaged(text)));
-        nav.onGitPush(() -> bus.publish(Messages.PUSH_TOPIC, new PushBranch()));
-        ui.history().onSwitch(this::askToSwitch);
-        ui.gitStage().onOpenAt(this::openFromGit);
-        ui.gitStage().onClose(this::closeDiff);
-        ui.history().onClose(this::closeHistory);
-        nav.onGitHistory(this::showHistory);
-        ui.gitStage().onMove(nav::gitMovePicked);
-        // A build or a script writes files the tree has not listed; its end is when they are all there.
-        console.onEnded(nav::refresh);
-        ws.runButton().onPress(this::runMenu);
-        runDialog.onRun(this::run);
-        ws.formattedButton().onPress(this::toggleFormatted);
-        ws.tabs().onContextMenu((index, menu) -> {
-            List<Buffer> all = ws.all();
-            if (index < 0 || index >= all.size()) {
-                return;
-            }
-            Buffer b = all.get(index);
-            boolean vexplore = Suite.hasVexplore();
-            menu.item("Close", () -> tell(Command.CLOSE, b.id))
-                    .item("Close others", all.size() > 1, () -> tell(Command.CLOSE_OTHERS, b.id))
-                    .item("Close all", () -> tell(Command.CLOSE_ALL, Messages.NO_TAB))
-                    .separator()
-                    .item("Reveal in navigator", b.path() != null, () -> reveal(b))
-                    .item(Suite.vexploreLabel(vexplore), vexplore && b.path() != null,
-                            () -> Suite.showInVexplore(b.path(), io))
-                    // A library's source has no path of its own, and its archive!/entry is the next best thing.
-                    .item("Copy path", b.path() != null || b.library() != null, () -> gui.clipboard().set(
-                            String.valueOf(b.path() != null ? b.path() : b.library())));
-        });
+        this.open = open;
+        this.go = go;
+        this.fronted = fronted;
+        this.edited = edited;
+        this.close = close;
+        this.save = save;
+        this.listing = listing;
+        this.mark = mark;
+        this.children = children;
+        this.intents = intents;
         shortcuts();
-        // The tree always has a document in it: an empty Untitled one, until the session or a dialog brings another.
-        bus.publish(Messages.NEW_FILE_TOPIC, new NewFile());
     }
 
     /**
-     * Every chord, as a {@code GLOBAL} claim: a focused field still owns the keys it claims for itself. What needs the
-     * tabs goes to this lane as an {@link Intent}; what needs nothing of the view's acts at once, or goes straight to
-     * the editor.
+     * Every chord, as a declaration: the chord and the {@link Intent} it sends. Chords a text field leaves alone, so a
+     * focused field never needs to outrank them. Zoom is here too: which chord zooms, or whether zooming exists at all,
+     * is the application's to say; how far it goes is {@code Appearance.ZoomRange}, the framework's.
      */
     private void shortcuts() {
-        gui.shortcut(Key.N, () -> bus.publish(Messages.NEW_FILE_TOPIC, new NewFile()), Modifier.CONTROL);
-        gui.shortcut(Key.N, () -> bus.publish(Messages.NEW_SCRATCH_TOPIC, new NewScratch(null)),
-                Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.N, this::toggleScratches, Modifier.ALT);
-        gui.shortcut(Key.G, this::toggleGit, Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.O, this::openDialog, Modifier.CONTROL);
-        gui.shortcut(Key.O, this::openFolderDialog, Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.S, () -> tell(Command.SAVE_FRONT, Messages.NO_TAB), Modifier.CONTROL);
-        gui.shortcut(Key.S, () -> tell(Command.SAVE_AS_FRONT, Messages.NO_TAB), Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.W, () -> tell(Command.CLOSE_FRONT, Messages.NO_TAB), Modifier.CONTROL);
-        gui.shortcut(Key.TAB, () -> tell(Command.NEXT_TAB, Messages.NO_TAB), Modifier.CONTROL);
-        gui.shortcut(Key.TAB, () -> tell(Command.PREVIOUS_TAB, Messages.NO_TAB), Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.PAGE_DOWN, () -> tell(Command.NEXT_TAB, Messages.NO_TAB), Modifier.CONTROL);
-        gui.shortcut(Key.PAGE_UP, () -> tell(Command.PREVIOUS_TAB, Messages.NO_TAB), Modifier.CONTROL);
-        gui.shortcut(Key.B, ui::toggleNavigator, Modifier.CONTROL);
-        gui.shortcut(Key.E, nav::focus, Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.Z, this::toggleWrap, Modifier.ALT);
-        gui.shortcut(Key.V, this::toggleFormatted, Modifier.CONTROL, Modifier.SHIFT);
-        gui.shortcut(Key.F5, this::runMenu);
-        // The field's own Ctrl+Enter follows a hyperlink under the caret, and the editor gives its fields none;
-        // without a link it fell through to inserting a newline, which this claim now outranks.
-        gui.shortcut(Key.ENTER, () -> tell(Command.DECLARATION, Messages.NO_TAB), Modifier.CONTROL);
-        gui.shortcut(Key.NUMPAD_ENTER, () -> tell(Command.DECLARATION, Messages.NO_TAB), Modifier.CONTROL);
+        chord(Shortcut.of(Key.S, Modifier.CONTROL), Command.SAVE_FRONT);
+        chord(Shortcut.of(Key.W, Modifier.CONTROL), Command.CLOSE_FRONT);
+        chord(Shortcut.of(Key.L, Modifier.CONTROL), Command.FOCUS_PATH);
+        chord(Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT), Command.FOCUS_TREE);
+        chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
+        chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
+        chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
+        chord(Shortcut.of(Key.PAGE_UP, Modifier.CONTROL), Command.PREVIOUS_TAB);
+        chord(Shortcut.of(Key.EQUAL, Modifier.CONTROL), Command.ZOOM_IN);
+        chord(Shortcut.of(Key.MINUS, Modifier.CONTROL), Command.ZOOM_OUT);
+        chord(Shortcut.of(Key.DIGIT_0, Modifier.CONTROL), Command.ZOOM_RESET);
+        chord(Shortcut.of(Key.NUMPAD_ADD, Modifier.CONTROL), Command.ZOOM_IN);
+        chord(Shortcut.of(Key.NUMPAD_SUBTRACT, Modifier.CONTROL), Command.ZOOM_OUT);
+        chord(Shortcut.of(Key.NUMPAD_0, Modifier.CONTROL), Command.ZOOM_RESET);
     }
 
-    private void tell(Command command, long id) {
-        bus.publish(Intent.INTENTS, new Intent(command, id));
+    private void chord(Shortcut shortcut, Command command) {
+        gui.shortcut(shortcut, intents, new Intent(command));
     }
 
-    @Subscribe(topic = Intent.TOPIC)
+    @Subscribe
     public void intent(Intent intent) {
-        intent.command().on(this, intent.id());
+        intent.command().on(this);
     }
 
     // ------------------------------------------------------------------ what the editor says
 
-    /** A new root: the navigator shows it, its own preferences are read, and it is indexed if it is a Maven project. */
-    @Subscribe(topic = Messages.SHOW_FOLDER)
+    @Subscribe
     public void showFolder(ShowFolder m) {
-        Path folder = m.path();
-        nav.show(folder, null);
-        ui.showNavigator(true);
-        // Reading a root's .vex is the disk, so it is off this lane.
-        io.execute(() -> {
-            prefs.root(folder);
-            ws.wordWrap(prefs.wrap());
-            concordance.folder(prefs.index() ? folder : null);
-        });
+        nav.show(m.path());
     }
 
-    @Subscribe(topic = Messages.RECENT)
-    public void recent(Recent m) {
-        List<Path> recent = new ArrayList<>(3);
-        for (Path p : new Path[] {m.first(), m.second(), m.third()}) {
-            if (p != null) {
-                recent.add(p);
-            }
-        }
-        nav.recent(recent, null);
-    }
-
-    /**
-     * A tab, for a file the editor read, a library's source, or an Untitled document. An empty Untitled tab the editor
-     * named as replaced goes, if it is still empty now, and the editor is told it went.
-     */
-    @Subscribe(topic = Messages.ADD_TAB, capacity = SET)
+    @Subscribe
     public void addTab(AddTab m) {
-        Library library = m.ticket() == 0 ? null : libraries.remove(m.ticket());
-        Buffer b = ws.add(m.id(), m.path(), new TextFile.Loaded(m.text(), m.crlf(), List.of()), m.focus(),
-                library == null ? null : library.source());
-        if (m.replace() != Messages.NO_TAB) {
-            Buffer replaced = ws.byId(m.replace());
-            if (replaced != null && replaced.pristine()) {
-                ws.close(replaced.id);
-                bus.publish(Messages.DROPPED_TOPIC, new Dropped(replaced.id));
-            }
-        }
-        ui.language(b.language());
-        if (library != null) {
-            library.then().accept(b);
-        }
-        Consumer<Buffer> selection = m.path() == null ? null : selections.remove(m.path());
-        if (selection != null) {
-            selection.accept(b);
-        }
+        ws.add(m.id(), m.path(), m.text(), m.focus());
     }
 
-    @Subscribe(topic = Messages.FRONT_TAB)
+    @Subscribe
     public void frontTab(FrontTab m) {
         Buffer b = ws.byId(m.id());
         if (b != null) {
             ws.show(b, m.focus());
-            ui.language(b.language());
         }
     }
 
-    @Subscribe(topic = Messages.CLOSE_TAB, capacity = SET)
-    public void closeTab(CloseTab m) {
-        ws.close(m.id());
+    @Subscribe
+    public void closeTabs(CloseTabs m) {
+        for (long id : m.tabs()) {
+            ws.close(id);
+        }
     }
 
-    @Subscribe(topic = Messages.RETITLE, capacity = SET)
+    /** The last title per tab in the frame: a state topic, so a burst of them is never a backlog. */
+    @Subscribe
     public void retitle(Retitle m) {
         ws.retitle(m.id(), m.title());
     }
 
-    @Subscribe(topic = Messages.CAPTION)
+    @Subscribe
     public void caption(Caption m) {
-        ui.caption(m.text());
+        ui.caption(m.file());
     }
 
-    @Subscribe(topic = Messages.STATUS)
+    @Subscribe
     public void status(Status m) {
         ui.status(m.message(), m.alert());
     }
 
-    /** Where the root stands in git, from the {@code Repository}: the status line, and the way into Git mode. */
-    @Subscribe(topic = Messages.GIT_HEAD)
-    public void gitHead(GitHead m) {
-        ui.git(m.label());
-        nav.git(m);
-    }
-
-    /** Every changed path, from the {@code Repository}, for Git mode's lists. */
-    @Subscribe(topic = Messages.GIT_TREE)
-    public void gitTree(GitTree m) {
-        nav.gitTree(m);
-    }
-
-    /** How a commit went, from the {@code Repository}: the message box is emptied, or given back as typed. */
-    @Subscribe(topic = Messages.GIT_COMMITTED)
-    public void gitCommitted(GitCommitted m) {
-        nav.gitCommitted(m);
-    }
-
-    /**
-     * Git mode came up, or went. While it is up the repository is told to look at git every {@code Repository.WATCH},
-     * so a commit made at a prompt shows; the clock's loop is named, since it keeps the timeline from going quiet.
-     */
-    private void gitShown(boolean on) {
-        Scheduled was = watching;
-        if (was != null) {
-            was.cancel();
-            watching = null;
-        }
-        if (on) {
-            watching = krono.every("git-watch", Dur.ms(Repository.WATCH.toMillis()),
-                    () -> bus.publish(Messages.GIT_TICK_TOPIC, new GitTick()));
-            // With no row picked, the history stands where the editor does; the repository sends it on GIT_WATCH.
-            ui.showHistory(true);
-        } else {
-            // The navigator's mode change has put the diff away already; the repository stops asking for it.
-            nav.gitUnpick();
-            bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
-        }
-        bus.publish(Messages.GIT_WATCH_TOPIC, new GitWatch(on));
-    }
-
-    /**
-     * A Git mode row was picked: its diff is asked for, and stands where the editor does when it comes. Which side is
-     * the row's: staged, untracked as a whole file, or the working tree's. A deleted file has nothing to open.
-     */
-    private void gitPicked(GitPane.Row r) {
-        Diff.Side side = r.staged() ? Diff.Side.STAGED : r.letter() == 'U' ? Diff.Side.UNTRACKED : Diff.Side.UNSTAGED;
-        pickedThere = r.letter() != 'D';
-        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(r.path(), side));
-    }
-
-    /** A diff, from the {@code Repository}, for the row picked or again because the status changed. */
-    @Subscribe(topic = Messages.GIT_DIFF_SHOWN)
-    public void gitDiff(GitDiff m) {
-        if (nav.mode() != Navigator.Mode.GIT) {
-            return;
-        }
-        ui.gitStage().show(m, pickedThere);
-        ui.showDiff(true);
-    }
-
-    /**
-     * Close, or Escape on the diff: what stood there before comes back, the history or the editor, and the keyboard
-     * goes to the row that was picked.
-     */
-    private void closeDiff() {
-        ui.showDiff(false);
-        nav.gitUnpick();
-        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
-        nav.focus();
-    }
-
-    /** The history and the branches, from the {@code Repository}, while Git mode is up. */
-    @Subscribe(topic = Messages.GIT_HISTORY_SHOWN)
-    public void gitHistory(GitHistory m) {
-        if (nav.mode() == Navigator.Mode.GIT) {
-            ui.history().show(m);
-        }
-    }
-
-    /** Git mode's History: any diff is put away, and the history stands where the editor does. */
-    private void showHistory() {
-        ui.showDiff(false);
-        nav.gitUnpick();
-        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
-        ui.showHistory(true);
-        ui.history().focus();
-    }
-
-    /** Close, or Escape on the history: the editor comes back, in Git mode still. */
-    private void closeHistory() {
-        ui.showHistory(false);
-        nav.focus();
-    }
-
-    /**
-     * A row's + or −, the diff's Stage or Unstage, or Stage all and Unstage all (a null row). On a worker: what it
-     * covers is worked out here, and the rest is this lane's, via a ticket ({@link #stage}).
-     */
-    private void askToStage(GitPane.Row r, boolean on) {
-        Path top = nav.gitTop();
-        Path covers = r == null ? nav.folder() : top == null ? null : top.resolve(r.path()).normalize();
-        if (covers == null) {
-            return;
-        }
-        long ticket = tickets.incrementAndGet();
-        stagings.put(ticket, new Staging(r == null ? null : r.path(), on, covers));
-        tell(Command.STAGE, ticket);
-    }
-
-    /**
-     * Stage, once the tabs it covers are saved: git stages what is on the disk, and what is meant is what is on the
-     * screen. The editor saves them ({@link Purpose#STAGE}) and answers with {@link Settled}; a save that fails
-     * stages nothing. Unstaging leaves the disk as it is, so it goes at once.
-     */
-    void stage(long ticket) {
-        Staging s = stagings.get(ticket);
-        if (s == null) {
-            return;
-        }
-        if (!s.on()) {
-            stagings.remove(ticket);
-            bus.publish(Messages.STAGE_TOPIC, new Stage(s.path(), false));
-            return;
-        }
-        List<Buffer> inside = ws.all().stream()
-                .filter(b -> b.path() != null && b.path().toAbsolutePath().normalize().startsWith(s.covers()))
-                .toList();
-        rollCall(inside, ticket, Purpose.STAGE, null);
-    }
-
-    /** A branch picked in the history to switch to. On a worker: the rest is this lane's, via a ticket. */
-    private void askToSwitch(String branch) {
-        long ticket = tickets.incrementAndGet();
-        switches.put(ticket, branch);
-        tell(Command.SWITCH, ticket);
-    }
-
-    /**
-     * Switch, once the tabs under the repository have nothing unsaved: git rewrites their files, and work only on the
-     * screen would be lost or left over the other branch's. The editor asks whether to save it or throw it away
-     * ({@link Purpose#SWITCH}); cancelled, nothing is switched. Afterwards the editor reads the tabs again.
-     */
-    void switchBranch(long ticket) {
-        Path top = nav.gitTop();
-        if (top == null || !switches.containsKey(ticket)) {
-            switches.remove(ticket);
-            return;
-        }
-        Path under = top.toAbsolutePath().normalize();
-        List<Buffer> inside = ws.all().stream()
-                .filter(b -> b.path() != null && b.path().toAbsolutePath().normalize().startsWith(under))
-                .toList();
-        rollCall(inside, ticket, Purpose.SWITCH, null);
-    }
-
-    /** How a push went, from the {@code Repository}: Push can be pressed again. */
-    @Subscribe(topic = Messages.GIT_PUSHED)
-    public void gitPushed(GitPushed m) {
-        nav.gitPushed(m);
-    }
-
-    /** Open {@code file} from Git mode, at 1-based {@code line}, or as it opens for 0: on this lane, via a ticket. */
-    private void openFromGit(Path file, int line) {
-        long ticket = tickets.incrementAndGet();
-        openings.put(ticket, new At(file, line));
-        tell(Command.OPEN_AT, ticket);
-    }
-
-    /**
-     * A file opened from Git mode: the diff goes, so the editor is what is seen, and the file comes to the front at the
-     * line asked for, now if its tab is open, else once the editor has given it one ({@link #selections}).
-     */
-    void openAt(long ticket) {
-        At at = openings.remove(ticket);
-        if (at == null) {
-            return;
-        }
-        ui.showDiff(false);
-        ui.showHistory(false);
-        nav.gitUnpick();
-        bus.publish(Messages.SHOW_DIFF_TOPIC, new ShowDiff(null, Diff.Side.UNSTAGED));
-        Buffer open = ws.find(at.file());
-        if (open != null) {
-            ws.show(open);
-            if (at.line() > 0) {
-                open.goToLine(at.line());
-            }
-            return;
-        }
-        if (at.line() > 0) {
-            selections.put(at.file(), loaded -> loaded.goToLine(at.line()));
-        }
-        bus.publish(Messages.OPEN_TOPIC, new Open(at.file(), true));
-    }
-
-    /** A question, as the framework's dialog: its answer goes back to the editor, from whichever thread presses it. */
-    @Subscribe(topic = Messages.ASK)
-    public void ask(Ask m) {
-        Modal modal = Modal.of(m.title(), m.message()).defaultButton(m.confirm(), () -> answer(m, Choice.CONFIRM));
-        if (!m.extra().isEmpty()) {
-            modal.button(m.extra(), () -> answer(m, Choice.EXTRA));
-        }
-        if (!m.other().isEmpty()) {
-            modal.button(m.other(), () -> answer(m, Choice.OTHER));
-        }
-        dialogs.ask(modal.cancelButton("Cancel", () -> answer(m, Choice.CANCEL)));
-    }
-
-    private void answer(Ask m, Choice choice) {
-        bus.publish(Messages.ANSWER_TOPIC, new Answer(m.question(), choice));
-    }
-
-    @Subscribe(topic = Messages.TELL)
-    public void tell(Tell m) {
-        dialogs.ask(Modal.of(m.title(), m.message()).defaultButton("OK", () -> { }));
-    }
-
-    /** Where to save: the platform's own dialog, its answer, or that there was none, back to the editor. */
-    @Subscribe(topic = Messages.ASK_WHERE)
-    public void askWhere(AskWhere m) {
-        dialogs.saveFile(m.dir(), m.name(), TEXT,
-                place -> bus.publish(Messages.PLACED_TOPIC, new Placed(m.question(), place)),
-                () -> bus.publish(Messages.PLACED_TOPIC, new Placed(m.question(), null)));
-    }
-
-    @Subscribe(topic = Messages.FLUSH, capacity = SET)
+    @Subscribe
     public void flush(Flush m) {
-        Buffer b = ws.byId(m.id());
-        if (b == null) {
-            bus.publish(Messages.SAVE_TOPIC, new Save(m.id(), "", false));
-        } else {
-            save(b);
+        for (long id : m.tabs()) {
+            Buffer b = ws.byId(id);
+            if (b == null) {
+                save.send(new Save(id, "", false));
+            } else {
+                save(b);
+            }
         }
     }
 
-    @Subscribe(topic = Messages.SAVE_FAILED)
+    @Subscribe
     public void saveFailed(SaveFailed m) {
         Buffer b = ws.byId(m.id());
         if (b != null) {
             b.saveFailed();
+            reportDirty(b);
         }
     }
 
-    /** A tab was written: to a new place, for a Save As or a first save, which its highlighting follows. */
-    @Subscribe(topic = Messages.SAVED)
-    public void saved(Saved m) {
-        moved(new Moved(m.id(), m.path()));
+    // ------------------------------------------------------------------ what the jobs answer
+
+    @Subscribe
+    public void listed(Listed m) {
+        if (m.tree().equals(nav.treeAddress())) {
+            children.send(nav.children(m));
+        }
     }
 
-    @Subscribe(topic = Messages.MOVED)
-    public void moved(Moved m) {
-        Buffer b = ws.byId(m.id());
-        if (b != null && !Objects.equals(b.path(), m.path())) {
-            b.savedAs(m.path());
-            ws.syncFormatted();
-            if (b == ws.front()) {
-                ui.language(b.language());
+    @Subscribe
+    public void marked(Marked m) {
+        Buffer b = ws.byField(m.field());
+        if (b != null) {
+            b.marked(m);
+        }
+    }
+
+    // ------------------------------------------------------------------ what the widgets say
+
+    /** The bar's selection moved: the editor hears which file is in front, and the status line where its caret is. */
+    @Subscribe
+    public void tabSelected(Tabs.Selected m) {
+        Buffer b = m.tabs().equals(ws.address()) ? ws.at(m.index()) : null;
+        if (b != null && b.id != front) {
+            front = b.id;
+            ui.position(b.position());
+            fronted.send(new Fronted(b.id));
+        }
+    }
+
+    /** One of the tab menu's actions. */
+    @Subscribe
+    public void tabChosen(Tabs.Chosen m) {
+        Buffer b = m.at().equals(ws.address()) && m.item() instanceof Integer i ? ws.at(i) : null;
+        if (b == null) {
+            return;
+        }
+        if (m.action().equals(Workspace.SAVE)) {
+            save(b);
+        } else if (m.action().equals(Workspace.CLOSE)) {
+            close(List.of(b));
+        } else if (m.action().equals(Workspace.CLOSE_OTHERS)) {
+            List<Buffer> rest = new ArrayList<>(ws.all());
+            rest.remove(b);
+            close(rest);
+        } else if (m.action().equals(Workspace.CLOSE_ALL)) {
+            close(ws.all());
+        } else if (m.action().equals(Workspace.REVEAL) && !nav.reveal(b.path)) {
+            ui.status(b.name() + " is not inside the folder shown", false);
+        }
+    }
+
+    /** A document's text changed: whether it is now unsaved, and its colours. */
+    @Subscribe
+    public void fieldChanged(TextField.Changed m) {
+        Buffer b = ws.byField(m.field());
+        if (b == null) {
+            return;
+        }
+        reportDirty(b);
+        Mark wanted = b.changed(m.text(), m.version());
+        if (wanted != null) {
+            mark.send(wanted);
+        }
+    }
+
+    @Subscribe
+    public void fieldCaret(TextField.Caret m) {
+        Buffer b = ws.byField(m.field());
+        if (b != null) {
+            b.caret(m.line(), m.column());
+            if (b.id == front) {
+                ui.position(b.position());
             }
         }
     }
 
-    @Subscribe(topic = Messages.REVERT)
-    public void revert(Revert m) {
-        Buffer b = ws.byId(m.id());
-        TextFile.Loaded content = new TextFile.Loaded(m.text(), m.crlf(), List.of());
-        // A file read again after a switch that came back the same is left alone, its undo and all.
-        if (b != null && !b.shows(content)) {
-            b.revert(content);
+    /** The path bar was submitted: what the text names is the editor's call. */
+    @Subscribe
+    public void fieldSubmitted(TextField.Submitted m) {
+        if (m.field().equals(nav.pathAddress())) {
+            go.send(new Go(m.text().strip()));
         }
     }
 
-    /** What the editor decided about a set this lane is waiting on: a gate's, or a run's. */
-    @Subscribe(topic = Messages.SETTLED)
-    public void settled(Settled m) {
-        if (m.purpose() == Purpose.RUN) {
-            Runs.Run run = runs.remove(m.batch());
-            if (run != null && m.go()) {
-                console.run(run);
-            }
-        } else if (m.purpose() == Purpose.STAGE) {
-            // A save that failed has been said by the editor, which file and why; nothing is staged.
-            Staging s = stagings.remove(m.batch());
-            if (s != null && m.go()) {
-                bus.publish(Messages.STAGE_TOPIC, new Stage(s.path(), true));
-            }
-        } else if (m.purpose() == Purpose.SWITCH) {
-            String branch = switches.remove(m.batch());
-            if (branch != null && m.go()) {
-                bus.publish(Messages.SWITCH_TOPIC, new SwitchBranch(branch));
-            }
+    /** The tree wants a level: ask {@code ListFolder}, or answer an empty top when no folder is shown yet. */
+    @Subscribe
+    public void treeWanted(TreeView.ChildrenWanted m) {
+        if (!m.tree().equals(nav.treeAddress())) {
+            return;
+        }
+        Listing wanted = nav.wanted(m.parent());
+        if (wanted != null) {
+            listing.send(wanted);
         } else {
-            gates.answer(m.batch(), m.go());
+            children.send(nav.nothing());
         }
     }
 
-    @Subscribe(topic = Messages.SCRATCH_SHOWN)
-    public void scratchShown(ScratchShown m) {
-        io.execute(() -> nav.scratchMade(m.path()));
-    }
-
-    /** Something was written or made the navigator has not listed: list it, and show what was made. */
-    @Subscribe(topic = Messages.RELIST)
-    public void relist(Relist m) {
-        nav.refresh();
-        if (m.reveal() != null) {
-            nav.reveal(m.reveal());
+    /** A file selected in the tree opens, and the keyboard stays in the tree, so walking it keeps walking. */
+    @Subscribe
+    public void treeSelected(TreeView.Selected m) {
+        if (m.tree().equals(nav.treeAddress()) && m.item() instanceof Path p && !nav.isFolder(p)) {
+            open.send(new Open(p, false));
         }
     }
 
-    @Subscribe(topic = Messages.PLAIN)
-    public void plain(Plain m) {
-        ui.plain();
+    /** Enter on a folder opens it in place. */
+    @Subscribe
+    public void treeActivated(TreeView.Activated m) {
+        if (m.tree().equals(nav.treeAddress()) && m.item() instanceof Path p && nav.isFolder(p)) {
+            nav.expand(p);
+        }
     }
 
-    /** A window with nothing to show has one thing to do first, and Open is where it is done. */
-    @Subscribe(topic = Messages.CHOOSE_ROOT)
-    public void chooseRoot(ChooseRoot m) {
-        nav.mode(Navigator.Mode.OPEN);
-        ui.showNavigator(true);
+    /** One of a row's menu actions. */
+    @Subscribe
+    public void treeChosen(TreeView.Chosen m) {
+        if (!m.at().equals(nav.treeAddress()) || !(m.item() instanceof Path p)) {
+            return;
+        }
+        if (m.action().equals(Navigator.OPEN)) {
+            open.send(new Open(p, true));
+        } else if (m.action().equals(Navigator.SHOW)) {
+            go.send(new Go(p.toString()));
+        } else if (m.action().equals(Navigator.COPY_PATH)) {
+            gui.clipboard().set(p.toString());
+        }
     }
 
-    // ------------------------------------------------------------------ what the person did, on this lane
+    @Subscribe
+    public void treeRevealed(TreeView.Revealed m) {
+        if (m.tree().equals(nav.treeAddress())) {
+            nav.revealed(m.item(), m.reached());
+        }
+    }
+
+    // ------------------------------------------------------------------ what the person did, by chord
 
     void saveFront() {
         Buffer b = ws.front();
@@ -717,510 +355,55 @@ final class View {
         }
     }
 
-    void saveAsFront() {
-        Buffer b = ws.front();
-        if (b != null) {
-            bus.publish(Messages.SAVE_AS_TOPIC, new SaveAs(b.id));
-        }
-    }
-
     /** The text, taken now and marked saved now: what is written is what the document said when Save was asked for. */
     private void save(Buffer b) {
-        bus.publish(Messages.SAVE_TOPIC, new Save(b.id, b.takeForSave(), true));
+        save.send(new Save(b.id, b.takeForSave(), true));
+        reportDirty(b);
     }
 
     void closeFront() {
         Buffer b = ws.front();
         if (b != null) {
-            rollCall(List.of(b), ++batches, Purpose.TABS, null);
+            close(List.of(b));
         }
     }
 
-    void close(long id) {
-        Buffer b = ws.byId(id);
-        if (b != null) {
-            rollCall(List.of(b), ++batches, Purpose.TABS, null);
+    /** Ask the editor to close these tabs, in one message: whether any is unsaved is the editor's to know. */
+    private void close(List<Buffer> buffers) {
+        List<Long> ids = new ArrayList<>(buffers.size());
+        for (Buffer b : buffers) {
+            ids.add(b.id);
         }
-    }
-
-    void closeOthers(long keep) {
-        List<Buffer> rest = new ArrayList<>(ws.all());
-        rest.removeIf(b -> b.id == keep);
-        rollCall(rest, ++batches, Purpose.TABS, null);
-    }
-
-    void closeAll() {
-        rollCall(ws.all(), ++batches, Purpose.TABS, null);
+        close.send(new Close(ids));
     }
 
     void cycle(int delta) {
         ws.cycle(delta);
     }
 
-    /** The window was asked to close: tell the editor every tab, and whether each is unsaved now. */
-    void quit(long ticket) {
-        rollCall(ws.all(), ticket, Purpose.QUIT, null);
+    void focusPath() {
+        nav.focusPath();
     }
 
-    /** About to go where a root is picked: the editor settles the unsaved work first, or says to stay. */
-    void settle(long ticket) {
-        rollCall(ws.all(), ticket, Purpose.SETTLE, null);
+    void focusTree() {
+        nav.focusTree();
     }
 
-    /** A new root was picked: every tab goes to the editor with it, to be put away as the old root's. */
-    void root(long ticket) {
-        Path folder = roots.remove(ticket);
-        if (folder != null) {
-            rollCall(ws.all(), ticket, Purpose.ROOT, folder);
-        }
-    }
-
-    /** Something to run was chosen: every tab goes to the editor, which saves what has a file before it runs. */
-    void run(long ticket) {
-        if (runs.containsKey(ticket)) {
-            rollCall(ws.all(), ticket, Purpose.RUN, null);
-        }
-    }
-
-    /**
-     * One {@link Closing} per tab, each carrying how many make the set and whether its tab is unsaved now; one with no
-     * tab for an empty set, so the set still arrives.
-     */
-    private void rollCall(List<Buffer> buffers, long batch, Purpose purpose, Path folder) {
-        if (buffers.isEmpty()) {
-            bus.publish(Messages.CLOSING_TOPIC, new Closing(batch, 1, Messages.NO_TAB, false, purpose, folder));
-            return;
-        }
-        for (Buffer b : buffers) {
-            bus.publish(Messages.CLOSING_TOPIC, new Closing(batch, buffers.size(), b.id, b.dirty(), purpose, folder));
-        }
-    }
-
-    // ------------------------------------------------------------------ what the person did, on a worker
-
-    private void openDialog() {
-        dialogs.openFile(startDir(), List.of(), p -> bus.publish(Messages.OPEN_TOPIC, new Open(p, true)), () -> { });
-    }
-
-    /** Ctrl+Shift+O: the folder dialog, as the way to a new root, so unsaved work is settled before it as Open settles it. */
-    private void openFolderDialog() {
-        gates.settle(() -> dialogs.openFolder(startDir(), this::pickRoot, () -> { }), () -> { });
-    }
-
-    /** {@code folder} was picked as the root: held under a ticket while the tabs go to the editor with it. */
-    private void pickRoot(Path folder) {
-        long ticket = tickets.incrementAndGet();
-        roots.put(ticket, folder);
-        tell(Command.ROOT, ticket);
-    }
-
-    /** Alt+N: the scratches over the navigator's files, or the files again. The navigator is shown for it. */
-    private void toggleScratches() {
-        nav.toggleScratches();
-        if (nav.mode() == Navigator.Mode.SCRATCHES) {
-            ui.showNavigator(true);
-        }
-    }
-
-    private void toggleGit() {
-        nav.toggleGit();
-        if (nav.mode() == Navigator.Mode.GIT) {
-            ui.showNavigator(true);
-        }
-    }
-
-    private void reveal(Buffer b) {
-        if (!nav.reveal(b.path())) {
-            say(b.name() + " is not inside the open folder");
+    /** In ({@code 1}), out ({@code -1}), or back to where it started ({@code 0}). */
+    void zoom(int direction) {
+        if (direction > 0) {
+            gui.zoomIn();
+        } else if (direction < 0) {
+            gui.zoomOut();
         } else {
-            ui.showNavigator(true);
+            gui.resetZoom();
         }
     }
 
-    /**
-     * The navigator's Add: ask for a name above the tree, starting from one Add suggests, and send what was named to
-     * the editor. A link is asked what it points at first, with the platform's own dialog.
-     */
-    private void add(Path folder, Made what, Template template) {
-        if (what == Made.SYMLINK) {
-            dialogs.openFile(folder, List.of(), target -> nav.askName(folder, String.valueOf(target.getFileName()),
-                    name -> bus.publish(Messages.ADD_TOPIC, new Add(folder, what, null, name, target))), () -> { });
-            return;
-        }
-        nav.askName(folder, Make.suggested(what, template, folder),
-                name -> bus.publish(Messages.ADD_TOPIC, new Add(folder, what, template, name, null)));
-    }
-
-    private void say(String message) {
-        bus.publish(Messages.STATUS_TOPIC, new Status(message, false));
-    }
-
-    private void refuse(String message) {
-        bus.publish(Messages.STATUS_TOPIC, new Status(message, true));
-    }
-
-    /** Where a dialog starts: beside the document in front, else the open folder, else home. */
-    private Path startDir() {
-        Buffer b = ws.front();
-        if (b != null && b.path() != null && b.path().getParent() != null) {
-            return b.path().getParent();
-        }
-        Path folder = nav.folder();
-        return folder != null ? folder : Path.of(System.getProperty("user.home"));
-    }
-
-    // ------------------------------------------------------------------ running
-
-    /**
-     * The Run button, and F5: what can be run for the folder and the document in front ({@link Runs}), as a menu under
-     * the button, and first, Run…, for a command typed ({@link RunDialog}). Worked out on the offload lane, since it
-     * reads the disk.
-     */
-    void runMenu() {
-        Buffer b = ws.front();
-        Path project = nav.folder();
-        Path file = b == null ? null : b.path();
-        String text = b == null ? null : b.field.text();
-        io.execute(() -> {
-            List<MenuItem> items = new ArrayList<>();
-            Path folder = project != null ? project : file != null ? file.getParent() : null;
-            items.add(MenuItem.of("Run…", () -> runDialog.show(folder)));
-            List<Runs.Run> offered = Runs.offered(project, file, text);
-            if (!offered.isEmpty()) {
-                items.add(MenuItem.SEPARATOR);
-            }
-            for (Runs.Run r : offered) {
-                items.add(r == null ? MenuItem.SEPARATOR : MenuItem.of(r.label(), () -> run(r)));
-            }
-            Node button = ws.runButton().node();
-            NodeLayout at = button.layout();
-            float x = at.present() ? at.rect().x() : 0f;
-            float y = at.present() ? at.rect().y() + at.rect().h() : 0f;
-            gui.menus().present(new ClickEvent(button.id(), MouseButton.LEFT, x, y), items);
-        });
-    }
-
-    /**
-     * Run {@code run} in the console, once every document that has a file and unsaved work has been saved: what runs
-     * is what is on disk, so it has to be what is on screen. The editor saves them, and a save that fails runs nothing.
-     */
-    private void run(Runs.Run run) {
-        long ticket = tickets.incrementAndGet();
-        runs.put(ticket, run);
-        tell(Command.RUN, ticket);
-    }
-
-    // ------------------------------------------------------------------ code
-
-    /**
-     * One declaration go to declaration may land on.
-     *
-     * @param file    where it is, or null when it is in a library or in {@code in}, an Untitled document
-     * @param library the library source it is in, or null
-     * @param in      the open document showing it, if any: for one read from the text in front, that text, which
-     *                is fresher than the index
-     * @param context what it was declared beside, for its label; null to ask the index, which is asked only for the
-     *                one target gone to, since a common name has hundreds of declarations in a project's libraries
-     */
-    private record Target(Symbol symbol, Path file, Source library, Buffer in, List<Symbol> context) {
-
-        /** Where it is, for the status line: the file, or the library's jar. Empty in a document never saved. */
-        String where() {
-            if (file != null) {
-                return " in " + file.getFileName();
-            }
-            return switch (library) {
-                case Source.InArchive a -> " in " + a.archive().getFileName();
-                case Source.Decompiled d -> " in " + d.archive().getFileName() + ", decompiled";
-                case null, default -> "";
-            };
-        }
-    }
-
-    /**
-     * Where each library declaration gone to turned out to be. A declaration read from a class file has no line
-     * until its class is decompiled and searched, which is too slow to redo on every Ctrl+Enter; this is how
-     * pressing again on one just reached knows it is there.
-     */
-    private final Map<Symbol, SourceRef> located = new ConcurrentHashMap<>();
-
-    /** Where {@code t}'s declaration is in the text it is shown in, as far as is known without reading it. */
-    private SourceRef position(Target t) {
-        SourceRef known = located.get(t.symbol());
-        return known != null ? known : t.symbol().at();
-    }
-
-    private String label(Target t, Index index) {
-        List<Symbol> context = t.context() != null ? t.context()
-                : index != null ? index.declaredIn(t.symbol().source()) : List.of(t.symbol());
-        return Outline.label(t.symbol(), context);
-    }
-
-    /**
-     * Ctrl+Enter: go to where the name under the caret is declared.
-     *
-     * <p>The document in front is read as it is now, and the rest of the project from its index. Names are
-     * matched as Concordance matches them — by name, not by resolving them — so a common name can have several
-     * declarations. They are visited in a fixed order, and pressing again on the one just reached goes on to the
-     * next: a list nobody has to open, at the cost of not seeing them all at once. The project's own come before
-     * its libraries', and within each which comes first depends on what the name is doing: before a {@code (} it
-     * is a method or constructor, otherwise a type or a field.
-     *
-     * <p>A library's declaration opens its source read-only in a tab of its own: the text from its
-     * {@code -sources.jar}, or its class decompiled when the library came without sources.
-     */
-    void goToDeclaration() {
-        Buffer b = ws.front();
-        if (b == null) {
-            return;
-        }
-        Buffer.Word word = b.wordAtCaret();
-        if (word == null) {
-            say("Go to declaration: the caret is not on a name");
-            return;
-        }
-        List<Target> targets = declarationsOf(b, word);
-        if (targets.isEmpty()) {
-            say(concordance.indexing()
-                    ? "No declaration of " + word.text() + " in this file; the project is still being indexed"
-                    : concordance.current() == null && !prefs.index()
-                    ? "No declaration of " + word.text() + " in this file; indexing is off in Preferences"
-                    : concordance.current() == null
-                    ? "No declaration of " + word.text() + " in this file"
-                    : "No declaration of " + word.text() + " in this project");
-            return;
-        }
-        int here = -1;
-        for (int i = 0; i < targets.size(); i++) {
-            Target t = targets.get(i);
-            SourceRef at = position(t);
-            if (t.in() == b && b.declaredNameAt(t.symbol().name(), at.line(), at.column()) == word.start()) {
-                here = i;
-                break;
-            }
-        }
-        int next = (here + 1) % targets.size();
-        Target to = targets.get(next);
-        String label = label(to, concordance.current());
-        goTo(to, targets.size() == 1
-                ? (here == 0 ? label + " is the only declaration of " + word.text() : label + to.where())
-                : label + to.where() + " (" + (next + 1) + " of " + targets.size() + ", Ctrl+Enter for the next)");
-    }
-
-    /**
-     * Every declaration named {@code word}, in the order {@link #goToDeclaration} visits them. The order does not
-     * depend on which document is in front, or pressing again from the one just reached would start a different
-     * walk and never arrive at the rest.
-     */
-    private List<Target> declarationsOf(Buffer front, Buffer.Word word) {
-        String name = word.text();
-        List<Target> out = new ArrayList<>();
-        Path frontFile = front.path() == null ? null : front.path().toAbsolutePath().normalize();
-        Source frontLibrary = front.library();
-        List<Symbol> local = front.declarations();
-        for (Symbol s : local) {
-            if (s.name().equals(name)) {
-                out.add(new Target(s, frontFile, frontLibrary, front, local));
-            }
-        }
-        Index index = concordance.current();
-        if (index != null) {
-            for (Symbol s : index.namesContaining(name)) {
-                if (!s.name().equals(name)) {
-                    continue;
-                }
-                if (s.source() instanceof Source.OnDisk disk) {
-                    Path file = disk.file().toAbsolutePath().normalize();
-                    if (file.equals(frontFile) && !local.isEmpty()) {
-                        continue;   // the front document's own declarations were read from its text, which is newer
-                    }
-                    out.add(new Target(s, file, null, ws.find(file), null));
-                } else {
-                    if (s.source().equals(frontLibrary) && !local.isEmpty()) {
-                        continue;   // read from the text in front, which is placed where a class file's are not
-                    }
-                    out.add(new Target(s, null, s.source(), ws.findLibrary(s.source()), null));
-                }
-            }
-        }
-        out.sort(Comparator
-                .comparingInt((Target t) -> t.library() == null ? 0 : 1)
-                .thenComparingInt(t -> preference(t.symbol().kind(), word.call()))
-                .thenComparing(t -> t.file() != null ? t.file().toString()
-                        : t.library() != null ? t.library().toString() : "")
-                .thenComparingInt(t -> t.symbol().line())
-                .thenComparingInt(t -> t.symbol().at().column()));
-        return out;
-    }
-
-    /** Which kinds of declaration a name most likely means, smallest first: a name before a {@code (} is called. */
-    private static int preference(Symbol.Kind kind, boolean call) {
-        return switch (kind) {
-            case METHOD, CONSTRUCTOR -> call ? 0 : 2;
-            case FIELD -> call ? 2 : 1;
-            default -> call ? 1 : 0;   // a type: `new Circle(` reaches the class when it declares no constructor
-        };
-    }
-
-    /**
-     * Bring {@code to}'s document forward, opening it if it is not open, select the declared name, and then say
-     * {@code message} — after, because opening a file says so on the status line too, and the jump is the news. A file
-     * not yet open is opened by the editor, and selected here when its tab arrives.
-     */
-    private void goTo(Target to, String message) {
-        Symbol s = to.symbol();
-        if (to.library() != null && s.source().equals(to.library())) {
-            // From the index, not from the text in front: read the source, and place the declaration in it.
-            io.execute(() -> goToLibrary(to, message));
-            return;
-        }
-        Buffer open = to.in() != null ? to.in() : ws.find(to.file());
-        if (open != null) {
-            if (open != ws.front()) {
-                ws.show(open);
-            }
-            open.selectDeclaration(s.name(), s.line(), s.at().column());
-            say(message);
-            return;
-        }
-        selections.put(to.file(), loaded -> {
-            loaded.selectDeclaration(s.name(), s.line(), s.at().column());
-            say(message);
-        });
-        bus.publish(Messages.OPEN_TOPIC, new Open(to.file(), true));
-    }
-
-    /**
-     * {@link #goTo} for a library's declaration, on the offload lane: read its source if it is not open, which for a
-     * class without sources is decompiling it, a fraction of a second or, for a huge class, up to Concordance's time
-     * limit, and place the declaration in that text. The tab itself is the editor's, asked for with the text read.
-     */
-    private void goToLibrary(Target to, String message) {
-        Symbol s = to.symbol();
-        Source source = to.library();
-        String name = Buffer.libraryName(source);
-        Buffer open = ws.findLibrary(source);
-        try {
-            if (open == null) {
-                if (source instanceof Source.Decompiled) {
-                    say("Decompiling " + name);
-                }
-                TextFile.Loaded loaded = TextFile.decode(source.read());
-                SourceRef at = source.locate(s);
-                located.put(s, at);
-                long ticket = tickets.incrementAndGet();
-                libraries.put(ticket, new Library(source, shown -> {
-                    shown.selectDeclaration(s.name(), at.line(), at.column());
-                    say(message);
-                }));
-                bus.publish(Messages.OPEN_TEXT_TOPIC, new OpenText(ticket, name, loaded.text(), loaded.crlf()));
-                return;
-            }
-            if (open != ws.front()) {
-                ws.show(open);
-            }
-            SourceRef at = source.locate(s);
-            located.put(s, at);
-            open.selectDeclaration(s.name(), at.line(), at.column());
-            say(message);
-        } catch (TextFile.Unsupported | IOException | RuntimeException e) {
-            LOG.warn("could not show {}", source, e);
-            say("Could not show " + name + ": " + e.getMessage());
-        }
-    }
-
-    // ------------------------------------------------------------------ view
-
-    /** Alt+Z, and the preferences menu: word wrap, remembered where the root's preferences are kept. */
-    void toggleWrap() {
-        boolean on = !ws.wrap();
-        ws.wordWrap(on);
-        io.execute(() -> prefs.wrap(on));
-        say((on ? "Word wrap on" : "Word wrap off") + scope());
-    }
-
-    /**
-     * The preferences button's menu. The theme is the editor's and takes effect at the next start; word wrap and
-     * indexing apply now, to the root's own {@code .vex} preferences when it keeps them and to the editor's otherwise.
-     */
-    List<MenuItem> preferencesMenu() {
-        Preferences.Shade next = prefs.theme();
-        Preferences.Shade now = Look.light(gui.theme().palette()) ? Preferences.Shade.LIGHT : Preferences.Shade.DARK;
-        Path at = prefs.root();
-        List<MenuItem> items = new ArrayList<>();
-        items.add(MenuItem.disabled(next == now ? "Theme" : "Theme (from the next start)"));
-        items.add(check(next == Preferences.Shade.DARK, "Dark", () -> theme(Preferences.Shade.DARK)));
-        items.add(check(next == Preferences.Shade.LIGHT, "Light", () -> theme(Preferences.Shade.LIGHT)));
-        items.add(MenuItem.SEPARATOR);
-        items.add(MenuItem.disabled(at != null && prefs.projectScoped() ? "Editor, for this project" : "Editor"));
-        items.add(check(ws.wrap(), "Word wrap", this::toggleWrap));
-        items.add(check(prefs.index(), "Index Maven projects", this::toggleIndex));
-        items.add(MenuItem.SEPARATOR);
-        items.add(check(prefs.projectScoped(), at == null ? "Keep for this project (no folder open)"
-                : "Keep for this project, in " + Preferences.DIR, at != null, this::toggleProjectScoped));
-        items.add(check(prefs.gitignore(), "Add " + Preferences.DIR + " to .gitignore", true, this::toggleGitignore));
-        return items;
-    }
-
-    private static MenuItem check(boolean on, String label, Runnable action) {
-        return check(on, label, true, action);
-    }
-
-    private static MenuItem check(boolean on, String label, boolean enabled, Runnable action) {
-        return new MenuItem(null, label, action, enabled, on ? Icon.CHECK : null);
-    }
-
-    private void theme(Preferences.Shade shade) {
-        io.execute(() -> prefs.theme(shade));
-        boolean light = Look.light(gui.theme().palette());
-        boolean same = light == (shade == Preferences.Shade.LIGHT);
-        String name = shade == Preferences.Shade.LIGHT ? "Light" : "Dark";
-        say(same ? name + " theme" : name + " theme from the next start of " + TextEditor.TITLE);
-    }
-
-    /** Indexing on or off: on indexes the root now if it is a Maven project, off drops the index there is. */
-    void toggleIndex() {
-        boolean on = !prefs.index();
-        io.execute(() -> {
-            prefs.index(on);
-            concordance.folder(on ? nav.folder() : null);
-        });
-        say((on ? "Indexing Maven projects" : "Not indexing Maven projects") + scope());
-    }
-
-    private void toggleProjectScoped() {
-        boolean keep = !prefs.projectScoped();
-        io.execute(() -> {
-            if (!prefs.keepForProject(keep)) {
-                refuse("Could not " + (keep ? "write" : "take away") + " " + Preferences.DIR + "/"
-                        + Preferences.FILE + "; the log says why");
-                return;
-            }
-            // Leaving the project's: the editor's own values take over, and may differ.
-            ws.wordWrap(prefs.wrap());
-            concordance.folder(prefs.index() ? nav.folder() : null);
-            say(keep ? "Preferences kept for this project, in " + Preferences.DIR + "/" + Preferences.FILE
-                    : "This project uses the editor's preferences again");
-        });
-    }
-
-    private void toggleGitignore() {
-        boolean on = !prefs.gitignore();
-        io.execute(() -> prefs.gitignore(on));
-        say(on ? "A project's " + Preferences.DIR + " folder goes in its .gitignore"
-                : "A project's " + Preferences.DIR + " folder is left out of its .gitignore");
-    }
-
-    /** Where a preference just changed is kept, for the status line. */
-    private String scope() {
-        return prefs.projectScoped() ? ", for this project" : "";
-    }
-
-    /** Ctrl+Shift+V, and the Formatted button: a Markdown document formatted, or back to its source. */
-    void toggleFormatted() {
-        String said = ws.toggleFormatted();
-        if (said != null) {
-            say(said);
+    /** Tell the editor when a document went unsaved, or came back to what is on disk. */
+    private void reportDirty(Buffer b) {
+        if (b.dirtyChanged()) {
+            edited.send(new Edited(b.id, b.dirty()));
         }
     }
 }

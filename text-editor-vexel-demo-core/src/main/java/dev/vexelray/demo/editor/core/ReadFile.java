@@ -6,6 +6,7 @@ import dev.vexelray.framework.api.Job;
 import sibarum.probe.Log;
 
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 
 /**
  * Read a file and decide whether it can be opened, on the offload lane.
@@ -15,25 +16,31 @@ import java.io.IOException;
  * a slow answer. What can go wrong with a file is part of the answer ({@code problem}), so the editor has to look at
  * it; the job declares no {@code throws}.
  */
-@Job(topic = Messages.READ, reply = Messages.FILE_READ)
+@Job
 public final class ReadFile {
 
-    private static final Log LOG = Log.of("editor.files");
+    private static final Log LOG = Log.of("text-editor-vexel-demo.files");
 
     public FileRead run(Read r) {
         try {
             TextFile.Loaded loaded = TextFile.load(r.path());
-            return new FileRead(r.path(), r.why(), r.focus(), r.id(), loaded.text(), loaded.crlf(),
+            return new FileRead(r.path(), r.why(), r.focus(), loaded.text(), loaded.crlf(),
                     String.join(", ", loaded.notes()), "");
         } catch (TextFile.Unsupported e) {
             return failed(r, e.getMessage());
-        } catch (IOException | RuntimeException e) {
-            LOG.warn("could not read {}", r.path(), e);
+        } catch (NoSuchFileException e) {
+            // A file of the last session that has gone since: an answer, which the reply carries, so a story rather
+            // than a warning.
+            LOG.info("not read, gone: {}", r.path());
+            return failed(r, String.valueOf(e.getMessage()));
+        } catch (IOException e) {
+            // A line, not a trace: the reply says why, and the disk's trouble is not a bug in this program.
+            LOG.warn("could not read {}: {}", r.path(), e.toString());
             return failed(r, String.valueOf(e.getMessage()));
         }
     }
 
     private static FileRead failed(Read r, String problem) {
-        return new FileRead(r.path(), r.why(), r.focus(), r.id(), "", false, "", problem);
+        return new FileRead(r.path(), r.why(), r.focus(), "", false, "", problem);
     }
 }

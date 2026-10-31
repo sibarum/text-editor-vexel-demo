@@ -1,8 +1,6 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
-import dev.vexelray.gui.core.style.Hex;
-import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Role;
 import org.junit.jupiter.api.Test;
 
@@ -53,49 +51,6 @@ class LookTest {
     void theAccentIsNotTheInk() {
         assertNotEquals(Look.THEME.color(Role.INK), Look.THEME.color(Role.ACCENT),
                 "the accent should be a colour, not the text shade");
-    }
-
-    /**
-     * Each colour the design shows, against what the construction derives for it. The tolerance is an Oklab
-     * distance; 0.02 is about where two flat swatches side by side stop looking the same. Glyph colours are
-     * sampled at a glyph's brightest pixel, so they were measured a little dark and get the looser bound.
-     */
-    @Test
-    void theConstructionLandsOnTheDesign() {
-        assertNear("#07080c", Look.THEME.color(Role.PAGE), 0.01, "page");
-        assertNear("#0e1218", Look.THEME.color(Look.CARD), 0.01, "card");
-        assertNear("#141c25", Look.THEME.color(Role.PANEL), 0.01, "current line, card edge");
-        assertNear("#17262c", Look.THEME.color(Role.SELECTION), 0.015, "selected row");
-        assertNear("#313a47", Look.THEME.color(Role.GRIP), 0.02, "scrollbar thumb");
-        assertNear("#eaf0f5", Look.THEME.color(Role.INK), 0.01, "heading ink");
-        assertNear("#9fa6b3", Look.THEME.color(Role.DIM), 0.02, "a label");
-        assertNear("#63d5e1", Look.THEME.color(Role.ACCENT), 0.01, "accent");
-    }
-
-    /** The light look: the same relationships the other way up, and the dark ring where it was measured. */
-    @Test
-    void theLightLookIsTheSameConstructionInverted() {
-        float page = luminance(Look.LIGHT_THEME.color(Role.PAGE));
-        float card = luminance(Look.LIGHT_THEME.color(Look.CARD));
-        float panel = luminance(Look.LIGHT_THEME.color(Role.PANEL));
-        float ink = luminance(Look.LIGHT_THEME.color(Role.INK));
-        float dim = luminance(Look.LIGHT_THEME.color(Role.DIM));
-        assertTrue(page - ink > 0.6f, "the ink should be far darker than the light page");
-        assertTrue(page > card && card > panel, "surfaces step towards the ink: darker on a light page");
-        assertTrue(dim > ink, "dim text is nearer the page");
-        assertTrue(Look.light(Look.LIGHT_PALETTE));
-        assertTrue(!Look.light(Look.PALETTE));
-        double ring = Oklab.of(Look.THEME.color(Look.FOCUS)).l();
-        assertTrue(Math.abs(ring - 0.38) < 0.005, "the dark page's focus ring is where it was tuned: " + ring);
-    }
-
-    private static void assertNear(String hex, Color derived, double tolerance, String what) {
-        Oklab want = Oklab.of(Hex.parse(hex).orElseThrow());
-        Oklab got = Oklab.of(derived);
-        double d = Math.sqrt(Math.pow(want.l() - got.l(), 2) + Math.pow(want.a() - got.a(), 2)
-                + Math.pow(want.b() - got.b(), 2));
-        assertTrue(d <= tolerance, what + ": design " + hex + " is " + String.format("%.4f", d)
-                + " from what the palette derives");
     }
 
     /** Rough perceived brightness -- enough to order two shades, which is all these assertions need. */

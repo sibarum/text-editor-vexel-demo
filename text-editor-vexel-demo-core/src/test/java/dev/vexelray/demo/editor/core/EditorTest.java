@@ -1,94 +1,107 @@
 package dev.vexelray.demo.editor.core;
 
-import dev.vexelray.demo.editor.core.Messages.Add;
 import dev.vexelray.demo.editor.core.Messages.AddTab;
-import dev.vexelray.demo.editor.core.Messages.Answer;
-import dev.vexelray.demo.editor.core.Messages.Ask;
-import dev.vexelray.demo.editor.core.Messages.AskWhere;
-import dev.vexelray.demo.editor.core.Messages.Choice;
-import dev.vexelray.demo.editor.core.Messages.CloseTab;
-import dev.vexelray.demo.editor.core.Messages.Closing;
+import dev.vexelray.demo.editor.core.Messages.Caption;
+import dev.vexelray.demo.editor.core.Messages.Close;
+import dev.vexelray.demo.editor.core.Messages.CloseTabs;
+import dev.vexelray.demo.editor.core.Messages.Create;
 import dev.vexelray.demo.editor.core.Messages.Created;
-import dev.vexelray.demo.editor.core.Messages.Dropping;
 import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.FileRead;
+import dev.vexelray.demo.editor.core.Messages.Find;
 import dev.vexelray.demo.editor.core.Messages.Flush;
+import dev.vexelray.demo.editor.core.Messages.Found;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
-import dev.vexelray.demo.editor.core.Messages.Made;
-import dev.vexelray.demo.editor.core.Messages.NewFile;
+import dev.vexelray.demo.editor.core.Messages.Go;
+import dev.vexelray.demo.editor.core.Messages.Kind;
 import dev.vexelray.demo.editor.core.Messages.Open;
-import dev.vexelray.demo.editor.core.Messages.Placed;
-import dev.vexelray.demo.editor.core.Messages.Purpose;
 import dev.vexelray.demo.editor.core.Messages.Read;
-import dev.vexelray.demo.editor.core.Messages.Relist;
-import dev.vexelray.demo.editor.core.Messages.Relocated;
-import dev.vexelray.demo.editor.core.Messages.Reload;
+import dev.vexelray.demo.editor.core.Messages.Recall;
+import dev.vexelray.demo.editor.core.Messages.Recalled;
+import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
-import dev.vexelray.demo.editor.core.Messages.Revert;
 import dev.vexelray.demo.editor.core.Messages.Save;
-import dev.vexelray.demo.editor.core.Messages.SaveAs;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
-import dev.vexelray.demo.editor.core.Messages.Saved;
-import dev.vexelray.demo.editor.core.Messages.ScratchMade;
-import dev.vexelray.demo.editor.core.Messages.Settled;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
-import dev.vexelray.demo.editor.core.Messages.Template;
 import dev.vexelray.demo.editor.core.Messages.Why;
 import dev.vexelray.demo.editor.core.Messages.Write;
 import dev.vexelray.demo.editor.core.Messages.Written;
-import dev.vexelray.framework.core.Launch;
-import dev.vexelray.gui.core.app.Settings;
+import dev.vexelray.framework.core.Answer;
+import dev.vexelray.framework.core.Ask;
+import dev.vexelray.framework.core.CloseAnswer;
+import dev.vexelray.framework.core.CloseRequested;
+import dev.vexelray.framework.core.WindowOpened;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import sibarum.atchung.Atchung;
+import sibarum.atchung.Fatal;
+import sibarum.atchung.Inbox;
+import sibarum.atchung.Tick;
 import sibarum.atchung.Topic;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The controller, alone: no window, no lanes, no jobs. Each test hands the {@link Editor} a message the way its lane
- * would, one at a time on this thread, and reads what it sent back. The jobs' replies are handed in by hand, which is
- * what makes the interesting orders (a write that fails, a dialog cancelled, a root's tabs coming back one at a time)
- * as easy to test as the common one.
+ * The controller, alone: no window and no jobs. The {@link Editor} owns an inbox on a tick of this test's, as it will
+ * own one on the framework's, and each test publishes what the view or a job would and runs the tick, then reads what
+ * the editor sent. The jobs' replies are published by hand, which is what makes the interesting orders (a write that
+ * fails, an answer to a question already answered) as easy to test as the common one.
+ *
+ * <p>The close tests are the witness of {@code docs/plans/chains.md}: closing a document with unsaved work is one
+ * chain, from the message that asks to its end, whichever way the person answers.
  */
 class EditorTest {
 
     @TempDir
     Path dir;
 
-    private Settings settings;
+    private Fatal previous;
+    private Atchung bus;
+    private Tick tick;
     private Editor editor;
-    /** Everything the editor published, in order. */
+    /** Everything the editor sent, in order. */
     private final List<Object> sent = new ArrayList<>();
 
     @BeforeEach
     void build() {
-        Atchung bus = Atchung.create();
-        settings = Settings.at(dir.resolve("settings.properties"));
-        editor = new Editor(bus, settings, Launch.parse(new String[0], "test", Set.of()),
-                new Scratches(dir.resolve("scratches")));
-        for (Topic<?> t : List.of(Messages.SHOW_FOLDER_TOPIC, Messages.RECENT_TOPIC, Messages.ADD_TAB_TOPIC,
-                Messages.FRONT_TAB_TOPIC, Messages.CLOSE_TAB_TOPIC, Messages.RETITLE_TOPIC, Messages.CAPTION_TOPIC,
-                Messages.STATUS_TOPIC, Messages.ASK_TOPIC, Messages.TELL_TOPIC, Messages.ASK_WHERE_TOPIC,
-                Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, Messages.SAVED_TOPIC, Messages.MOVED_TOPIC,
-                Messages.REVERT_TOPIC, Messages.SETTLED_TOPIC, Messages.SCRATCH_SHOWN_TOPIC, Messages.RELIST_TOPIC,
-                Messages.PLAIN_TOPIC, Messages.CHOOSE_ROOT_TOPIC, Messages.READ_TOPIC, Messages.WRITE_TOPIC,
-                Messages.FIND_TOPIC, Messages.MAKE_SCRATCH_TOPIC, Messages.NAME_SCRATCH_TOPIC,
-                Messages.DROP_SCRATCH_TOPIC, Messages.MAKE_TOPIC)) {
-            listen(bus, t);
+        previous = Atchung.fatal();
+        Atchung.onFatal(Fatal.THROW);
+        bus = Atchung.create();
+        tick = bus.tick(null);
+        editor = new Editor(tick.inbox("editor"));
+        Inbox heard = tick.inbox("heard");
+        for (Topic<?> t : List.of(Messages.SHOW_FOLDER_TOPIC, Messages.ADD_TAB_TOPIC, Messages.FRONT_TAB_TOPIC,
+                Messages.CLOSE_TABS_TOPIC, Messages.RETITLE_TOPIC, Messages.CAPTION_TOPIC, Messages.STATUS_TOPIC,
+                Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
+                Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
+                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC)) {
+            listen(heard, t);
         }
     }
 
-    private <T> void listen(Atchung bus, Topic<T> topic) {
-        bus.subscribe(topic, sent::add);
+    @AfterEach
+    void restoreTheFatalPolicy() {
+        Atchung.onFatal(previous);
+    }
+
+    private <T> void listen(Inbox heard, Topic<T> topic) {
+        heard.subscribe(topic, sent::add, 256);
+    }
+
+    /** Publish {@code message} as its sender would, and run the tick until nothing is left to deliver. */
+    private <T> void tell(Topic<T> topic, T message) {
+        bus.publish(topic, message);
+        tick.run(System.nanoTime() + 60_000_000_000L);
     }
 
     /** What was sent of one kind, in order, and forget everything sent so far. */
@@ -102,267 +115,267 @@ class EditorTest {
         return dir.resolve(name).toAbsolutePath().normalize();
     }
 
-    /** The Untitled tab a window starts with, as the view asks for it; its id. */
-    private long untitled() {
-        editor.newFile(new NewFile());
-        return took(AddTab.class).getFirst().id();
-    }
-
     /** Open {@code name} as the reader would answer it, and return the new tab's id. */
     private long opened(String name, String text) {
         Path file = file(name);
-        editor.open(new Open(file, true));
-        assertEquals(List.of(new Read(file, Why.OPEN, true, Messages.NO_TAB)), took(Read.class));
-        editor.read(new FileRead(file, Why.OPEN, true, Messages.NO_TAB, text, false, "", ""));
+        tell(Messages.OPEN_TOPIC, new Open(file, true));
+        assertEquals(List.of(new Read(file, Why.OPEN, true)), took(Read.class));
+        tell(Messages.FILE_READ_TOPIC, new FileRead(file, Why.OPEN, true, text, false, "", ""));
         List<AddTab> added = took(AddTab.class);
         assertEquals(1, added.size());
         return added.getFirst().id();
     }
 
-    @Test
-    void aFileTakesThePlaceOfTheEmptyUntitledTabAWindowStartsWith() {
-        long blank = untitled();
-        Path file = file("a.txt");
-        editor.open(new Open(file, true));
-        editor.read(new FileRead(file, Why.OPEN, true, Messages.NO_TAB, "hello", false, "", ""));
-        AddTab tab = took(AddTab.class).getFirst();
-        assertEquals(blank, tab.replace(), "the empty Untitled one is named to go");
-        assertEquals("hello", tab.text());
+    /** Open {@code name} and type into it. */
+    private long unsaved(String name) {
+        long id = opened(name, name);
+        tell(Messages.EDITED_TOPIC, new Edited(id, true));
+        sent.clear();
+        return id;
+    }
 
-        // Typed into, it is no longer empty, and stays.
-        long a = untitled();
-        editor.edited(new Edited(a, true));
-        Path other = file("b.txt");
-        editor.open(new Open(other, true));
-        editor.read(new FileRead(other, Why.OPEN, true, Messages.NO_TAB, "", false, "", ""));
-        assertEquals(Messages.NO_TAB, took(AddTab.class).getFirst().replace());
+    // ------------------------------------------------------------------ opening
+
+    @Test
+    void openingReadsTheFileThenAddsATabInFront() {
+        Path file = file("a.txt");
+        tell(Messages.OPEN_TOPIC, new Open(file, true));
+        assertEquals(List.of(new Read(file, Why.OPEN, true)), took(Read.class));
+        tell(Messages.FILE_READ_TOPIC, new FileRead(file, Why.OPEN, true, "hello", false, "", ""));
+        assertTrue(sent.contains(new AddTab(1, file, "hello", true)));
+        assertTrue(sent.contains(new Caption("a.txt")));
+        assertTrue(sent.contains(new Status("Opened a.txt", false)));
     }
 
     @Test
     void openingAnOpenFileFrontsItRatherThanReadingItAgain() {
         long a = opened("a.txt", "a");
         opened("b.txt", "b");
-        editor.open(new Open(file("a.txt"), true));
+        tell(Messages.OPEN_TOPIC, new Open(dir.resolve("a.txt"), true));
         assertEquals(List.of(new FrontTab(a, true)), took(FrontTab.class));
         assertTrue(took(Read.class).isEmpty());
     }
 
     @Test
-    void closingTheLastTabLeavesAnEmptyOne() {
-        long a = opened("a.txt", "a");
-        editor.closing(new Closing(1, 1, a, false, Purpose.TABS, null));
-        assertEquals(List.of(new CloseTab(a)), sent.stream().filter(CloseTab.class::isInstance).toList());
-        AddTab blank = took(AddTab.class).getFirst();
-        assertEquals(null, blank.path());
-        assertEquals("", blank.library());
+    void aSecondClickWhileTheFirstIsBeingReadReadsNothingMore() {
+        Path file = file("a.txt");
+        tell(Messages.OPEN_TOPIC, new Open(file, true));
+        tell(Messages.OPEN_TOPIC, new Open(file, true));
+        assertEquals(1, took(Read.class).size());
     }
 
     @Test
-    void anUntitledTabWithUnsavedWorkCanBeKeptAsAScratchAndAFileCannot() {
-        long blank = untitled();
-        editor.closing(new Closing(1, 1, blank, true, Purpose.TABS, null));
-        assertEquals("Keep as scratch", took(Ask.class).getFirst().extra());
+    void aFileThatCannotBeOpenedIsRefusedOnTheStatusLine() {
+        Path blob = file("blob.bin");
+        tell(Messages.OPEN_TOPIC, new Open(blob, true));
+        tell(Messages.FILE_READ_TOPIC, new FileRead(blob, Why.OPEN, true, "", false, "", "it is binary"));
+        assertTrue(sent.contains(new Status("Could not open blob.bin: it is binary", true)));
+        assertTrue(took(AddTab.class).isEmpty());
+        tell(Messages.OPEN_TOPIC, new Open(blob, true));
+        assertEquals(1, took(Read.class).size(), "a refusal does not leave the file marked as being read");
+    }
 
+    @Test
+    void goingUnsavedRetitlesTheTabAndTheCaption() {
         long a = opened("a.txt", "a");
-        editor.closing(new Closing(2, 1, a, true, Purpose.TABS, null));
+        tell(Messages.EDITED_TOPIC, new Edited(a, true));
+        assertTrue(sent.contains(new Retitle(a, "• a.txt")));
+        assertTrue(sent.contains(new Caption("• a.txt")));
+    }
+
+    @Test
+    void thePathBarCreatesANameThatIsNotThereYetInTheFolderShown() {
+        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(), dir));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        sent.clear();
+        tell(Messages.GO_TOPIC, new Go("new.txt"));
+        Path wanted = file("new.txt");
+        assertEquals(List.of(new Find(wanted, Why.GO)), took(Find.class));
+        tell(Messages.FOUND_TOPIC, new Found(wanted, Why.GO, Kind.NEW));
+        assertEquals(List.of(new Create(wanted)), took(Create.class));
+        tell(Messages.CREATED_TOPIC, new Created(wanted, true, ""));
+        assertTrue(sent.contains(new ShowFolder(dir)), "the folder is listed again");
+        List<AddTab> added = took(AddTab.class);
+        assertEquals(1, added.size());
+        tell(Messages.SAVE_TOPIC, new Save(added.getFirst().id(), "x", true));
+        assertTrue(took(Write.class).getFirst().crlf(), "a new file has the line endings its job said");
+    }
+
+    // ------------------------------------------------------------------ closing: the witness
+
+    @Test
+    void closingASavedTabClosesItWithoutAsking() {
+        long a = opened("a.txt", "a");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a)));
+        assertEquals(List.of(new CloseTabs(List.of(a))), sent.stream().filter(CloseTabs.class::isInstance).toList());
+        assertTrue(took(Ask.class).isEmpty());
+        assertTrue(editor.state().closings().isEmpty(), "nothing is left waiting");
+    }
+
+    @Test
+    void closingAnUnsavedTabAsksAndNothingClosesWhileThePersonDecides() {
+        long a = unsaved("a.txt");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a)));
         Ask ask = took(Ask.class).getFirst();
-        assertEquals("", ask.extra());
-        editor.answer(new Answer(ask.question(), Choice.OTHER));
-        assertEquals(List.of(new CloseTab(a)), took(CloseTab.class), "Don't save closes it");
+        assertEquals("Unsaved changes", ask.title());
+        assertEquals("Save the changes to a.txt before closing it?", ask.message());
+        assertEquals(List.of("Save", "Don't save", "Cancel"), ask.buttons(), "default first, cancel last");
+        assertEquals(1, editor.state().closings().size());
+        assertTrue(editor.state().doc().entry(a) != null, "the tab is still open");
     }
 
     @Test
-    void savingAnUntitledTabAsksWhereAndCancellingLeavesItUnsaved() {
-        long blank = untitled();
-        editor.save(new Save(blank, "text", true));
-        AskWhere where = took(AskWhere.class).getFirst();
-        assertEquals("untitled.txt", where.name());
-        editor.placed(new Placed(where.question(), null));
-        assertEquals(List.of(new SaveFailed(blank)), took(SaveFailed.class));
-
-        editor.save(new Save(blank, "text", true));
-        AskWhere again = took(AskWhere.class).getFirst();
-        Path target = file("kept.txt");
-        editor.placed(new Placed(again.question(), target));
-        Write write = took(Write.class).getFirst();
-        assertEquals(new Write(blank, target, "text", System.lineSeparator().equals("\r\n")), write);
-
-        editor.written(new Written(blank, target, ""));
-        assertTrue(sent.contains(new Saved(blank, target)));
-        assertTrue(sent.contains(new Retitle(blank, "kept.txt")), "the tab is named for its file now");
-        assertTrue(sent.contains(new Relist(null)), "the navigator lists the file it has never seen");
+    void dontSaveClosesWithoutWriting() {
+        long a = unsaved("a.txt");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a)));
+        tell(Answer.TOPIC, new Answer(took(Ask.class).getFirst().id(), 1));
+        assertTrue(sent.contains(new CloseTabs(List.of(a))));
+        assertTrue(took(Write.class).isEmpty(), "Don't save does not save");
+        assertTrue(editor.state().closings().isEmpty());
     }
 
     @Test
-    void saveAsWritesWhereThePersonPicksWithTheFilesOwnLineEndings() {
-        Path file = file("crlf.txt");
-        editor.open(new Open(file, true));
-        editor.read(new FileRead(file, Why.OPEN, true, Messages.NO_TAB, "x", true, "", ""));
-        long a = took(AddTab.class).getFirst().id();
-        editor.saveAs(new SaveAs(a));
-        AskWhere where = took(AskWhere.class).getFirst();
-        assertEquals("crlf.txt", where.name());
-        assertEquals(dir.toAbsolutePath().normalize(), where.dir());
-        Path copy = file("copy.txt");
-        editor.placed(new Placed(where.question(), copy));
-        assertEquals(List.of(new Flush(a)), took(Flush.class));
-        editor.save(new Save(a, "x", true));
-        assertEquals(List.of(new Write(a, copy, "x", true)), took(Write.class));
-        editor.written(new Written(a, copy, ""));
-        assertTrue(sent.contains(new Relist(null)), "the navigator lists the copy");
+    void saveWritesThenClosesOnceTheWriteHasLanded() {
+        long a = unsaved("a.txt");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a)));
+        tell(Answer.TOPIC, new Answer(took(Ask.class).getFirst().id(), 0));
+        assertEquals(List.of(new Flush(List.of(a))), took(Flush.class));
+        tell(Messages.SAVE_TOPIC, new Save(a, "typed", true));
+        Write w = took(Write.class).getFirst();
+        assertEquals("typed", w.text());
+        assertTrue(editor.state().doc().entry(a) != null, "nothing closes before the write lands");
+        tell(Messages.WRITTEN_TOPIC, new Written(a, w.path(), ""));
+        assertTrue(sent.contains(new CloseTabs(List.of(a))));
+        assertTrue(editor.state().closings().isEmpty());
     }
 
     @Test
-    void aWriteThatFailsLeavesTheTabUnsavedAndKeepsTheWindowOpen() {
+    void cancelClosesNothingAndForgetsTheQuestion() {
+        long a = unsaved("a.txt");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a)));
+        long question = took(Ask.class).getFirst().id();
+        tell(Answer.TOPIC, new Answer(question, 2));
+        assertTrue(took(CloseTabs.class).isEmpty());
+        assertTrue(editor.state().closings().isEmpty());
+        tell(Answer.TOPIC, new Answer(question, 1));
+        assertTrue(took(CloseTabs.class).isEmpty(), "an answer to a question no longer asked does nothing");
+    }
+
+    @Test
+    void severalTabsAreOneMessageAndOneQuestionAboutTheUnsavedOnes() {
         long a = opened("a.txt", "a");
-        editor.closing(new Closing(7, 1, a, true, Purpose.QUIT, null));
+        long b = unsaved("b.txt");
+        long c = unsaved("c.txt");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a, b, c)));
+        List<Ask> asked = took(Ask.class);
+        assertEquals(1, asked.size());
+        assertEquals("2 files have unsaved changes: b.txt, c.txt.", asked.getFirst().message());
+        tell(Answer.TOPIC, new Answer(asked.getFirst().id(), 1));
+        assertEquals(List.of(new CloseTabs(List.of(a, b, c))), took(CloseTabs.class));
+    }
+
+    @Test
+    void aSecondAnswerWhileTheSavesAreUnderWayChangesNothing() {
+        long a = unsaved("a.txt");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(a)));
+        long question = took(Ask.class).getFirst().id();
+        tell(Answer.TOPIC, new Answer(question, 0));
+        tell(Answer.TOPIC, new Answer(question, 1));
+        assertTrue(took(CloseTabs.class).isEmpty(), "the run waits on the write, not on another answer");
+    }
+
+    // ------------------------------------------------------------------ quitting: the same chain, another way in
+
+    @Test
+    void quittingWithNothingUnsavedProceedsWithoutAsking() {
+        opened("a.txt", "a");
+        tell(CloseRequested.TOPIC, new CloseRequested(CloseRequested.MAIN, 7));
+        assertEquals(List.of(new CloseAnswer(7, true)), sent.stream().filter(CloseAnswer.class::isInstance).toList());
+        assertTrue(took(Ask.class).isEmpty());
+    }
+
+    @Test
+    void saveAllThenQuitProceedsOnceEveryWriteHasLanded() {
+        long a = unsaved("a.txt");
+        long c = unsaved("c.txt");
+        tell(CloseRequested.TOPIC, new CloseRequested(CloseRequested.MAIN, 9));
         Ask ask = took(Ask.class).getFirst();
         assertEquals("Quit with unsaved changes?", ask.title());
-        editor.answer(new Answer(ask.question(), Choice.CONFIRM));
-        assertEquals(List.of(new Flush(a)), took(Flush.class));
-        editor.save(new Save(a, "a!", true));
+        tell(Answer.TOPIC, new Answer(ask.id(), 0));
+        assertEquals(List.of(new Flush(List.of(a, c))), took(Flush.class));
+
+        tell(Messages.SAVE_TOPIC, new Save(a, "1a", true));
+        tell(Messages.SAVE_TOPIC, new Save(c, "2c", true));
+        List<Write> writes = took(Write.class);
+        assertEquals(List.of("1a", "2c"), writes.stream().map(Write::text).toList());
+        tell(Messages.WRITTEN_TOPIC, new Written(a, writes.get(0).path(), ""));
+        assertTrue(took(CloseAnswer.class).isEmpty(), "one of two has landed");
+        tell(Messages.WRITTEN_TOPIC, new Written(c, writes.get(1).path(), ""));
+        assertEquals(List.of(new CloseAnswer(9, true)), took(CloseAnswer.class));
+        assertTrue(editor.state().doc().entry(a) != null, "a quit closes the window, not the tabs");
+    }
+
+    @Test
+    void aWriteThatFailsCancelsTheQuitAndSaysWhy() {
+        long a = unsaved("a.txt");
+        tell(CloseRequested.TOPIC, new CloseRequested(CloseRequested.MAIN, 3));
+        tell(Answer.TOPIC, new Answer(took(Ask.class).getFirst().id(), 0));
+        tell(Messages.SAVE_TOPIC, new Save(a, "x", true));
         Write w = took(Write.class).getFirst();
-        editor.written(new Written(a, w.path(), "disk full"));
+        tell(Messages.WRITTEN_TOPIC, new Written(a, w.path(), "disk full"));
         assertTrue(sent.contains(new SaveFailed(a)));
-        assertTrue(sent.contains(new Settled(7, Purpose.QUIT, false)), "a quit that waited on it stays");
+        assertTrue(sent.contains(new Status("Could not save a.txt: disk full", true)));
+        assertEquals(List.of(new CloseAnswer(3, false)), took(CloseAnswer.class));
+        assertTrue(editor.state().closings().isEmpty());
     }
 
     @Test
-    void aRunSavesOnlyTheFilesWithUnsavedWorkThenGoes() {
-        long a = opened("a.txt", "a");
-        long blank = untitled();
-        editor.closing(new Closing(3, 2, a, true, Purpose.RUN, null));
-        editor.closing(new Closing(3, 2, blank, true, Purpose.RUN, null));
-        assertEquals(List.of(new Flush(a)), took(Flush.class), "an Untitled document is not what runs");
-        editor.save(new Save(a, "a!", true));
-        Write w = took(Write.class).getFirst();
-        editor.written(new Written(a, w.path(), ""));
-        assertTrue(sent.contains(new Settled(3, Purpose.RUN, true)));
+    void cancellingAQuitKeepsTheWindow() {
+        unsaved("a.txt");
+        tell(CloseRequested.TOPIC, new CloseRequested(CloseRequested.MAIN, 4));
+        tell(Answer.TOPIC, new Answer(took(Ask.class).getFirst().id(), 2));
+        assertEquals(List.of(new CloseAnswer(4, false)), took(CloseAnswer.class));
     }
 
     @Test
-    void stagingSavesTheTabsItCoversFirstAndAFailedSaveStagesNothing() {
-        long a = opened("a.txt", "a");
-        editor.closing(new Closing(5, 1, a, true, Purpose.STAGE, null));
-        assertEquals(List.of(new Flush(a)), took(Flush.class));
-        editor.save(new Save(a, "a!", true));
-        Write w = took(Write.class).getFirst();
-        editor.written(new Written(a, w.path(), ""));
-        assertTrue(sent.contains(new Settled(5, Purpose.STAGE, true)));
-        sent.clear();
+    void anotherWindowClosesWithoutAskingWhateverIsUnsaved() {
+        unsaved("a.txt");
+        tell(CloseRequested.TOPIC, new CloseRequested("about", 5));
+        assertEquals(List.of(new CloseAnswer(5, true)), took(CloseAnswer.class));
+        assertTrue(took(Ask.class).isEmpty(), "closing the About window asked about the editor's files");
+        assertTrue(editor.state().closings().isEmpty());
+    }
 
-        editor.edited(new Edited(a, true));
-        editor.closing(new Closing(6, 1, a, true, Purpose.STAGE, null));
-        took(Flush.class);
-        editor.save(new Save(a, "a!!", true));
-        editor.written(new Written(a, took(Write.class).getFirst().path(), "the disk is full"));
-        assertTrue(sent.contains(new Settled(6, Purpose.STAGE, false)));
+    // ------------------------------------------------------------------ the session
 
-        editor.closing(new Closing(7, 1, Messages.NO_TAB, false, Purpose.STAGE, null));
-        assertTrue(sent.contains(new Settled(7, Purpose.STAGE, true)), "nothing open: nothing to save first");
+    /** The tabs come back as they were: one file asked for at a time, the next when the last is answered. */
+    @Test
+    void theSessionComesBackInOrderAndIsRememberedOnlyAfterwards() {
+        Path a = file("a.txt");
+        Path b = file("b.txt");
+        tell(WindowOpened.TOPIC, new WindowOpened("about"));
+        assertTrue(took(Recall.class).isEmpty(), "another window opening brought the session back");
+        tell(WindowOpened.TOPIC, new WindowOpened(CloseRequested.MAIN));
+        assertEquals(List.of(new Recall()), took(Recall.class));
+
+        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(a, b), Optional.of(a), List.of(), dir));
+        assertEquals(List.of(new Find(dir, Why.RESTORE_FOLDER)), took(Find.class));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class), "only the first file");
+        tell(Messages.FILE_READ_TOPIC, new FileRead(a, Why.RESTORE_FILE, true, "a", false, "", ""));
+        assertFalse(sent.stream().anyMatch(Remember.class::isInstance), "nothing is remembered mid-restore");
+        assertEquals(List.of(new Read(b, Why.RESTORE_FILE, true)), took(Read.class));
+        tell(Messages.FILE_READ_TOPIC, new FileRead(b, Why.RESTORE_FILE, true, "b", false, "", ""));
+        assertEquals(1, sent.stream().filter(FrontTab.class::isInstance).count(),
+                "the remembered front comes back to the front");
+        assertEquals(List.of(new Remember(Optional.of(dir), List.of(a, b), Optional.of(a))), took(Remember.class));
     }
 
     @Test
-    void switchingBranchAsksAboutUnsavedWorkFirstAndCancelledDoesNotSwitch() {
-        long a = opened("a.txt", "a");
-        editor.closing(new Closing(8, 1, a, false, Purpose.SWITCH, null));
-        assertTrue(sent.contains(new Settled(8, Purpose.SWITCH, true)), "nothing unsaved: it goes at once");
-        sent.clear();
-
-        editor.edited(new Edited(a, true));
-        editor.closing(new Closing(9, 1, a, true, Purpose.SWITCH, null));
-        Ask ask = took(Ask.class).getFirst();
-        editor.answer(new Answer(ask.question(), Choice.CANCEL));
-        assertTrue(sent.contains(new Settled(9, Purpose.SWITCH, false)));
-        sent.clear();
-
-        editor.closing(new Closing(10, 1, a, true, Purpose.SWITCH, null));
-        editor.answer(new Answer(took(Ask.class).getFirst().question(), Choice.OTHER));
-        assertEquals(List.of(new Read(file("a.txt"), Why.REVERT, false, a)), took(Read.class),
-                "Discard puts the tab back as the disk has it, before git changes the disk");
-    }
-
-    @Test
-    void afterASwitchTheTabsUnderTheRepositoryAreReadAgainAndOnesWithNoFileAreClosed() {
-        long a = opened("a.txt", "a");
-        long b = opened("b.txt", "b");
-        long typed = opened("typed.txt", "t");
-        editor.edited(new Edited(typed, true));
-        untitled();
-        sent.clear();
-
-        editor.reload(new Reload(dir));
-        assertEquals(List.of(new Read(file("a.txt"), Why.RELOAD, false, a),
-                        new Read(file("b.txt"), Why.RELOAD, false, b)), took(Read.class),
-                "not one with unsaved work, and not one with no file");
-
-        editor.read(new FileRead(file("a.txt"), Why.RELOAD, false, a, "a on feature", true, "", ""));
-        assertEquals(List.of(new Revert(a, "a on feature", true)), took(Revert.class));
-        editor.read(new FileRead(file("b.txt"), Why.RELOAD, false, b, "", false, "", "No such file"));
-        assertTrue(sent.contains(new CloseTab(b)));
-        assertTrue(sent.contains(new Status("Closed b.txt, which is not on this branch", false)));
-    }
-
-    @Test
-    void switchingRootsPutsTheTabsAwayAndSwitchingBackBringsThemBackOneAtATime() {
-        Path one = file("one");
-        Path two = file("two");
-        untitled();
-        editor.closing(new Closing(1, 1, 1, false, Purpose.ROOT, one));
-        assertEquals(List.of(new ShowFolder(one)), took(ShowFolder.class));
-        long a = opened("one/a.txt", "a");
-
-        editor.closing(new Closing(2, 1, a, false, Purpose.ROOT, two));
-        assertTrue(sent.contains(new ShowFolder(two)));
-        assertTrue(sent.contains(new CloseTab(a)));
-        sent.clear();
-
-        editor.closing(new Closing(3, 1, a + 1, false, Purpose.ROOT, one));
-        Read back = took(Read.class).getFirst();
-        assertEquals(new Read(file("one/a.txt"), Why.REOPEN, false, Messages.NO_TAB), back);
-        editor.read(new FileRead(back.path(), Why.REOPEN, false, Messages.NO_TAB, "a", false, "", ""));
-        assertEquals(file("one/a.txt"), took(AddTab.class).getFirst().path());
-    }
-
-    @Test
-    void addRefusesWhatIsNotANameAndOpensAFileOnceItIsMade() {
-        editor.add(new Add(dir, Made.FILE, Template.TEXT, "  ", null));
-        assertTrue(took(Status.class).getFirst().alert());
-        editor.add(new Add(dir, Made.FILE, Template.TEXT, "a/b.txt", null));
-        assertTrue(took(Add.class).isEmpty(), "a name, not a path");
-
-        editor.add(new Add(dir, Made.FILE, Template.TEXT, " notes.txt ", null));
-        assertEquals(List.of(new Add(dir, Made.FILE, Template.TEXT, "notes.txt", null)), took(Add.class));
-        Path made = file("notes.txt");
-        editor.made(new Created(made, Made.FILE, "", ""));
-        assertTrue(sent.contains(new Relist(made)));
-        assertTrue(sent.contains(new Read(made, Why.MADE, true, Messages.NO_TAB)));
-        editor.read(new FileRead(made, Why.MADE, true, Messages.NO_TAB, "", false, "", ""));
-        assertEquals("Made notes.txt", took(Status.class).getLast().message(), "not \"Opened\": what happened is that it was made");
-    }
-
-    @Test
-    void aScratchMadeAndClosedEmptyGoesAndOneSavedOrFiledAwayStays() {
-        Path made = file("scratches/one.md");
-        editor.scratchMade(new ScratchMade(made, ""));
-        long s = took(AddTab.class).getFirst().id();
-        editor.closing(new Closing(1, 1, s, false, Purpose.TABS, null));
-        assertTrue(sent.contains(new Dropping(made)));
-        sent.clear();
-
-        Path saved = file("scratches/two.md");
-        editor.scratchMade(new ScratchMade(saved, ""));
-        long t = took(AddTab.class).getFirst().id();
-        editor.written(new Written(t, saved, ""));
-        editor.closing(new Closing(2, 1, t, false, Purpose.TABS, null));
-        assertTrue(took(Dropping.class).isEmpty(), "saved, even empty: kept");
-
-        Path filed = file("scratches/three.md");
-        editor.scratchMade(new ScratchMade(filed, ""));
-        long u = took(AddTab.class).getFirst().id();
-        Path moved = file("scratches/ideas/three.md");
-        editor.relocated(new Relocated(filed, moved));
-        editor.closing(new Closing(3, 1, u, false, Purpose.TABS, null));
-        assertTrue(took(Dropping.class).isEmpty(), "filed away is meant to be kept");
+    void anUnchangedSessionIsNotRememberedTwice() {
+        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.empty(), List.of(), Optional.empty(), List.of(), dir));
+        assertEquals(1, took(Remember.class).size());
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.GO, Kind.FOLDER));
+        assertTrue(took(Remember.class).isEmpty(), "the same folder again is the same session");
     }
 }

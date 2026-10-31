@@ -8,35 +8,13 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 
 ## Next
 
-- [ ] Only a launch with no arguments may write **the window's placement**. The session half is done: a launch
-      with paths (Vexplore's *Open in VexelRay IDE* is one) opens only those and the `Editor` never arms, so it neither
-      restores nor writes the tabs. The framework's window memory still writes `window.main.*` (x, y, size) to the
-      same `~/.text-editor/settings.properties` from every window, which is upstream: *Settings and the session*
-      in the framework TODO.
-- [ ] Drive the chords once ottermate can press them (FN-3): Ctrl+S on a dirty file, Ctrl+W through the
-      question, Ctrl+Tab round the bar. Today they are checked by reading the claim rules, not by pressing.
-- [ ] Notice a file changing on disk under an open, clean tab, and reload it; ask if the tab is dirty.
-- [ ] Remember the navigator's width and whether it is shown, beside the session.
-- [ ] The window wears the executable's icon (`src/main/rc/vex-window.svg`, from the suite icon canvas) once a
-      generated wiring can name an icon (FN-2).
-
-- [ ] The view still reaches the disk itself in four places the editor has no part in: a preference written to a
-      root's `.vex`, a library's source read for a declaration, the Run menu worked out, and the suite's other
-      applications started. Each goes to `Gui.offload()` with a lambda, which the framework means to withdraw
-      (components.md, section 10). Make each a `@Job` in `-core`, as the files' are.
-- [ ] `Preferences` and `ProjectIndex` are services both halves read, locked inside. The model the stack is heading
-      for (Spike/ROADMAP.md) wants them owned: a component each, reached by messages, like the `Editor`.
+- [ ] Decide what this application is. It starts as an editor because an editor reaches every seam; keep the parts
+      yours needs and delete the rest. `Messages` is the place to start, since every way the parts talk is a record there.
+- [ ] Replace the palette anchors in `Look.java` with the design's, measured in Oklab. See the note in that file
+      about which authored colours the construction can reproduce and which have to be declared.
 
 ## Later
 
-- [ ] Find across the open folder, with results as a list that opens at the line.
-- [ ] Reopen a recently closed tab (Ctrl+Shift+T).
-- [ ] Switch between Dark and Light without a restart, once the framework can restyle a built tree (vexelray-gui
-      todo, *A theme swapped at runtime*). Today the choice is read at launch.
-- [ ] Order and choose a name's declarations by nearness: concordance's `Search` over a `Plan` (the open tabs
-      first, then the project, then the libraries they import) with `NameGroups`, in place of Ctrl+Enter's fixed
-      project-then-libraries walk, which can be hundreds long for a common name.
-- [ ] The native build (`-Pnative`, [docs/native-build.md](native-build.md)) works and every grammar renders in it,
-      but its metadata was traced from a JVM run. Walk the paths nobody drove: Ctrl+O and Ctrl+S (the native
-      dialogs), Save As, the clipboard, and the chords `ottermate` cannot press. Most of the metadata belongs
-      upstream (framework TODO, *native-image metadata*).
+- [ ] Automation coverage: `--automation=0` (or `-Dautomation=0`) opens a driving socket on a free port and prints it, and the landmarks in `Landmarks.java` are
+      already the names a script would use. One scripted run through the main path is worth more than several
+      unit tests of the view.

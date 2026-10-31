@@ -1,5 +1,11 @@
 {
-  "comment": ["Traced with native-image-agent from a JVM run of this editor (open files of each grammar, tree clicks,", "the screenshot button for the native save dialog), then trimmed of everything the library jars register", "themselves: the foreign descriptors, the Win32 / tactroller / nfd entries, the shaders and the font atlas.", "What is left is this application's: TextEditor, the grammars/ resources, every jcodings tables/*.bin (a trace lists only the tables one run loaded, so Markdown failed on CR_L.bin), the TM4E Raw* classes,", "and the JDK entries the trace saw. See docs/native-build.md."],
+  "comment": [
+    "This program's own native-image metadata: the entry point the launcher reaches by JNI, and the JDK's",
+    "locale and time-zone data a native run of the calculator was seen to read. Everything else registers",
+    "itself: the libraries carry their own (Win32, tactroller, DXGI, the shaders, the font atlas), and the processor writes the icon's.",
+    "Add to it when a native run of this program fails on something the JVM run did not: run it on a JVM",
+    "under -agentlib:native-image-agent and keep only the entries naming this program."
+  ],
   "reflection": [
     {
       "type": "dev.vexelray.demo.editor.TextEditor",
@@ -22,58 +28,7 @@
       ]
     },
     {
-      "type": "java.lang.Class"
-    },
-    {
       "type": "java.lang.String[]"
-    },
-    {
-      "type": "java.lang.reflect.RecordComponent"
-    },
-    {
-      "type": "java.security.MessageDigestSpi"
-    },
-    {
-      "type": "java.security.interfaces.RSAPrivateKey"
-    },
-    {
-      "type": "java.security.interfaces.RSAPublicKey"
-    },
-    {
-      "type": "java.sql.Date"
-    },
-    {
-      "type": "java.util.ArrayList",
-      "methods": [
-        {
-          "name": "clone",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "java.util.HashMap",
-      "methods": [
-        {
-          "name": "clone",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "org.eclipse.tm4e.core.internal.grammar.raw.RawCaptures"
-    },
-    {
-      "type": "org.eclipse.tm4e.core.internal.grammar.raw.RawGrammar"
-    },
-    {
-      "type": "org.eclipse.tm4e.core.internal.grammar.raw.RawRepository"
-    },
-    {
-      "type": "org.eclipse.tm4e.core.internal.grammar.raw.RawRule"
-    },
-    {
-      "type": "org.eclipse.tm4e.core.internal.parser.PropertySettable$ArrayList"
     },
     {
       "type": "sun.launcher.LauncherHelper",
@@ -94,211 +49,24 @@
       ]
     },
     {
-      "type": "sun.security.provider.DRBG",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.security.SecureRandomParameters"]
-        }
-      ]
+      "type": "sun.text.resources.FormatData"
     },
     {
-      "type": "sun.security.provider.SHA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "type": "sun.text.resources.FormatData_en"
     },
     {
-      "type": "sun.security.provider.SHA2$SHA256",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "sun.security.provider.X509Factory",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "sun.security.rsa.RSAKeyFactory$Legacy",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "sun.security.rsa.RSASignature$SHA256withRSA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.AuthorityInfoAccessExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.AuthorityKeyIdentifierExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.BasicConstraintsExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.CRLDistributionPointsExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.CertificatePoliciesExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.ExtendedKeyUsageExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.KeyUsageExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
-    },
-    {
-      "type": "sun.security.x509.SubjectKeyIdentifierExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": ["java.lang.Boolean", "java.lang.Object"]
-        }
-      ]
+      "type": "sun.text.resources.JavaTimeSupplementary"
     },
     {
       "type": "sun.text.resources.cldr.FormatData"
     },
     {
-      "type": "sun.util.resources.cldr.TimeZoneNames"
-    },
-    {
-      "type": "sun.util.resources.cldr.TimeZoneNames_en"
-    },
-    {
-      "type": "sun.util.resources.cldr.TimeZoneNames_en_US"
+      "type": "sun.text.resources.cldr.FormatData_en"
     }
   ],
   "resources": [
     {
       "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
-    },
-    {
-      "glob": "dev/vexelray/demo/editor/fonts/fonts.json"
-    },
-    {
-      "glob": "dev/vexelray/demo/editor/fonts/*/*.json"
-    },
-    {
-      "glob": "dev/vexelray/demo/editor/fonts/*/*.rgba"
-    },
-    {
-      "glob": "grammars/JSON.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/JSONC.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/JavaScript.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/batchfile.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/css.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/diff.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/docker.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/html.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/ini.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/java.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/markdown.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/powershell.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/python.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/shell-unix-bash.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/xml.tmLanguage.json"
-    },
-    {
-      "glob": "grammars/yaml.tmLanguage.json"
-    },
-    {
-      "glob": "tables/*.bin"
-    },
-    {
-      "module": "java.base",
-      "glob": "jdk/internal/icu/impl/data/icudt76b/nfkc.nrm"
     }
   ]
 }

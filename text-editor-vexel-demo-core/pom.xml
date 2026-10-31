@@ -7,22 +7,22 @@
     <parent>
         <groupId>dev.vexelray.demo</groupId>
         <artifactId>text-editor-vexel-demo</artifactId>
-        <version>0.1.3-SNAPSHOT</version>
+        <version>0.2.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>text-editor-vexel-demo-core</artifactId>
 
     <name>text-editor-vexel-demo-core</name>
     <description>
-        The controller: the Editor, which decides, and the jobs that touch the disk. Reached only by messages.
+        The controller: the editor, which decides, and the jobs that touch the disk. Reached only by messages.
     </description>
 
     <!--
       What the controller may build against, and what it may not. It may use the framework's vocabulary, the bus, and
-      vexelray-gui-core's values (a span, a colour, the settings store), all of which are safe from any thread, and
-      Concordance, which indexes a project with no window. It may not use a widget, the window or the shell: those are
-      -gui's, and a widget here would put the view back inside the controller. Nothing enforces that but this list, so a
-      dependency added here is a decision about where the line is.
+      vexelray-gui-core's values (a span, a colour, the settings store), all of which are safe from any thread. It may
+      not use a widget, the window or the shell: those are -gui's, and a widget here would put the view back inside
+      the controller. Nothing enforces that but this list, so a dependency added here is a decision about where the
+      line is.
     -->
     <dependencies>
         <!-- @Component, @Job, @Subscribe, @Publishes, @Configuration: checked by the processor while this compiles. -->
@@ -31,7 +31,7 @@
             <artifactId>vexelray-framework-api</artifactId>
             <version>${vexelray-framework.version}</version>
         </dependency>
-        <!-- The command line's paths (Launch), which the Editor opens once the window exists. JDK-only. -->
+        <!-- The command line's paths (Launch), which the editor opens once the window exists. JDK-only. -->
         <dependency>
             <groupId>dev.vexelray.framework</groupId>
             <artifactId>vexelray-framework-core</artifactId>
@@ -42,23 +42,6 @@
             <groupId>dev.vexelray.gui</groupId>
             <artifactId>vexelray-gui-core</artifactId>
             <version>${vexelray-gui.version}</version>
-        </dependency>
-        <!-- Java code intelligence: Concordance's structural index (declarations and the places names are used),
-             built from a Maven project by reading its poms. Brings concordance-project and javaparser-core, which
-             it drives at LanguageLevel.RAW so nothing reflects and native-image needs no metadata for it.
-             Installed to the local .m2 by `mvn install` in the sibling concordance-indexer repo. -->
-        <dependency>
-            <groupId>sibarum.concordance</groupId>
-            <artifactId>concordance-index</artifactId>
-            <version>${concordance.version}</version>
-        </dependency>
-        <!-- Git, run as a process, and what it says read into records: the Repository's view of the root. The
-             suite library's git module alone, which has no widget, so this module still builds against none.
-             Installed to the local .m2 by `mvn install` in the sibling vex-suite-common repo. -->
-        <dependency>
-            <groupId>dev.sibarum</groupId>
-            <artifactId>vex-suite-common-git</artifactId>
-            <version>${vex-suite-common.version}</version>
         </dependency>
 
         <dependency>

@@ -3,126 +3,73 @@ package dev.vexelray.demo.editor;
 import sibarum.atchung.Topic;
 
 /**
- * Something the person did that the {@link View} has to act on, sent from the thread it happened on to the view's own
- * lane.
+ * What a key chord asks of the {@link View}: the message the gesture was declared to send.
  *
- * <p>A key chord, a menu item and a dialog's answer all arrive on a worker, and the tabs are the view's to read: so the
- * worker only says what happened, and the view does it, in order, on its own thread. {@code id} is the tab a gesture
- * is about, or the ticket a {@link Gates} or the view keeps something under for {@link Command#QUIT},
- * {@link Command#SETTLE}, {@link Command#ROOT} and {@link Command#RUN}; {@code NO_TAB} where neither applies.
+ * <p>A chord is a declaration ({@code gui.shortcut(chord, sender, message)}, threading.md T7.5): the dispatcher sends
+ * this when the chord is pressed and runs nothing of the application's, and the view hears it in the frame, on the GUI
+ * thread, like any other message.
  */
-record Intent(Command command, long id) {
+record Intent(Command command) {
 
-    static final String TOPIC = "view.intent";
-    static final Topic<Intent> INTENTS = Topic.of(TOPIC, Intent.class);
+    static final Topic<Intent> INTENTS = Topic.edge(Intent.class);
 
     /** Each command is a method on the view, so there is no switch to keep in step with this list. */
     enum Command {
         SAVE_FRONT {
             @Override
-            void on(View view, long id) {
+            void on(View view) {
                 view.saveFront();
-            }
-        },
-        SAVE_AS_FRONT {
-            @Override
-            void on(View view, long id) {
-                view.saveAsFront();
             }
         },
         CLOSE_FRONT {
             @Override
-            void on(View view, long id) {
+            void on(View view) {
                 view.closeFront();
             }
         },
         NEXT_TAB {
             @Override
-            void on(View view, long id) {
+            void on(View view) {
                 view.cycle(1);
             }
         },
         PREVIOUS_TAB {
             @Override
-            void on(View view, long id) {
+            void on(View view) {
                 view.cycle(-1);
             }
         },
-        CLOSE {
+        FOCUS_PATH {
             @Override
-            void on(View view, long id) {
-                view.close(id);
+            void on(View view) {
+                view.focusPath();
             }
         },
-        CLOSE_OTHERS {
+        FOCUS_TREE {
             @Override
-            void on(View view, long id) {
-                view.closeOthers(id);
+            void on(View view) {
+                view.focusTree();
             }
         },
-        CLOSE_ALL {
+        ZOOM_IN {
             @Override
-            void on(View view, long id) {
-                view.closeAll();
+            void on(View view) {
+                view.zoom(1);
             }
         },
-        /** Ctrl+Enter: go to where the name under the caret is declared. */
-        DECLARATION {
+        ZOOM_OUT {
             @Override
-            void on(View view, long id) {
-                view.goToDeclaration();
+            void on(View view) {
+                view.zoom(-1);
             }
         },
-        /** The window was asked to close; {@code id} is the close gate's ticket. */
-        QUIT {
+        ZOOM_RESET {
             @Override
-            void on(View view, long id) {
-                view.quit(id);
-            }
-        },
-        /** About to go where a root is picked; {@code id} is the gate's ticket. */
-        SETTLE {
-            @Override
-            void on(View view, long id) {
-                view.settle(id);
-            }
-        },
-        /** A new root was picked; {@code id} is the view's ticket for the folder. */
-        ROOT {
-            @Override
-            void on(View view, long id) {
-                view.root(id);
-            }
-        },
-        /** Something was chosen from the Run menu; {@code id} is the view's ticket for it. */
-        RUN {
-            @Override
-            void on(View view, long id) {
-                view.run(id);
-            }
-        },
-        /** A file to open from Git mode, a row or a diff's line; {@code id} is the view's ticket for where. */
-        OPEN_AT {
-            @Override
-            void on(View view, long id) {
-                view.openAt(id);
-            }
-        },
-        /** Something to stage or unstage from Git mode; {@code id} is the view's ticket for what. */
-        STAGE {
-            @Override
-            void on(View view, long id) {
-                view.stage(id);
-            }
-        },
-        /** A branch to switch to, from the history; {@code id} is the view's ticket for which. */
-        SWITCH {
-            @Override
-            void on(View view, long id) {
-                view.switchBranch(id);
+            void on(View view) {
+                view.zoom(0);
             }
         };
 
-        abstract void on(View view, long id);
+        abstract void on(View view);
     }
 }

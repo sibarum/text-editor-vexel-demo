@@ -3,75 +3,64 @@ package dev.vexelray.demo.editor.core;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.UnaryOperator;
 
 /**
- * Everything the editor knows about its session, in one immutable value: which documents are open, in what order,
- * which one is in front, whether each has unsaved work, which folder the navigator shows and which it showed before.
+ * The shape of the session, in one immutable value: which files are open, in what order, which one is in front,
+ * which have unsaved work, and which folder the navigator shows.
  *
- * <p><b>What it does not hold is the text.</b> Each document's text is already one versioned value, the
- * {@code State<Document>} inside its {@code TextField} in the view, so copying it here would be a second place it
- * lives, and the two would disagree for a frame every keystroke. This is the part nothing else owns: the shape of the
- * session, which the {@link Editor} keeps in one field of its own.
+ * <h2>Whose it is</h2>
  *
- * <p>A tab is named by an {@code id} rather than an index. An index is a fact about the tab bar at one instant, and a
- * close landing between a read and a write turns it into the neighbour's index.
+ * <p>The {@link Editor}'s, and nobody else's. It is part of the editor's {@code State}, which only the editor's
+ * declared steps change, and the view hears about a change as a message rather than by reading this. So it needs no
+ * lock: a step runs on the editor's lane, one at a time, and returns the next value rather than changing this one.
+ * What the session is goes here; what the editor is in the middle of (a question, a save, a restore) goes in the
+ * {@code State}.
+ *
+ * <h2>What it does not hold is the text</h2>
+ *
+ * <p>Each document's text is already one versioned value, the {@code State<Document>} inside its {@code TextField} in
+ * the view, so copying it here would be a second place it lives, and the two would disagree every keystroke. What is
+ * here is the part nothing else owns: the shape of the session.
+ *
+ * <p>A tab is named by an {@code id}, not an index. An index is a fact about the tab bar at one instant, and a close
+ * landing between a read and a write turns it into the neighbour's.
  */
-record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent) {
+record Doc(List<Entry> tabs, long active, Path folder) {
 
-    /** No tab is in front. */
+    /** No tab: none is in front. */
     static final long NONE = Messages.NO_TAB;
 
-    /** How many roots {@link #recent} keeps, newest first. The current folder is never among them. */
-    static final int RECENT = 4;
-
     /**
-     * One open document.
+     * One open file.
      *
-     * @param id      stable for the life of the tab
-     * @param path    where it is on disk, or null for one that has never been saved
-     * @param dirty   whether it differs from what was last loaded or saved
-     * @param crlf    whether its file's lines end in CR LF, which a save puts back
-     * @param library the name a library's read-only source is shown under, which has no path; null for a file
+     * @param id    stable for the life of the tab
+     * @param path  where it is on disk; every document here has one
+     * @param dirty whether it differs from what was last loaded or saved
+     * @param crlf  whether the file used {@code \r\n}, which a save puts back
      */
-    record Entry(long id, Path path, boolean dirty, boolean crlf, String library) {
+    record Entry(long id, Path path, boolean dirty, boolean crlf) {
 
-        /** The tab's name: the file's, the library source's, or {@code Untitled}. */
         String name() {
-            return path != null ? String.valueOf(path.getFileName()) : library != null ? library : "Untitled";
+            return String.valueOf(path.getFileName());
         }
 
-        /**
-         * The tab's label: its name, with a bullet in front while it is unsaved. A bullet (U+2022) rather than a
-         * heavier dot, because the sans face's atlas has General Punctuation and not Geometric Shapes, and the
-         * missing-glyph box is what a tab header would otherwise show.
-         */
+        /** The tab's label: the file name, with a bullet in front while it is unsaved. */
         String title() {
             return dirty ? "• " + name() : name();
         }
 
-        /** Whether it is an Untitled document: no file, and not a library's source. */
-        boolean untitled() {
-            return path == null && library == null;
-        }
-
         Entry withDirty(boolean value) {
-            return new Entry(id, path, value, crlf, library);
-        }
-
-        Entry withPath(Path value) {
-            return new Entry(id, value, dirty, crlf, library);
+            return new Entry(id, path, value, crlf);
         }
     }
 
     Doc {
         tabs = List.copyOf(tabs);
-        recent = List.copyOf(recent);
     }
 
-    /** No documents, no folder. */
+    /** Nothing open. */
     static Doc initial() {
-        return new Doc(List.of(), NONE, null, List.of());
+        return new Doc(List.of(), NONE, null);
     }
 
     /** The entry with {@code id}, or null if it has gone. */
@@ -84,20 +73,10 @@ record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent) {
         return null;
     }
 
-    /** The entry open on {@code file}, or null. */
-    Entry entry(Path file) {
+    /** The open tab for {@code path}, or null. */
+    Entry entry(Path path) {
         for (Entry e : tabs) {
-            if (e.path() != null && e.path().equals(file)) {
-                return e;
-            }
-        }
-        return null;
-    }
-
-    /** The entry showing the library source called {@code name}, or null. */
-    Entry library(String name) {
-        for (Entry e : tabs) {
-            if (name.equals(e.library())) {
+            if (e.path().equals(path)) {
                 return e;
             }
         }
@@ -109,56 +88,37 @@ record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent) {
         return entry(active);
     }
 
-    /** Every document that is a file on disk, in tab order: what a session remembers. */
+    /** Every open file, in tab order: what a session remembers. */
     List<Path> files() {
-        return tabs.stream().map(Entry::path).filter(p -> p != null).toList();
+        return tabs.stream().map(Entry::path).toList();
     }
 
     Doc withTab(Entry entry) {
         List<Entry> next = new ArrayList<>(tabs);
         next.add(entry);
-        return new Doc(next, active, folder, recent);
+        return new Doc(next, active, folder);
     }
 
     Doc without(long id) {
         List<Entry> next = new ArrayList<>(tabs);
         next.removeIf(e -> e.id() == id);
-        return new Doc(next, active == id ? NONE : active, folder, recent);
+        return new Doc(next, active == id ? NONE : active, folder);
     }
 
-    /** Change one entry, whatever it currently is. A no-op on an entry that has gone. */
-    Doc withEntry(long id, UnaryOperator<Entry> change) {
+    /** Mark one entry unsaved or saved. A no-op on one that has gone. */
+    Doc withDirty(long id, boolean dirty) {
         List<Entry> next = new ArrayList<>(tabs.size());
         for (Entry e : tabs) {
-            next.add(e.id() == id ? change.apply(e) : e);
+            next.add(e.id() == id ? e.withDirty(dirty) : e);
         }
-        return new Doc(next, active, folder, recent);
+        return new Doc(next, active, folder);
     }
 
     Doc withActive(long id) {
-        return new Doc(tabs, id, folder, recent);
+        return new Doc(tabs, id, folder);
     }
 
-    /**
-     * Show {@code value} in the navigator. The folder it replaces goes to the front of {@link #recent}, which is how a
-     * root left behind stays one click away; the first folder of a session replaces nothing and adds nothing.
-     */
     Doc withFolder(Path value) {
-        if (folder == null || folder.equals(value)) {
-            return new Doc(tabs, active, value, recent);
-        }
-        List<Path> next = new ArrayList<>(RECENT);
-        next.add(folder);
-        for (Path p : recent) {
-            if (next.size() < RECENT && !p.equals(folder) && !p.equals(value)) {
-                next.add(p);
-            }
-        }
-        return new Doc(tabs, active, value, next);
-    }
-
-    /** What the navigator offered as recent roots last time, as the session brings it back. */
-    Doc withRecent(List<Path> value) {
-        return new Doc(tabs, active, folder, value.stream().limit(RECENT).toList());
+        return new Doc(tabs, active, value);
     }
 }
