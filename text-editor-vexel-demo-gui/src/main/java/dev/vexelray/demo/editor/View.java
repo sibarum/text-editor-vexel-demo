@@ -328,7 +328,7 @@ final class View {
     @Subscribe
     public void fieldSubmitted(TextField.Submitted m) {
         if (m.field().equals(nav.pathAddress())) {
-            go.send(new Go(m.text().strip()));
+            go.send(new Go(nav.submitted(m.text())));
         }
     }
 
@@ -374,6 +374,12 @@ final class View {
             go.send(new Go(p.toString()));
         } else if (m.action().equals(Navigator.COPY_PATH)) {
             gui.clipboard().set(p.toString());
+        } else if (m.action().equals(Navigator.NEW_FILE) || m.action().equals(Navigator.NEW_FOLDER)) {
+            // A file's row names something beside it, in the folder it is in.
+            Path in = nav.isFolder(p) ? p : p.getParent();
+            boolean folder = m.action().equals(Navigator.NEW_FOLDER);
+            nav.startNew(in, folder);
+            ui.status(folder ? "Name the new folder, then Enter" : "Name the new file, then Enter", false);
         }
     }
 

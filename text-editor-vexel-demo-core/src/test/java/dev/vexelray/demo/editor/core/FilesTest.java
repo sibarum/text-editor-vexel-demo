@@ -73,9 +73,47 @@ class FilesTest {
     @Test
     void creatingMakesAnEmptyFileAndRefusesOneThatIsThere() throws Exception {
         Path file = dir.resolve("new.txt");
-        Created made = new CreateFile().run(new Create(file));
+        Created made = new CreateFile().run(new Create(file, false));
         assertEquals("", made.problem());
         assertEquals(0, Files.size(file));
-        assertFalse(new CreateFile().run(new Create(file)).problem().isEmpty());
+        assertFalse(new CreateFile().run(new Create(file, false)).problem().isEmpty());
+    }
+
+    @Test
+    void creatingAFolderMakesOneAndRefusesOneThatIsThere() {
+        Path folder = dir.resolve("made");
+        Created made = new CreateFile().run(new Create(folder, true));
+        assertEquals("", made.problem());
+        assertTrue(made.folder());
+        assertTrue(Files.isDirectory(folder));
+        assertFalse(new CreateFile().run(new Create(folder, true)).problem().isEmpty());
+    }
+
+    /** A file starts with what its extension asks for, written with the line endings the reply says. */
+    @Test
+    void aNewFileIsMadeFromTheTemplateItsExtensionAsksFor() throws Exception {
+        Path pkg = Files.createDirectories(dir.resolve("src/main/java/com/example"));
+        Created java = new CreateFile().run(new Create(pkg.resolve("Thing.java"), false));
+        assertEquals("package com.example;\n\npublic class Thing {\n}\n", java.text());
+        assertEquals(new String(TextFile.encode(java.text(), java.crlf()), StandardCharsets.UTF_8),
+                Files.readString(pkg.resolve("Thing.java")));
+
+        Created md = new CreateFile().run(new Create(dir.resolve("Notes.md"), false));
+        assertEquals("# Notes\n\n", md.text());
+
+        Created sh = new CreateFile().run(new Create(dir.resolve("go.sh"), false));
+        assertEquals("#!/usr/bin/env bash\n\n", sh.text());
+        assertFalse(sh.crlf(), "a shell reads LF whatever the platform");
+        assertEquals("#!/usr/bin/env bash\n\n", Files.readString(dir.resolve("go.sh")));
+
+        assertEquals("", new CreateFile().run(new Create(dir.resolve("plain.txt"), false)).text());
+    }
+
+    @Test
+    void aJavaPackageIsReadFromTheSourceRootAboveIt() {
+        assertEquals("com.example", CreateFile.packageOf(dir.resolve("src/main/java/com/example")));
+        assertEquals("a.b", CreateFile.packageOf(dir.resolve("src/test/java/a/b")));
+        assertEquals("", CreateFile.packageOf(dir.resolve("src/main/java")));
+        assertEquals("", CreateFile.packageOf(dir.resolve("elsewhere")));
     }
 }

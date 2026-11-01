@@ -175,6 +175,8 @@ public final class Messages {
         OPEN,
         /** Typed into the path bar. */
         GO,
+        /** Typed into the path bar ending in a separator: a folder, made if it is not there. */
+        GO_FOLDER,
         /** The folder the last session showed. */
         RESTORE_FOLDER,
         /** A file the last session had open, or one the command line named: one at a time, in order. */
@@ -227,16 +229,19 @@ public final class Messages {
     public record Found(Path path, Why why, Kind kind) {
     }
 
-    /** Make an empty file ({@link CreateFile}). */
+    /** Make a folder, or a file from the template its name asks for ({@link CreateFile}). */
     public static final Topic<Create> CREATE_TOPIC = Topic.edge(Create.class);
 
-    public record Create(Path path) {
+    public record Create(Path path, boolean folder) {
     }
 
-    /** What {@link Create} did, and the line endings a new file gets here. */
+    /**
+     * What {@link Create} did: for a file, the text it was made with and its line endings, which are the platform's
+     * unless the template wants its own.
+     */
     public static final Topic<Created> CREATED_TOPIC = Topic.edge(Created.class);
 
-    public record Created(Path path, boolean crlf, String problem) {
+    public record Created(Path path, boolean folder, String text, boolean crlf, String problem) {
     }
 
     /** Read back what the last session remembered, and what the command line named ({@link ReadSession}). */

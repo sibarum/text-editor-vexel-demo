@@ -14,6 +14,7 @@ import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -29,6 +30,10 @@ import java.util.Set;
  * stands in for all three of them: type a folder and the tree shows it, type a file and it opens, type a name that
  * is not there yet and it is created. Ctrl+L puts the keyboard in it; Enter goes. It is an ordinary single-line
  * {@link TextField}, named {@code path}, and its {@code SUBMITTED} message is the whole of its wiring.
+ *
+ * <p>So it is where new things are named, too. A row's "New file here…" puts the folder into the bar with the caret
+ * after it, and Enter makes the name typed there, from the template its extension asks for. A name ending in a
+ * separator is a folder, and "New folder here…" adds that separator itself, so the person types only the name.
  *
  * <h2>The tree asks, and is answered</h2>
  *
@@ -48,6 +53,8 @@ final class Navigator {
     static final String OPEN = "open";
     static final String SHOW = "show-folder";
     static final String COPY_PATH = "copy-path";
+    static final String NEW_FILE = "new-file";
+    static final String NEW_FOLDER = "new-folder";
 
     private final Gui gui;
     private final Motion motion;
@@ -60,6 +67,8 @@ final class Navigator {
     private Path folder;
     /** The file a reveal is walking to, to ring when the walk lands. */
     private Path revealing;
+    /** Set by "New folder here…" until the bar is next submitted or taken for something else. */
+    private boolean namingFolder;
 
     Navigator(Gui gui, Motion motion) {
         this.gui = gui;
@@ -72,7 +81,9 @@ final class Navigator {
         tree = new TreeView<Path>(gui, "files").motion(motion.arrival)
                 .action(MenuAction.of(OPEN, "›", "Open"))
                 .action(MenuAction.of(SHOW, "»", "Show this folder"))
-                .action(MenuAction.of(COPY_PATH, "Copy path"));
+                .action(MenuAction.of(COPY_PATH, "Copy path"))
+                .action(MenuAction.of(NEW_FILE, "+", "New file here…"))
+                .action(MenuAction.of(NEW_FOLDER, "New folder here…"));
         tree.node().width(Length.FILL).height(Length.grow(1f));
         gui.landmark(Landmarks.TREE, tree.node());
 
@@ -94,6 +105,11 @@ final class Navigator {
         return path.address();
     }
 
+    /** What the path bar says. */
+    String pathText() {
+        return path.text();
+    }
+
     /** The tree's address, which its messages carry. */
     String treeAddress() {
         return tree.address();
@@ -110,6 +126,7 @@ final class Navigator {
      */
     void show(Path shown) {
         folder = shown;
+        namingFolder = false;
         path.text(String.valueOf(shown));
         tree.refresh();
     }
@@ -187,8 +204,31 @@ final class Navigator {
 
     /** Put the keyboard in the path bar, everything in it selected so typing replaces it. */
     void focusPath() {
+        namingFolder = false;
         gui.focus(path.node());
         path.select(0, path.text().length());
+    }
+
+    /**
+     * Name something new in {@code in}: the folder in the bar with the caret after it, so the person types only the
+     * name. {@code folder}: what is named is a folder, so {@link #submitted} ends it with a separator.
+     */
+    void startNew(Path in, boolean folder) {
+        String prefix = in.toString().endsWith(File.separator) ? in.toString() : in + File.separator;
+        namingFolder = folder;
+        path.text(prefix);
+        gui.focus(path.node());
+        path.caret(prefix.length());
+    }
+
+    /** What the bar's submitted text asks for: a folder when "New folder here…" put it there and it has no separator. */
+    String submitted(String text) {
+        String asked = text.strip();
+        if (namingFolder && !asked.isEmpty() && !asked.endsWith("/") && !asked.endsWith("\\")) {
+            asked += File.separator;
+        }
+        namingFolder = false;
+        return asked;
     }
 
     /** Put the keyboard in the tree. */

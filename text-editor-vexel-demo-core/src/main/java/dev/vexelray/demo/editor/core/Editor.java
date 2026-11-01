@@ -463,7 +463,8 @@ public final class Editor {
         }
         Path base = s.doc().folder();
         Path target = (typed.isAbsolute() || base == null ? typed : base.resolve(typed)).toAbsolutePath().normalize();
-        out.send(Messages.FIND_TOPIC, new Find(target, Why.GO));
+        boolean folder = text.endsWith("/") || text.endsWith("\\");
+        out.send(Messages.FIND_TOPIC, new Find(target, folder ? Why.GO_FOLDER : Why.GO));
         return s;
     }
 
@@ -516,18 +517,25 @@ public final class Editor {
         if (f.kind() == Kind.FOLDER) {
             return showFolder(s, f.path(), out);
         }
+        boolean folder = f.why() == Why.GO_FOLDER;
         if (f.kind() == Kind.FILE) {
+            if (folder) {
+                refuse(out, "A file is there, not a folder: " + f.path().getFileName());
+                return s;
+            }
             return open(s, new Open(f.path(), true), out);
         }
         if (f.kind() == Kind.NEW) {
-            out.send(Messages.CREATE_TOPIC, new Create(f.path()));
+            out.send(Messages.CREATE_TOPIC, new Create(f.path(), folder));
             return s;
         }
         refuse(out, "No such folder: " + f.path().getParent());
         return s;
     }
 
-    /** A file the path bar named into being: list the folder again, and open it empty. */
+    /**
+     * What the path bar named into being: list the folder again, and open a file with the text its template gave it.
+     */
     private static State created(State s, Created c, Out out) {
         String name = String.valueOf(c.path().getFileName());
         if (!c.problem().isEmpty()) {
@@ -537,7 +545,11 @@ public final class Editor {
         if (s.doc().folder() != null) {
             out.send(Messages.SHOW_FOLDER_TOPIC, new ShowFolder(s.doc().folder()));
         }
-        State next = addTab(s, c.path(), "", c.crlf(), true, out);
+        if (c.folder()) {
+            say(out, "Created folder " + name);
+            return s;
+        }
+        State next = addTab(s, c.path(), c.text(), c.crlf(), true, out);
         say(out, "Created " + name);
         return next;
     }

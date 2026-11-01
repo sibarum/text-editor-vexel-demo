@@ -193,13 +193,37 @@ class EditorTest {
         Path wanted = file("new.txt");
         assertEquals(List.of(new Find(wanted, Why.GO)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(wanted, Why.GO, Kind.NEW));
-        assertEquals(List.of(new Create(wanted)), took(Create.class));
-        tell(Messages.CREATED_TOPIC, new Created(wanted, true, ""));
+        assertEquals(List.of(new Create(wanted, false)), took(Create.class));
+        tell(Messages.CREATED_TOPIC, new Created(wanted, false, "", true, ""));
         assertTrue(sent.contains(new ShowFolder(dir)), "the folder is listed again");
         List<AddTab> added = took(AddTab.class);
         assertEquals(1, added.size());
         tell(Messages.SAVE_TOPIC, new Save(added.getFirst().id(), "x", true));
         assertTrue(took(Write.class).getFirst().crlf(), "a new file has the line endings its job said");
+    }
+
+    @Test
+    void aNameEndingInASeparatorIsAFolderToMake() {
+        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(), dir));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        sent.clear();
+        tell(Messages.GO_TOPIC, new Go("made" + java.io.File.separator));
+        Path wanted = file("made");
+        assertEquals(List.of(new Find(wanted, Why.GO_FOLDER)), took(Find.class));
+        tell(Messages.FOUND_TOPIC, new Found(wanted, Why.GO_FOLDER, Kind.NEW));
+        assertEquals(List.of(new Create(wanted, true)), took(Create.class));
+        tell(Messages.CREATED_TOPIC, new Created(wanted, true, "", true, ""));
+        assertTrue(sent.contains(new ShowFolder(dir)), "the folder is listed again");
+        assertTrue(sent.contains(new Status("Created folder made", false)));
+        assertTrue(took(AddTab.class).isEmpty(), "a folder opens no tab");
+    }
+
+    @Test
+    void aFolderAskedForWhereAFileIsIsRefused() {
+        Path there = file("a.txt");
+        tell(Messages.FOUND_TOPIC, new Found(there, Why.GO_FOLDER, Kind.FILE));
+        assertTrue(sent.contains(new Status("A file is there, not a folder: a.txt", true)));
+        assertTrue(took(Read.class).isEmpty(), "the file is not opened");
     }
 
     // ------------------------------------------------------------------ closing: the witness

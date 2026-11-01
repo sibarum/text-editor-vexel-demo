@@ -15,6 +15,8 @@ import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Tabs;
+import dev.vexelray.gui.widget.TextField;
+import dev.vexelray.gui.widget.TreeView;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -266,6 +268,35 @@ class ViewTest {
         Path created = dir.resolve("new.txt").toAbsolutePath().normalize();
         eventually("the file to be created and opened", () -> ws.find(created) != null);
         assertTrue(Files.isRegularFile(created));
+    }
+
+    /** A Java file named in the path bar is made a class, in the package its folder is in. */
+    @Test
+    void aJavaFileIsMadeFromItsTemplate() throws Exception {
+        Path pkg = Files.createDirectories(dir.resolve("src/main/java/com/example"));
+        shell.bus().publish(Messages.GO_TOPIC, new Go(pkg.resolve("Thing.java").toString()));
+        Path created = pkg.resolve("Thing.java").toAbsolutePath().normalize();
+        eventually("the file to be created and opened", () -> ws.find(created) != null);
+        assertEquals("package com.example;\n\npublic class Thing {\n}\n", ws.find(created).field.text());
+        assertFalse(ws.find(created).dirty(), "what it was made with is what is on disk");
+    }
+
+    /** A row's "New folder here…" puts its folder in the path bar, and Enter on a name makes a folder of it. */
+    @Test
+    void newFolderHereMakesAFolderOfTheNameTyped() throws Exception {
+        Path sub = Files.createDirectory(dir.resolve("sub")).toAbsolutePath().normalize();
+        Path file = Files.writeString(sub.resolve("a.txt"), "a");
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        Navigator nav = wiring.ui().navigator();
+        eventually("the folder", () -> dir.toAbsolutePath().equals(nav.folder()));
+
+        // A file's row names something in the folder it is in.
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.NEW_FOLDER, file));
+        String prefix = sub + java.io.File.separator;
+        eventually("the folder in the path bar", () -> nav.pathText().equals(prefix));
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), prefix + "made"));
+        eventually("the folder to be made", () -> Files.isDirectory(sub.resolve("made")));
+        assertTrue(ws.all().isEmpty(), "a folder opens no tab");
     }
 
     /** The tree asks for the folder shown, a job reads it, and the view answers the tree with its rows. */
