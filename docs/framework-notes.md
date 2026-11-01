@@ -40,7 +40,8 @@ moved on. A `@Job` returns one reply and is not stopped part way (components.md 
 
 Done here: the survey is bounded (6000 files, 900 Java files read), and `Preview` keeps one survey running, asking for
 wherever the pointer has got to when it lands, so a sweep down twenty rows costs two surveys. What is lost is the
-climbing numbers: a large build shows its name, then its whole picture at once.
+climbing numbers: a large build shows its name, then its whole picture at once. Add's archive (`CreateFile`) is the
+same: a big folder says nothing until the zip is done.
 
 What the framework could do: let a job send while it runs (a `Sender` of its own reply type, or a progress topic
 beside the reply), and hand it a cancellation token the caller can trip, which components.md already calls additive.

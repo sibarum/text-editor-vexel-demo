@@ -1,9 +1,11 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.demo.editor.core.CreateFile;
 import dev.vexelray.demo.editor.core.ListFolder;
 import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
+import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
@@ -36,6 +38,11 @@ import java.util.Set;
  * after it, and Enter makes the name typed there, from the template its extension asks for. A name ending in a
  * separator is a folder, and "New folder here…" adds that separator itself, so the person types only the name.
  *
+ * <p>What an extension cannot say is said by the row's menu, and the bar keeps it in mind until Enter: a Maven project,
+ * or where a project is around the row a module of it instead; an archive of a folder, named beside it; and a link to
+ * the row, where the platform makes links without privilege. Each puts a name in the bar, selected, so Enter takes it
+ * and typing replaces it. Which of these a row offers its listing said, so the menu asks nothing of the disk.
+ *
  * <h2>The tree asks, and is answered</h2>
  *
  * <p>The tree asks for a level the first time it is opened ({@code TreeView.CHILDREN_WANTED}); reading a folder is
@@ -63,6 +70,10 @@ final class Navigator {
     static final String COPY_PATH = "copy-path";
     static final String NEW_FILE = "new-file";
     static final String NEW_FOLDER = "new-folder";
+    static final String NEW_PROJECT = "new-project";
+    static final String NEW_MODULE = "new-module";
+    static final String ARCHIVE = "archive";
+    static final String LINK = "link";
 
     private final Gui gui;
     private final Motion motion;
@@ -81,8 +92,15 @@ final class Navigator {
     private Path folder;
     /** The file a reveal is walking to, to ring when the walk lands. */
     private Path revealing;
-    /** Set by "New folder here…" until the bar is next submitted or taken for something else. */
-    private boolean namingFolder;
+    /**
+     * What a row's menu put the bar in mind of, until the bar is next submitted or taken for something else: a file,
+     * which is also the bar's own mind, where the text alone says what it names.
+     */
+    private Made naming = Made.FILE;
+    /** What an archive being named holds, or what a link being named points at; null for the rest. */
+    private Path namingFrom;
+    /** Whether rows offer "Link to this…": where the platform makes links without privilege, or a test says so. */
+    private boolean links = CreateFile.links();
 
     Navigator(Gui gui, Motion motion) {
         this.gui = gui;
@@ -97,7 +115,11 @@ final class Navigator {
                 .action(MenuAction.of(SHOW, "»", "Show this folder"))
                 .action(MenuAction.of(COPY_PATH, "Copy path"))
                 .action(MenuAction.of(NEW_FILE, "+", "New file here…"))
-                .action(MenuAction.of(NEW_FOLDER, "New folder here…"));
+                .action(MenuAction.of(NEW_FOLDER, "New folder here…"))
+                .action(MenuAction.of(NEW_PROJECT, "New project here…"))
+                .action(MenuAction.of(NEW_MODULE, "New module here…"))
+                .action(MenuAction.of(ARCHIVE, "Archive this folder…"))
+                .action(MenuAction.of(LINK, "Link to this…"));
         tree.node().width(Length.FILL).height(Length.grow(1f));
         gui.landmark(Landmarks.TREE, tree.node());
 
@@ -207,7 +229,8 @@ final class Navigator {
      */
     void show(Path shown) {
         folder = shown;
-        namingFolder = false;
+        naming = Made.FILE;
+        namingFrom = null;
         path.text(String.valueOf(shown));
         chipText = Picker.label(shown);
         chip.label(chipText);
@@ -230,12 +253,17 @@ final class Navigator {
     TreeView.Children children(Listed listed) {
         List<TreeView.Entry> entries = new ArrayList<>(listed.items().size());
         for (Item item : listed.items()) {
+            TreeView.Entry entry;
             if (item.folder()) {
                 folders.add(item.path());
-                entries.add(TreeView.Entry.branch(item.path(), item.name()).hides(OPEN));
+                // A module where a project is around, a project where none is: one or the other, never both.
+                entry = TreeView.Entry.branch(item.path(), item.name())
+                        .hides(OPEN, item.inProject() ? NEW_PROJECT : NEW_MODULE);
             } else {
-                entries.add(TreeView.Entry.leaf(item.path(), item.name()).hides(SHOW));
+                entry = TreeView.Entry.leaf(item.path(), item.name()).hides(SHOW, NEW_PROJECT, NEW_MODULE, ARCHIVE);
             }
+            // Where a link takes privilege to make, it is not offered: a line that fails for most people teaches nothing.
+            entries.add(links ? entry : entry.hides(LINK));
         }
         return new TreeView.Children(treeAddress(), listed.roots() ? null : listed.dir(), entries);
     }
@@ -288,7 +316,8 @@ final class Navigator {
 
     /** Put the keyboard in the path bar, everything in it selected so typing replaces it. */
     void focusPath() {
-        namingFolder = false;
+        naming = Made.FILE;
+        namingFrom = null;
         gui.focus(path.node());
         path.select(0, path.text().length());
     }
@@ -298,20 +327,48 @@ final class Navigator {
      * name. {@code folder}: what is named is a folder, so {@link #submitted} ends it with a separator.
      */
     void startNew(Path in, boolean folder) {
-        String prefix = in.toString().endsWith(File.separator) ? in.toString() : in + File.separator;
-        namingFolder = folder;
-        path.text(prefix);
-        gui.focus(path.node());
-        path.caret(prefix.length());
+        startNew(in, folder ? Made.FOLDER : Made.FILE, "", null);
     }
 
-    /** What the bar's submitted text asks for: a folder when "New folder here…" put it there and it has no separator. */
+    /**
+     * Name {@code what} in {@code in}, starting from {@code suggested}, which is selected so typing replaces it and
+     * Enter takes it as it is. {@code from}: what an archive holds or a link points at.
+     */
+    void startNew(Path in, Made what, String suggested, Path from) {
+        String prefix = in.toString().endsWith(File.separator) ? in.toString() : in + File.separator;
+        naming = what;
+        namingFrom = from;
+        path.text(prefix + suggested);
+        gui.focus(path.node());
+        path.select(prefix.length(), prefix.length() + suggested.length());
+    }
+
+    /** What a row's menu put the bar in mind of: {@link Made#FILE} for none, where the text says what it names. */
+    Made naming() {
+        return naming;
+    }
+
+    /** What an archive being named holds or a link being named points at; null for the rest. */
+    Path namingFrom() {
+        return namingFrom;
+    }
+
+    /** Offer "Link to this…" on rows listed from now on, or not, whatever the platform: for a test. */
+    void offerLinks(boolean offer) {
+        links = offer;
+    }
+
+    /**
+     * What the bar's submitted text asks for: a folder when "New folder here…" put it there and it has no separator.
+     * The bar's mind goes back to its own.
+     */
     String submitted(String text) {
         String asked = text.strip();
-        if (namingFolder && !asked.isEmpty() && !asked.endsWith("/") && !asked.endsWith("\\")) {
+        if (naming == Made.FOLDER && !asked.isEmpty() && !asked.endsWith("/") && !asked.endsWith("\\")) {
             asked += File.separator;
         }
-        namingFolder = false;
+        naming = Made.FILE;
+        namingFrom = null;
         return asked;
     }
 

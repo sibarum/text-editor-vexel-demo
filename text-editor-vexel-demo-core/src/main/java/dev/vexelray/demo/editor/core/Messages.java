@@ -46,6 +46,16 @@ public final class Messages {
     public record Go(String text) {
     }
 
+    /**
+     * The path bar was submitted to make something its extension does not say: a project, a module, an archive or a
+     * link, which a row's menu put the bar in mind of. {@code from} is the folder an archive holds or what a link
+     * points at.
+     */
+    public static final Topic<Add> ADD_TOPIC = Topic.edge(Add.class);
+
+    public record Add(String text, Made what, Optional<Path> from) {
+    }
+
     /** A file was chosen in the navigator. {@code focus}: whether its tab takes the keyboard. */
     public static final Topic<Open> OPEN_TOPIC = Topic.edge(Open.class);
 
@@ -238,19 +248,38 @@ public final class Messages {
     public record Found(Path path, Why why, Kind kind) {
     }
 
-    /** Make a folder, or a file from the template its name asks for ({@link CreateFile}). */
+    /** What a new thing on the disk is. */
+    public enum Made {
+        FILE, FOLDER,
+        /** A Maven project with nothing in it yet. */
+        PROJECT,
+        /** A Maven module of the project around it. */
+        MODULE,
+        /** A zip of a folder. */
+        ARCHIVE,
+        /** A symbolic link. */
+        LINK
+    }
+
+    /**
+     * Make {@code what} at {@code path} ({@link CreateFile}): a file from the template its name asks for, or one of the
+     * others. {@code from} is the folder an archive holds or what a link points at, and empty for the rest.
+     */
     public static final Topic<Create> CREATE_TOPIC = Topic.edge(Create.class);
 
-    public record Create(Path path, boolean folder) {
+    public record Create(Path path, Made what, Optional<Path> from) {
+        public Create(Path path, Made what) {
+            this(path, what, Optional.empty());
+        }
     }
 
     /**
      * What {@link Create} did: for a file, the text it was made with and its line endings, which are the platform's
-     * unless the template wants its own.
+     * unless the template wants its own. {@code note}: anything worth saying about what was made, as "214 files".
      */
     public static final Topic<Created> CREATED_TOPIC = Topic.edge(Created.class);
 
-    public record Created(Path path, boolean folder, String text, boolean crlf, String problem) {
+    public record Created(Path path, Made what, String text, boolean crlf, String note, String problem) {
     }
 
     /** Read back what the last session remembered, and what the command line named ({@link ReadSession}). */
@@ -300,8 +329,11 @@ public final class Messages {
     public record Listing(String tree, Path dir, boolean roots, boolean foldersOnly) {
     }
 
-    /** One entry of a level: where it is, what its row says, and whether it opens. */
-    public record Item(Path path, String name, boolean folder) {
+    /**
+     * One entry of a level: where it is, what its row says, and whether it opens. {@code inProject}: a Maven project is
+     * at or above it, so what is added in it is a module of that project rather than a project of its own.
+     */
+    public record Item(Path path, String name, boolean folder, boolean inProject) {
     }
 
     public static final Topic<Listed> LISTED_TOPIC = Topic.edge(Listed.class);

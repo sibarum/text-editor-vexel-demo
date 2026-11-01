@@ -2,7 +2,11 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Messages;
 import dev.vexelray.demo.editor.core.Messages.Caption;
+import dev.vexelray.demo.editor.core.CreateFile;
 import dev.vexelray.demo.editor.core.Messages.Go;
+import dev.vexelray.demo.editor.core.Messages.Item;
+import dev.vexelray.demo.editor.core.Messages.Listed;
+import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Picture;
 import dev.vexelray.demo.editor.core.Messages.Status;
@@ -420,6 +424,84 @@ class ViewTest {
         shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), prefix + "made"));
         eventually("the folder to be made", () -> Files.isDirectory(sub.resolve("made")));
         assertTrue(ws.all().isEmpty(), "a folder opens no tab");
+    }
+
+    /** "New project here…" names one in the bar, selected, and Enter takes the name as it is. */
+    @Test
+    void newProjectHereMakesAProjectOfTheNameInTheBar() throws Exception {
+        Path sub = Files.createDirectory(dir.resolve("sub")).toAbsolutePath().normalize();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        Navigator nav = wiring.ui().navigator();
+        eventually("a row for the folder", () -> nav.hasRow(sub));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.NEW_PROJECT, sub));
+        String named = sub + java.io.File.separator + "new-project";
+        eventually("the name in the path bar", () -> nav.pathText().equals(named));
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), named));
+        eventually("the project to be made", () -> Files.isRegularFile(sub.resolve("new-project/pom.xml")));
+        eventually("the status to say so", () -> said.stream().anyMatch(s -> s instanceof Status st
+                && st.message().startsWith("Created new-project, a Maven project")));
+        assertEquals(Made.FILE, nav.naming(), "the bar's mind goes back to its own");
+    }
+
+    /** Inside a project a folder offers a module rather than a project; its archive is named beside it. */
+    @Test
+    void aFolderInAProjectAddsAModuleAndArchivesBesideItself() throws Exception {
+        Files.writeString(dir.resolve("pom.xml"), """
+                <project>
+                    <groupId>com.example</groupId>
+                    <artifactId>whole</artifactId>
+                    <version>1</version>
+                    <packaging>pom</packaging>
+                </project>
+                """);
+        Path lib = Files.createDirectory(dir.resolve("lib")).toAbsolutePath().normalize();
+        Files.writeString(lib.resolve("a.txt"), "a");
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        Navigator nav = wiring.ui().navigator();
+        eventually("a row for the folder", () -> nav.hasRow(lib));
+
+        TreeView.Entry row = nav.children(new Listed(nav.treeAddress(), dir, false,
+                List.of(new Item(lib, "lib", true, true)))).entries().getFirst();
+        assertTrue(row.hidden().contains(Navigator.NEW_PROJECT) && !row.hidden().contains(Navigator.NEW_MODULE));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.NEW_MODULE, lib));
+        String module = lib + java.io.File.separator + "new-module";
+        eventually("the module's name in the path bar", () -> nav.pathText().equals(module));
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), module));
+        eventually("the module to be made", () -> Files.isRegularFile(lib.resolve("new-module/pom.xml")));
+        assertTrue(Files.readString(dir.resolve("pom.xml")).contains("<module>lib/new-module</module>"));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.ARCHIVE, lib));
+        String zip = dir.toAbsolutePath().normalize() + java.io.File.separator + "lib.zip";
+        eventually("the archive's name in the path bar", () -> nav.pathText().equals(zip));
+        assertEquals(lib, nav.namingFrom());
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), zip));
+        eventually("the archive to be made", () -> Files.isRegularFile(Path.of(zip)));
+    }
+
+    /**
+     * "Link to this…" names a link beside the row, to it. Offered here whatever the platform, so this runs on Windows,
+     * where making it takes privilege: then the status line says why not, and nothing is made.
+     */
+    @Test
+    void linkToThisNamesALinkToTheRow() throws Exception {
+        Path file = Files.writeString(dir.resolve("a.txt"), "a").toAbsolutePath().normalize();
+        Navigator nav = wiring.ui().navigator();
+        nav.offerLinks(true);
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        eventually("a row for the file", () -> nav.hasRow(file));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.LINK, file));
+        String named = file.getParent() + java.io.File.separator + "a.txt-link";
+        eventually("the link's name in the path bar", () -> nav.pathText().equals(named));
+        assertEquals(Made.LINK, nav.naming());
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), named));
+        eventually("the status to say what happened", () -> said.stream().anyMatch(s -> s instanceof Status st
+                && (st.message().startsWith("Created link a.txt-link") || st.message().startsWith("Could not create"))));
+        if (CreateFile.links()) {
+            assertEquals(file, Files.readSymbolicLink(Path.of(named)));
+        }
     }
 
     /** The tree asks for the folder shown, a job reads it, and the view answers the tree with its rows. */

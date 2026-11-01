@@ -20,7 +20,7 @@ import java.util.stream.Stream;
  * case-insensitively by name.
  *
  * <p>The tree asks for a level the first time it is opened, and the view asks this; the answer is data (each entry's
- * path, name and whether it is a folder), so the view can tell the tree what to draw without touching the disk on the
+ * path, name, whether it is a folder and whether a Maven project is around it), so the view can tell the tree what to draw without touching the disk on the
  * GUI thread. An unreadable folder answers empty rather than taking the tree down.
  */
 @Job
@@ -44,9 +44,15 @@ public final class ListFolder {
 
     static List<Item> list(Path dir) {
         List<Item> items = new ArrayList<>();
+        // One walk up for the level, then one look per folder for a pom of its own.
+        boolean inProject = Poms.projectOf(dir) != null;
         try (Stream<Path> s = Files.list(dir)) {
             s.filter(p -> !HIDDEN.contains(String.valueOf(p.getFileName())))
-                    .forEach(p -> items.add(new Item(p, name(p), Files.isDirectory(p))));
+                    .forEach(p -> {
+                        boolean folder = Files.isDirectory(p);
+                        boolean project = inProject || folder && Files.isRegularFile(p.resolve("pom.xml"));
+                        items.add(new Item(p, name(p), folder, project));
+                    });
         } catch (IOException | RuntimeException e) {
             return List.of();
         }

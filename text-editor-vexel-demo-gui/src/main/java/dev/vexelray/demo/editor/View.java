@@ -2,6 +2,7 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.Intent.Command;
 import dev.vexelray.demo.editor.core.Messages;
+import dev.vexelray.demo.editor.core.Messages.Add;
 import dev.vexelray.demo.editor.core.Messages.AddTab;
 import dev.vexelray.demo.editor.core.Messages.Caption;
 import dev.vexelray.demo.editor.core.Messages.Close;
@@ -15,6 +16,7 @@ import dev.vexelray.demo.editor.core.Messages.Formatted;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
+import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Open;
@@ -46,6 +48,7 @@ import sibarum.tactroller.api.Modifier;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The view: what the editor decided, shown, and what the person did, told. A {@code @View}, so it runs on the GUI
@@ -104,6 +107,7 @@ final class View {
     private final Sender<TreeView.Children> children;
     private final Sender<Intent> intents;
     private final Sender<Picture> picture;
+    private final Sender<Add> add;
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
@@ -114,12 +118,13 @@ final class View {
     View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
          Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
-         Sender<Intent> intents, Sender<Picture> picture) {
+         Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add) {
         this.gui = gui;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
         this.picture = picture;
+        this.add = add;
         this.open = open;
         this.go = go;
         this.fronted = fronted;
@@ -358,11 +363,21 @@ final class View {
         }
     }
 
-    /** The path bar was submitted: what the text names is the editor's call. */
+    /**
+     * The path bar was submitted: what the text names is the editor's call, unless a row's menu put the bar in mind of
+     * something its extension cannot say, which goes with it.
+     */
     @Subscribe
     public void fieldSubmitted(TextField.Submitted m) {
         if (m.field().equals(nav.pathAddress())) {
-            go.send(new Go(nav.submitted(m.text())));
+            Made what = nav.naming();
+            Path from = nav.namingFrom();
+            String text = nav.submitted(m.text());
+            if (what == Made.FILE || what == Made.FOLDER) {
+                go.send(new Go(text));
+            } else {
+                add.send(new Add(text, what, Optional.ofNullable(from)));
+            }
         }
     }
 
@@ -481,6 +496,21 @@ final class View {
             boolean folder = m.action().equals(Navigator.NEW_FOLDER);
             nav.startNew(in, folder);
             ui.status(folder ? "Name the new folder, then Enter" : "Name the new file, then Enter", false);
+        } else if (m.action().equals(Navigator.NEW_PROJECT)) {
+            nav.startNew(p, Made.PROJECT, "new-project", null);
+            ui.status("Name the new project, then Enter", false);
+        } else if (m.action().equals(Navigator.NEW_MODULE)) {
+            nav.startNew(p, Made.MODULE, "new-module", null);
+            ui.status("Name the new module, then Enter", false);
+        } else if (m.action().equals(Navigator.ARCHIVE)) {
+            // Beside the folder, where an archive of it is looked for, and where it cannot end up holding itself.
+            Path beside = p.getParent() != null ? p.getParent() : p;
+            nav.startNew(beside, Made.ARCHIVE, Picker.label(p) + ".zip", p);
+            ui.status("Name the archive, then Enter", false);
+        } else if (m.action().equals(Navigator.LINK)) {
+            Path beside = p.getParent() != null ? p.getParent() : p;
+            nav.startNew(beside, Made.LINK, Picker.label(p) + "-link", p);
+            ui.status("Name the link to " + Picker.label(p) + ", then Enter", false);
         }
     }
 

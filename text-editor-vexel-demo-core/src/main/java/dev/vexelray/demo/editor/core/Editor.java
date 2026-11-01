@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor.core;
 
+import dev.vexelray.demo.editor.core.Messages.Add;
 import dev.vexelray.demo.editor.core.Messages.AddTab;
 import dev.vexelray.demo.editor.core.Messages.Caption;
 import dev.vexelray.demo.editor.core.Messages.Close;
@@ -15,6 +16,7 @@ import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
+import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recent;
@@ -102,7 +104,7 @@ import java.util.Set;
  * thing without a window.
  */
 @Component
-@Hears({WindowOpened.class, Recalled.class, Go.class, Open.class, FileRead.class, Found.class,
+@Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
         Created.class, Fronted.class, Edited.class, Save.class, Written.class, Answer.class,
         Close.class, CloseRequested.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class,
@@ -299,6 +301,7 @@ public final class Editor {
         Step<State, WindowOpened> begin = b.step("begin", Editor::begin);
         Step<State, Recalled> recalled = b.step("recalled", Editor::recalled);
         Step<State, Go> go = b.step("go", Editor::go);
+        Step<State, Add> add = b.step("add", Editor::add);
         Step<State, Open> open = b.step("open", Editor::open);
         Step<State, FileRead> fileRead = b.step("fileRead", Editor::fileRead);
         Step<State, Found> found = b.step("found", Editor::found);
@@ -320,6 +323,7 @@ public final class Editor {
         b.on(WindowOpened.TOPIC, begin)
                 .on(Messages.RECALLED_TOPIC, recalled)
                 .on(Messages.GO_TOPIC, go)
+                .on(Messages.ADD_TOPIC, add)
                 .on(Messages.OPEN_TOPIC, open)
                 .on(Messages.FILE_READ_TOPIC, fileRead)
                 .on(Messages.FOUND_TOPIC, found)
@@ -454,21 +458,40 @@ public final class Editor {
      */
     private static State go(State s, Go go, Out out) {
         String text = go.text().strip();
+        Path target = typed(s, text, out);
+        if (target != null) {
+            boolean folder = text.endsWith("/") || text.endsWith("\\");
+            out.send(Messages.FIND_TOPIC, new Find(target, folder ? Why.GO_FOLDER : Why.GO));
+        }
+        return s;
+    }
+
+    /**
+     * What the path bar named, to make what a row's menu asked for: straight to the job, which makes nothing over what
+     * is there and says so.
+     */
+    private static State add(State s, Add a, Out out) {
+        Path target = typed(s, a.text().strip(), out);
+        if (target != null) {
+            out.send(Messages.CREATE_TOPIC, new Create(target, a.what(), a.from()));
+        }
+        return s;
+    }
+
+    /** The path {@code text} names, relative to the folder shown; null, and said, when it names none. */
+    private static Path typed(State s, String text, Out out) {
         if (text.isEmpty()) {
-            return s;
+            return null;
         }
         Path typed;
         try {
             typed = Path.of(text);
         } catch (InvalidPathException e) {
             refuse(out, "Not a path: " + text);
-            return s;
+            return null;
         }
         Path base = s.doc().folder();
-        Path target = (typed.isAbsolute() || base == null ? typed : base.resolve(typed)).toAbsolutePath().normalize();
-        boolean folder = text.endsWith("/") || text.endsWith("\\");
-        out.send(Messages.FIND_TOPIC, new Find(target, folder ? Why.GO_FOLDER : Why.GO));
-        return s;
+        return (typed.isAbsolute() || base == null ? typed : base.resolve(typed)).toAbsolutePath().normalize();
     }
 
     private static State open(State s, Open open, Out out) {
@@ -529,7 +552,7 @@ public final class Editor {
             return open(s, new Open(f.path(), true), out);
         }
         if (f.kind() == Kind.NEW) {
-            out.send(Messages.CREATE_TOPIC, new Create(f.path(), folder));
+            out.send(Messages.CREATE_TOPIC, new Create(f.path(), folder ? Made.FOLDER : Made.FILE));
             return s;
         }
         refuse(out, "No such folder: " + f.path().getParent());
@@ -548,8 +571,13 @@ public final class Editor {
         if (s.doc().folder() != null) {
             out.send(Messages.SHOW_FOLDER_TOPIC, new ShowFolder(s.doc().folder()));
         }
-        if (c.folder()) {
-            say(out, "Created folder " + name);
+        if (c.what() != Made.FILE) {
+            String kind = switch (c.what()) {
+                case FOLDER -> "folder ";
+                case LINK -> "link ";
+                default -> "";
+            };
+            say(out, "Created " + kind + name + (c.note().isEmpty() ? "" : ", " + c.note()));
             return s;
         }
         State next = addTab(s, c.path(), c.text(), c.crlf(), true, out);

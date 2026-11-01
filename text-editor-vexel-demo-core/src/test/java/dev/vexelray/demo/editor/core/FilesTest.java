@@ -2,6 +2,7 @@ package dev.vexelray.demo.editor.core;
 
 import dev.vexelray.demo.editor.core.Messages.Create;
 import dev.vexelray.demo.editor.core.Messages.Created;
+import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.FileRead;
 import dev.vexelray.demo.editor.core.Messages.Find;
 import dev.vexelray.demo.editor.core.Messages.Kind;
@@ -73,40 +74,40 @@ class FilesTest {
     @Test
     void creatingMakesAnEmptyFileAndRefusesOneThatIsThere() throws Exception {
         Path file = dir.resolve("new.txt");
-        Created made = new CreateFile().run(new Create(file, false));
+        Created made = new CreateFile().run(new Create(file, Made.FILE));
         assertEquals("", made.problem());
         assertEquals(0, Files.size(file));
-        assertFalse(new CreateFile().run(new Create(file, false)).problem().isEmpty());
+        assertFalse(new CreateFile().run(new Create(file, Made.FILE)).problem().isEmpty());
     }
 
     @Test
     void creatingAFolderMakesOneAndRefusesOneThatIsThere() {
         Path folder = dir.resolve("made");
-        Created made = new CreateFile().run(new Create(folder, true));
+        Created made = new CreateFile().run(new Create(folder, Made.FOLDER));
         assertEquals("", made.problem());
-        assertTrue(made.folder());
+        assertEquals(Made.FOLDER, made.what());
         assertTrue(Files.isDirectory(folder));
-        assertFalse(new CreateFile().run(new Create(folder, true)).problem().isEmpty());
+        assertFalse(new CreateFile().run(new Create(folder, Made.FOLDER)).problem().isEmpty());
     }
 
     /** A file starts with what its extension asks for, written with the line endings the reply says. */
     @Test
     void aNewFileIsMadeFromTheTemplateItsExtensionAsksFor() throws Exception {
         Path pkg = Files.createDirectories(dir.resolve("src/main/java/com/example"));
-        Created java = new CreateFile().run(new Create(pkg.resolve("Thing.java"), false));
+        Created java = new CreateFile().run(new Create(pkg.resolve("Thing.java"), Made.FILE));
         assertEquals("package com.example;\n\npublic class Thing {\n}\n", java.text());
         assertEquals(new String(TextFile.encode(java.text(), java.crlf()), StandardCharsets.UTF_8),
                 Files.readString(pkg.resolve("Thing.java")));
 
-        Created md = new CreateFile().run(new Create(dir.resolve("Notes.md"), false));
+        Created md = new CreateFile().run(new Create(dir.resolve("Notes.md"), Made.FILE));
         assertEquals("# Notes\n\n", md.text());
 
-        Created sh = new CreateFile().run(new Create(dir.resolve("go.sh"), false));
+        Created sh = new CreateFile().run(new Create(dir.resolve("go.sh"), Made.FILE));
         assertEquals("#!/usr/bin/env bash\n\n", sh.text());
         assertFalse(sh.crlf(), "a shell reads LF whatever the platform");
         assertEquals("#!/usr/bin/env bash\n\n", Files.readString(dir.resolve("go.sh")));
 
-        assertEquals("", new CreateFile().run(new Create(dir.resolve("plain.txt"), false)).text());
+        assertEquals("", new CreateFile().run(new Create(dir.resolve("plain.txt"), Made.FILE)).text());
     }
 
     @Test
