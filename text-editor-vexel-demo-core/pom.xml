@@ -67,6 +67,15 @@
             <version>2.7</version>
         </dependency>
 
+        <!-- A folder's build, for Open's picture of it (Survey): Concordance's pom reader, which follows a reactor's
+             modules without Maven. Plain JDK, no widget. Installed to the local .m2 by `mvn install` in the sibling
+             concordance-indexer repo. -->
+        <dependency>
+            <groupId>sibarum.concordance</groupId>
+            <artifactId>concordance-project</artifactId>
+            <version>${concordance.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

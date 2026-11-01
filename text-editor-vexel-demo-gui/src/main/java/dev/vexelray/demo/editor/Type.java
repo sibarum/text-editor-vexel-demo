@@ -35,13 +35,25 @@ final class Type {
     /** The path bar, a hint, the navigator's chrome. */
     static final Length SMALL = Length.rem(0.75f);
 
+    /** A row of Open's picture: a module's or an annotation's name. */
+    static final Length LABEL = Length.rem(0.8125f);
+
+    /** A number worth looking at: the folder's name in Open's picture, the one thing on it that is the point. */
+    static final Length FIGURE = Length.rem(2.0f);
+
     // --------------------------------------------------------------- gutters
+
+    /** The outer inset of a region: Open's picture. */
+    static final Length EDGE = Length.dp(22.4f);
 
     /** A panel's padding, and the gap between a quote's bar and its text. */
     static final Length WIDE = Length.dp(11.2f);
 
     /** A tight gap, and the navigator's padding. */
     static final Length TIGHT = Length.dp(5.6f);
+
+    /** The standard gap between two things that belong together. */
+    static final Length GAP = Length.dp(8.4f);
 
     /** A border. Not scaled by zoom; a hairline is a hairline. */
     static final Length RULE = Length.dp(1);

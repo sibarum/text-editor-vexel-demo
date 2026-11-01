@@ -35,6 +35,10 @@ import java.util.List;
  * the tree, goes back to the files: the view claims it on each tree ({@link #treeNode}), since a claim sends an
  * intent, and the intents are the view's.
  *
+ * <p>What a click would pick is in view before the click: the folder under the pointer, a recent one or a row, is
+ * pictured where the editor stood ({@link Preview}), and off them, the selected row, wherever the arrow keys have
+ * walked to.
+ *
  * <h2>A tree for each start</h2>
  *
  * <p>Each time Open starts somewhere it builds its tree afresh. A tree's first listing is the one a walk down it waits
@@ -52,6 +56,7 @@ final class Picker {
     /** The line between Recent and the tree: there only when Recent is. */
     private final Node rule;
     private final Button[] recentButtons = new Button[RECENT];
+    private final Node[] recentCells = new Node[RECENT];
     private final Path[] recentPaths = new Path[RECENT];
     private final Breadcrumb<Path> ancestry;
     /** Where the tree goes: replaced, tree and all, each time Open starts somewhere. */
@@ -68,9 +73,12 @@ final class Picker {
         Node recent = gui.column().alignItems(AlignItems.STRETCH).children(recentLabel);
         for (int i = 0; i < RECENT; i++) {
             Button b = new Button(gui, "").kind(Button.Kind.GHOST).name("recent." + i);
-            b.node().font(Type.UI).visible(false);
+            b.node().font(Type.UI).width(Length.FILL);
             recentButtons[i] = b;
-            recent.append(b.node());
+            // A cell round each button, for the view to hear the pointer on: the button takes its own node's hover
+            // for its wash, and a node is hovered while the pointer is on anything inside it.
+            recentCells[i] = gui.row().alignItems(AlignItems.STRETCH).visible(false).children(b.node());
+            recent.append(recentCells[i]);
         }
         gui.landmark(Landmarks.RECENT, recent);
 
@@ -120,10 +128,20 @@ final class Picker {
             Path p = i < folders.size() ? folders.get(i) : null;
             recentPaths[i] = p;
             recentButtons[i].label(p == null ? "" : label(p));
-            recentButtons[i].node().visible(p != null);
+            recentCells[i].visible(p != null);
         }
         recentLabel.visible(!folders.isEmpty());
         rule.visible(!folders.isEmpty());
+    }
+
+    /** The cell round the recent button at {@code index}: hovered while the pointer is on the button. */
+    Node recentCell(int index) {
+        return recentCells[index];
+    }
+
+    /** The folder the recent button at {@code index} stands for, or null when it stands for none. */
+    Path recentPath(int index) {
+        return recentPaths[index];
     }
 
     /** The address of the recent button at {@code index}, which its {@code Pressed} carries: for a test. */

@@ -18,6 +18,8 @@ import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Open;
+import dev.vexelray.demo.editor.core.Messages.Picture;
+import dev.vexelray.demo.editor.core.Messages.Pictured;
 import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
@@ -28,7 +30,9 @@ import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.NodeEvent;
 import dev.vexelray.gui.core.input.ClaimScope;
+import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
@@ -99,18 +103,23 @@ final class View {
     private final Sender<Format> format;
     private final Sender<TreeView.Children> children;
     private final Sender<Intent> intents;
+    private final Sender<Picture> picture;
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
+    /** The folder under the pointer in Open: a recent one, a row of its tree, or null for neither. */
+    private Path recentHover;
+    private Path treeHover;
 
     View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
          Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
-         Sender<Intent> intents) {
+         Sender<Intent> intents, Sender<Picture> picture) {
         this.gui = gui;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
+        this.picture = picture;
         this.open = open;
         this.go = go;
         this.fronted = fronted;
@@ -123,6 +132,10 @@ final class View {
         this.children = children;
         this.intents = intents;
         shortcuts();
+        for (int i = 0; i < Picker.RECENT; i++) {
+            int slot = i;
+            gui.hear(nav.picker().recentCell(i), NodeEvent.STATE, state -> recentHovered(slot, state));
+        }
     }
 
     /**
@@ -166,6 +179,7 @@ final class View {
     public void showFolder(ShowFolder m) {
         nav.show(m.path());
         ui.showNavigator(true);
+        picture();
     }
 
     /** A window on files alone: the navigator out of the way until a folder is shown or Ctrl+B asks for it. */
@@ -246,6 +260,12 @@ final class View {
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             children.send(nav.picker().children(m));
         }
+    }
+
+    /** A folder's picture: drawn if it is still the one wanted, and the next asked for if the pointer has moved on. */
+    @Subscribe
+    public void pictured(Pictured m) {
+        ask(ui.preview().landed(m));
     }
 
     @Subscribe
@@ -375,6 +395,17 @@ final class View {
     public void treeSelected(TreeView.Selected m) {
         if (m.tree().equals(nav.treeAddress()) && m.item() instanceof Path p && !nav.isFolder(p)) {
             open.send(new Open(p, false));
+        } else if (m.tree().equals(nav.picker().treeAddress())) {
+            picture();
+        }
+    }
+
+    /** The row under the pointer in Open's tree, or none: pictured. */
+    @Subscribe
+    public void treeHovered(TreeView.Hovered m) {
+        if (m.tree().equals(nav.picker().treeAddress())) {
+            treeHover = m.item() instanceof Path p ? p : null;
+            picture();
         }
     }
 
@@ -418,7 +449,9 @@ final class View {
     public void ancestry(Breadcrumb.Navigated m) {
         if (m.breadcrumb().equals(nav.picker().ancestryAddress()) && m.item() instanceof Path p) {
             nav.widen(p);
+            treeHover = null;   // a row of the tree just replaced
             claimEscape();
+            picture();
         }
     }
 
@@ -527,6 +560,7 @@ final class View {
         } else if (ws.front() != null) {
             gui.focus(ws.front().keyboard());
         }
+        picture();
     }
 
     /** Ctrl+O: Open, or back to the files. */
@@ -540,12 +574,57 @@ final class View {
      */
     void open(boolean value) {
         if (value) {
+            if (!nav.opened()) {
+                ui.preview().forget();   // each visit looks at the disk again
+                recentHover = null;
+                treeHover = null;
+            }
             ui.showNavigator(true);
             nav.open(true);
             claimEscape();
         } else if (nav.opened()) {
             nav.open(false);
             nav.focusTree();
+        }
+        picture();
+    }
+
+    /** The pointer on a recent folder in Open, or off it. */
+    private void recentHovered(int slot, InteractionState state) {
+        Path p = nav.picker().recentPath(slot);
+        if (state != InteractionState.NORMAL) {
+            recentHover = p;
+        } else if (recentHover != null && recentHover.equals(p)) {
+            recentHover = null;   // a late leave of one the pointer has since left clears nothing else
+        }
+        picture();
+    }
+
+    /**
+     * While Open is up, its picture stands where the editor does: of the folder under the pointer, a recent one
+     * before a row, and with the pointer on neither, of the selected row. Before the tree's walk has selected the
+     * folder shown, that folder, which the walk will select; with none shown, the folder the tree starts at. Worked
+     * out from all of them each time rather than from whichever message came last, since leaving one control and
+     * entering the next arrive as two messages in no promised order.
+     */
+    private void picture() {
+        boolean on = nav.opened() && ui.navigatorShown();
+        ui.picturing(on);
+        if (!on) {
+            return;
+        }
+        Path selected = nav.picker().selected();
+        Path folder = recentHover != null ? recentHover
+                : treeHover != null ? treeHover
+                : selected != null ? selected
+                : nav.folder() != null ? nav.folder()
+                : nav.picker().topFolder();
+        ask(ui.preview().show(folder));
+    }
+
+    private void ask(Picture wanted) {
+        if (wanted != null) {
+            picture.send(wanted);
         }
     }
 

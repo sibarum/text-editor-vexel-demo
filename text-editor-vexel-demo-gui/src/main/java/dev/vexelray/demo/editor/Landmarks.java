@@ -36,6 +36,10 @@ final class Landmarks {
     static final String ANCESTRY = "ancestry";
     static final String PICKER = "picker";
 
+    /** Open's picture of a folder, where the editor stands, and its list of the folder's files. */
+    static final String PREVIEW = "preview";
+    static final String CONTENTS = "preview.files";
+
     /** The status line, and its four slots. */
     static final String STATUS = "status";
     static final String STATUS_FILE = "status.file";

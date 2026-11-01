@@ -4,7 +4,9 @@ import dev.vexelray.demo.editor.core.Messages;
 import dev.vexelray.demo.editor.core.Messages.Caption;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Open;
+import dev.vexelray.demo.editor.core.Messages.Picture;
 import dev.vexelray.demo.editor.core.Messages.Status;
+import dev.vexelray.demo.editor.core.SurveyFolder;
 import dev.vexelray.framework.core.Answer;
 import dev.vexelray.framework.core.CloseAnswer;
 import dev.vexelray.framework.core.CloseRequested;
@@ -289,6 +291,62 @@ class ViewTest {
         eventually("Open again", () -> nav.opened() && picker.hasRow(b));
         shell.bus().publish(TreeView.CLICKED, new TreeView.Clicked(picker.treeAddress(), b));
         eventually("b shown, and Open over", () -> b.equals(nav.folder()) && !nav.opened());
+    }
+
+    /**
+     * Open pictures the folder shown where the editor stood, then the one under the pointer, and the shown one again
+     * when the pointer leaves the rows; going back to the files puts the editor back.
+     */
+    @Test
+    void openPicturesTheFolderShownAndThenTheOneUnderThePointer() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Path b = Files.createDirectory(dir.resolve("b")).toAbsolutePath().normalize();
+        Files.writeString(a.resolve("notes.md"), "# a");
+        Files.writeString(b.resolve("pom.xml"), """
+                <project><modelVersion>4.0.0</modelVersion><groupId>g</groupId><artifactId>bee</artifactId>
+                <version>1</version></project>""");
+        Ui ui = wiring.ui();
+        Navigator nav = ui.navigator();
+        Preview preview = ui.preview();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a shown", () -> a.equals(nav.folder()));
+        assertFalse(ui.picturing(), "the editor, while the files are shown");
+
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("a pictured", () -> ui.picturing() && a.equals(preview.drawn()));
+        eventually("b listed", () -> nav.picker().hasRow(b));
+
+        shell.bus().publish(TreeView.HOVERED, new TreeView.Hovered(nav.picker().treeAddress(), b));
+        eventually("b pictured", () -> b.equals(preview.drawn()));
+        shell.bus().publish(TreeView.HOVERED, new TreeView.Hovered(nav.picker().treeAddress(), null));
+        eventually("a again, off the rows", () -> a.equals(preview.drawn()));
+
+        tell(Intent.Command.LEAVE_OPEN);
+        eventually("the editor back", () -> !ui.picturing());
+    }
+
+    /**
+     * One survey runs at a time. The pointer passing over folders while one runs asks for none of them; when it lands,
+     * the folder the pointer is on now is asked for, and an answer for one it has left is kept but not drawn.
+     */
+    @Test
+    void aSurveyLandingLateAsksForWhereThePointerIsNow() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Path b = Files.createDirectory(dir.resolve("b")).toAbsolutePath().normalize();
+        Path c = Files.createDirectory(dir.resolve("c")).toAbsolutePath().normalize();
+        Preview p = new Preview(shell.gui());
+        SurveyFolder survey = new SurveyFolder();
+
+        assertEquals(new Picture(a), p.show(a));
+        assertNull(p.show(b), "a survey is running");
+        assertNull(p.show(c), "still running");
+        assertEquals(new Picture(c), p.landed(survey.run(new Picture(a))), "where the pointer is now, not b");
+        assertNull(p.drawn(), "a, left, is not drawn under c's name");
+
+        assertNull(p.show(a), "a is in hand");
+        assertEquals(a, p.drawn());
+        assertNull(p.landed(survey.run(new Picture(c))), "nothing more is wanted");
+        assertEquals(a, p.drawn(), "c is kept, but the pointer is on a");
     }
 
     /** The folder left is offered under Recent, and pressing it goes back there. */

@@ -14,8 +14,8 @@ import java.util.Optional;
  * <p>The application is three kinds of part, and none of them holds another. The {@link Editor} decides; it owns the
  * session, and changes it only by running its own declared steps. The view, in the {@code -gui} module, shows; it
  * owns the widgets. The jobs ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
- * {@link ReadSession}, {@link WriteSession}, {@link ListFolder}, {@link MarkText}) touch the disk or do slow work, on
- * the job lane. Each sends a record on a topic and the others hear it on their own lane, so no state is shared
+ * {@link ReadSession}, {@link WriteSession}, {@link ListFolder}, {@link MarkText}, {@link SurveyFolder}) touch the
+ * disk or do slow work, on the job lane. Each sends a record on a topic and the others hear it on their own lane, so no state is shared
  * and nothing needs a lock.
  *
  * <p>A record here is what crossed, and it crosses as itself: the processor refuses a payload that is not deeply
@@ -310,6 +310,18 @@ public final class Messages {
         public Listed {
             items = List.copyOf(items);
         }
+    }
+
+    /** Picture a folder for Open ({@link SurveyFolder}): the one under the pointer, or selected. */
+    public static final Topic<Picture> PICTURE_TOPIC = Topic.edge(Picture.class);
+
+    public record Picture(Path folder) {
+    }
+
+    /** What {@link Picture} found: the survey, and the folder's files when it has no build to describe. */
+    public static final Topic<Pictured> PICTURED_TOPIC = Topic.edge(Pictured.class);
+
+    public record Pictured(Path folder, Survey survey, Optional<Contents> contents) {
     }
 
     /**

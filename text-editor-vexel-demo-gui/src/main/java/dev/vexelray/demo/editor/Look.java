@@ -87,6 +87,15 @@ final class Look {
     /** The hairline round the navigator in Open: the accent itself. */
     static final Role PICKING_RIM = p -> p.accent().toColor();
 
+    /** A tile or a bar's track in Open's picture: a step above {@link #PICKING}, in the same hue. */
+    static final Role TILE = p -> {
+        Oklab level = Oklab.of(p.surface(3));
+        return Oklab.polar(level.l(), 0.034, p.accent().hueDegrees()).toColor();
+    };
+
+    /** A quiet hairline: a chip's edge in Open's picture, and the languages that are not named. */
+    static final Role RIM = p -> p.surface(2);
+
     /**
      * A folder under the pointer in Open: well above the card and strongly in the accent's hue, where a hovered row
      * elsewhere is a quiet neutral. A click there changes the whole window, and the row says so by how it lights.

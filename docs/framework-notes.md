@@ -32,5 +32,25 @@ The markers are a filter, not decoration:
 
 ## Findings
 
-*(none yet)*
+## FN-1 · A job replies once, so slow work cannot be watched filling in 🔬
+
+Open pictures the folder under the pointer (`SurveyFolder`). In 0.1 the survey ran on a thread of its own, handed the
+picture its counts every 120 ms so a large build was seen being read, and gave up between files once the pointer had
+moved on. A `@Job` returns one reply and is not stopped part way (components.md §10: cancellation is the caller's).
+
+Done here: the survey is bounded (6000 files, 900 Java files read), and `Preview` keeps one survey running, asking for
+wherever the pointer has got to when it lands, so a sweep down twenty rows costs two surveys. What is lost is the
+climbing numbers: a large build shows its name, then its whole picture at once.
+
+What the framework could do: let a job send while it runs (a `Sender` of its own reply type, or a progress topic
+beside the reply), and hand it a cancellation token the caller can trip, which components.md already calls additive.
+Any job on hover or on typing wants both.
+
+## FN-2 · A Button says nothing about the pointer being on it 🔬
+
+Open pictures a recent folder while the pointer is on its button. `TreeView` publishes `Hovered`; `Button` publishes
+only `Pressed` and `Toggled`, and it takes its own node's `NodeEvent.STATE` for its wash, so `gui.hear` on that node is
+refused. Done here: each button sits in a cell of its own, and the view hears the cell's state, since a node is hovered
+while the pointer is on anything inside it (`Picker.recentCell`). Costs a node per button and a paragraph explaining
+it. What the framework could do: a `Button.Hovered` state topic, as `TreeView` has.
 

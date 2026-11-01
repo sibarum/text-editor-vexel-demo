@@ -2,6 +2,8 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.LayoutEnums.Direction;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -37,9 +39,12 @@ final class Ui {
     private final StatusBar status;
     private final Workspace workspace;
     private final Navigator navigator;
+    private final Preview preview;
     private final SplitPane split;
     /** Set only by {@link #showNavigator}, from the view, on the GUI thread. */
     private boolean navigatorShown = true;
+    /** Set only by {@link #picturing}: whether Open's picture stands where the editor does. */
+    private boolean picturing;
     private final Motion motion;
     private final Color danger;
 
@@ -63,7 +68,14 @@ final class Ui {
         workspace = new Workspace(gui, motion);
         navigator = new Navigator(gui, motion);
 
-        split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), workspace.node())
+        // In Open the editor steps aside for a picture of the folder being considered: the two share the place
+        // beside the navigator, one showing at a time, and the tabs keep everything they had while hidden.
+        preview = new Preview(gui);
+        Node stage = gui.column().width(Length.FILL).height(Length.FILL).scroll(false, false)
+                .alignItems(AlignItems.STRETCH)
+                .children(workspace.node(), preview.node());
+
+        split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), stage)
                 .size(NAVIGATOR);
         split.node().width(Length.FILL).height(Length.grow(1f));
 
@@ -78,6 +90,22 @@ final class Ui {
 
     Navigator navigator() {
         return navigator;
+    }
+
+    Preview preview() {
+        return preview;
+    }
+
+    /** Whether Open's picture stands where the editor does. */
+    boolean picturing() {
+        return picturing;
+    }
+
+    /** Put Open's picture where the editor stands, or the editor back. */
+    void picturing(boolean value) {
+        picturing = value;
+        workspace.node().visible(!value);
+        preview.node().visible(value);
     }
 
     /**
