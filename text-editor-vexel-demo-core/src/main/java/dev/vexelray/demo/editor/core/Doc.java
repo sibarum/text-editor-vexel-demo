@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * The shape of the session, in one immutable value: which files are open, in what order, which one is in front,
- * which have unsaved work, and which folder the navigator shows.
+ * which have unsaved work, which folder the navigator shows, and the folders it showed before, newest first.
  *
  * <h2>Whose it is</h2>
  *
@@ -25,10 +25,13 @@ import java.util.List;
  * <p>A tab is named by an {@code id}, not an index. An index is a fact about the tab bar at one instant, and a close
  * landing between a read and a write turns it into the neighbour's.
  */
-record Doc(List<Entry> tabs, long active, Path folder) {
+record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent) {
 
     /** No tab: none is in front. */
     static final long NONE = Messages.NO_TAB;
+
+    /** How many folders {@link #recent} keeps. The folder shown is never among them. */
+    static final int RECENT = 8;
 
     /**
      * One open file.
@@ -56,11 +59,12 @@ record Doc(List<Entry> tabs, long active, Path folder) {
 
     Doc {
         tabs = List.copyOf(tabs);
+        recent = List.copyOf(recent);
     }
 
     /** Nothing open. */
     static Doc initial() {
-        return new Doc(List.of(), NONE, null);
+        return new Doc(List.of(), NONE, null, List.of());
     }
 
     /** The entry with {@code id}, or null if it has gone. */
@@ -96,13 +100,13 @@ record Doc(List<Entry> tabs, long active, Path folder) {
     Doc withTab(Entry entry) {
         List<Entry> next = new ArrayList<>(tabs);
         next.add(entry);
-        return new Doc(next, active, folder);
+        return new Doc(next, active, folder, recent);
     }
 
     Doc without(long id) {
         List<Entry> next = new ArrayList<>(tabs);
         next.removeIf(e -> e.id() == id);
-        return new Doc(next, active == id ? NONE : active, folder);
+        return new Doc(next, active == id ? NONE : active, folder, recent);
     }
 
     /** Mark one entry unsaved or saved. A no-op on one that has gone. */
@@ -111,14 +115,40 @@ record Doc(List<Entry> tabs, long active, Path folder) {
         for (Entry e : tabs) {
             next.add(e.id() == id ? e.withDirty(dirty) : e);
         }
-        return new Doc(next, active, folder);
+        return new Doc(next, active, folder, recent);
     }
 
     Doc withActive(long id) {
-        return new Doc(tabs, id, folder);
+        return new Doc(tabs, id, folder, recent);
     }
 
+    /**
+     * Show {@code value} in the navigator. The folder it replaces goes to the front of {@link #recent}, which is how a
+     * folder becomes recent: by being left.
+     */
     Doc withFolder(Path value) {
-        return new Doc(tabs, active, value);
+        if (folder == null || folder.equals(value)) {
+            return new Doc(tabs, active, value, recentWithout(recent, value));
+        }
+        List<Path> next = new ArrayList<>();
+        next.add(folder);
+        next.addAll(recent);
+        return new Doc(tabs, active, value, recentWithout(next, value));
+    }
+
+    /** The recent folders a session brought back, but the folder shown. */
+    Doc withRecent(List<Path> value) {
+        return new Doc(tabs, active, folder, recentWithout(value, folder));
+    }
+
+    /** {@code paths} once each, in order, without {@code shown}, and no more than {@link #RECENT}. */
+    private static List<Path> recentWithout(List<Path> paths, Path shown) {
+        List<Path> out = new ArrayList<>();
+        for (Path p : paths) {
+            if (!p.equals(shown) && !out.contains(p) && out.size() < RECENT) {
+                out.add(p);
+            }
+        }
+        return out;
     }
 }

@@ -17,6 +17,7 @@ import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Read;
+import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Recall;
 import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Recalled;
@@ -106,7 +107,7 @@ import java.util.Set;
         Close.class, CloseRequested.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
-        Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class})
+        Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class})
 public final class Editor {
 
     /**
@@ -383,14 +384,16 @@ public final class Editor {
      */
     private static State recalled(State s, Recalled r, Out out) {
         List<Restore> steps = new ArrayList<>();
+        // The recent folders are history rather than this window's tabs, so a window on files alone offers them too.
+        State next = s.withDoc(s.doc().withRecent(r.recent()));
+        out.send(Messages.RECENT_TOPIC, new Recent(next.doc().recent()));
         if (!r.arguments().isEmpty()) {
             out.send(Messages.PLAIN_TOPIC, new Plain());
             for (Path p : r.arguments()) {
                 steps.add(new Restore(Why.ARGUMENT, p));
             }
-            return next(s.withRestoring(steps, Optional.empty(), r.started(), false), out);
+            return next(next.withRestoring(steps, Optional.empty(), r.started(), false), out);
         }
-        State next = s;
         if (r.folder().isPresent()) {
             steps.add(new Restore(Why.RESTORE_FOLDER, r.folder().get()));
         } else {
@@ -435,7 +438,7 @@ public final class Editor {
         Doc d = s.doc();
         Doc.Entry f = d.front();
         Remember now = new Remember(Optional.ofNullable(d.folder()), d.files(),
-                f == null ? Optional.empty() : Optional.of(f.path()));
+                f == null ? Optional.empty() : Optional.of(f.path()), d.recent());
         if (s.last().equals(Optional.of(now))) {
             return s;
         }
@@ -570,9 +573,13 @@ public final class Editor {
         return remember(next, out);
     }
 
+    /** Show a folder; the one it replaces becomes recent, and the view hears the recent folders when they change. */
     private static State showFolder(State s, Path folder, Out out) {
         State next = s.withDoc(s.doc().withFolder(folder));
         out.send(Messages.SHOW_FOLDER_TOPIC, new ShowFolder(folder));
+        if (!next.doc().recent().equals(s.doc().recent())) {
+            out.send(Messages.RECENT_TOPIC, new Recent(next.doc().recent()));
+        }
         return remember(next, out);
     }
 

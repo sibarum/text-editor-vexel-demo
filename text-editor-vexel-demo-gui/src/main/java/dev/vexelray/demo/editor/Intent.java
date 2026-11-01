@@ -51,6 +51,18 @@ record Intent(Command command) {
                 view.toggleNavigator();
             }
         },
+        TOGGLE_OPEN {
+            @Override
+            void on(View view) {
+                view.toggleOpen();
+            }
+        },
+        LEAVE_OPEN {
+            @Override
+            void on(View view) {
+                view.open(false);
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

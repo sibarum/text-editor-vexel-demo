@@ -9,6 +9,7 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.TextField;
@@ -46,6 +47,13 @@ import java.util.Set;
  * so the walk carries on. Enter opens a folder in place. Rows move rather than jump when a folder opens, because the
  * tree is handed {@link Motion#arrival}. There is one tree for the life of the window, and showing another folder
  * refreshes it, which asks again for every level it has listed.
+ *
+ * <h2>Open is the other place it can be</h2>
+ *
+ * <p>Above the bar, a chip says which folder is shown; pressing it, or Ctrl+O, puts the {@link Picker} where the files
+ * were, to pick another folder from. The chip stays pressed while Open is up, so the way back is the same name pressed
+ * again, and the card steeps in the accent and wears it as its edge, with a sweep down it as it changes, so the switch
+ * is seen even by an eye that was on the document. Showing a folder ends Open.
  */
 final class Navigator {
 
@@ -60,7 +68,13 @@ final class Navigator {
     private final Motion motion;
     private final TextField path;
     private final TreeView<Path> tree;
+    private final Button chip;
+    private final Picker picker;
     private final Node root;
+    /** Whether Open is up, in place of the files. */
+    private boolean opened;
+    /** What the chip says, which a node does not give back. */
+    private String chipText = NO_FOLDER;
     /** Every folder a listing has shown, so a row's kind is known without the disk. */
     private final Set<Path> folders = new HashSet<>();
     /** The folder shown, or null for none yet. */
@@ -87,13 +101,80 @@ final class Navigator {
         tree.node().width(Length.FILL).height(Length.grow(1f));
         gui.landmark(Landmarks.TREE, tree.node());
 
+        // A chip, outlined and so plainly pressable, saying the thing that Open changes: the thing to change is the
+        // thing to press. A button rather than a clickable text, so Tab, Enter and Space reach it too.
+        chip = new Button(gui, NO_FOLDER).name("folder").kind(Button.Kind.SECONDARY).toggle(true);
+        chip.node().font(Type.UI).width(Length.FILL);
+        gui.landmark(Landmarks.FOLDER, chip.node());
+
+        picker = new Picker(gui);
+        picker.node().visible(false);
+
+        // The edge is there in both places, in the panel's own colour while the files are shown, so it costs no
+        // layout when it turns to the accent.
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .gap(Type.TIGHT)
                 .padding(Type.TIGHT, Type.TIGHT)
-                .background(gui.theme().color(Role.PANEL))
                 .alignItems(AlignItems.STRETCH)
-                .children(path.node(), tree.node());
+                .children(chip.node(), path.node(), tree.node(), picker.node());
+        paint();
+    }
+
+    /** What the chip says while no folder is shown. */
+    static final String NO_FOLDER = "No folder";
+
+    /** The card's colours for where it is: the panel, or steeped in the accent for Open. */
+    private void paint() {
+        root.background(gui.theme().color(opened ? Look.PICKING : Role.PANEL))
+                .border(Type.RULE, gui.theme().color(opened ? Look.PICKING_RIM : Role.PANEL));
+    }
+
+    // ------------------------------------------------------------------ Open
+
+    /** Whether Open is up. */
+    boolean opened() {
+        return opened;
+    }
+
+    /**
+     * Put Open in place of the files, starting from the folder above the one shown, or take it away. The keyboard
+     * goes to Open's tree when it comes.
+     */
+    void open(boolean value) {
+        if (value == opened) {
+            return;
+        }
+        opened = value;
+        chip.show(value);
+        tree.node().visible(!value);
+        picker.node().visible(value);
+        paint();
+        if (value) {
+            picker.start(folder);
+            picker.focus();
+            motion.cues.play(root, Cue.scanline(gui.theme().color(Role.ACCENT)));
+        }
+    }
+
+    /** Start Open's tree at {@code from}, one of its way up's ancestors. */
+    void widen(Path from) {
+        picker.startAt(from, folder);
+        picker.focus();
+    }
+
+    Picker picker() {
+        return picker;
+    }
+
+    /** The chip's address, which its {@code Toggled} carries. */
+    String chipAddress() {
+        return chip.address();
+    }
+
+    /** What the chip says: the folder shown's name. */
+    String chipLabel() {
+        return chipText;
     }
 
     Node node() {
@@ -128,7 +209,10 @@ final class Navigator {
         folder = shown;
         namingFolder = false;
         path.text(String.valueOf(shown));
+        chipText = Picker.label(shown);
+        chip.label(chipText);
         tree.refresh();
+        open(false);
     }
 
     /**
@@ -137,9 +221,9 @@ final class Navigator {
      */
     Listing wanted(Object parent) {
         if (parent instanceof Path dir) {
-            return new Listing(treeAddress(), dir, false);
+            return new Listing(treeAddress(), dir, false, false);
         }
-        return folder == null ? null : new Listing(treeAddress(), folder, true);
+        return folder == null ? null : new Listing(treeAddress(), folder, true, false);
     }
 
     /** {@code ListFolder}'s answer, as the tree's entries for the level it asked about. */

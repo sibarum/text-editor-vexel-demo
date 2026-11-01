@@ -23,6 +23,7 @@ public final class WriteSession {
         settings.putString(ReadSession.FOLDER, r.folder().map(Path::toString).orElse(""))
                 .putList(ReadSession.FILES, r.files().stream().map(Path::toString).toList())
                 .putString(ReadSession.FRONT, r.front().map(Path::toString).orElse(""))
+                .putList(ReadSession.RECENT, r.recent().stream().map(Path::toString).toList())
                 .save();
     }
 }

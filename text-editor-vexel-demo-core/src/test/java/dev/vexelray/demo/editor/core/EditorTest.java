@@ -19,6 +19,7 @@ import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recall;
 import dev.vexelray.demo.editor.core.Messages.Recalled;
+import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
@@ -85,7 +86,7 @@ class EditorTest {
                 Messages.CLOSE_TABS_TOPIC, Messages.RETITLE_TOPIC, Messages.CAPTION_TOPIC, Messages.STATUS_TOPIC,
                 Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
-                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC)) {
+                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -110,6 +111,11 @@ class EditorTest {
         List<T> out = sent.stream().filter(kind::isInstance).map(kind::cast).toList();
         sent.clear();
         return out;
+    }
+
+    /** What ReadSession would answer, with no recent folders and started in {@code dir}. */
+    private Recalled recalled(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> arguments) {
+        return new Recalled(folder, files, front, List.of(), arguments, dir);
     }
 
     private Path file(String name) {
@@ -186,7 +192,7 @@ class EditorTest {
 
     @Test
     void thePathBarCreatesANameThatIsNotThereYetInTheFolderShown() {
-        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(), dir));
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         sent.clear();
         tell(Messages.GO_TOPIC, new Go("new.txt"));
@@ -204,7 +210,7 @@ class EditorTest {
 
     @Test
     void aNameEndingInASeparatorIsAFolderToMake() {
-        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(), dir));
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         sent.clear();
         tell(Messages.GO_TOPIC, new Go("made" + java.io.File.separator));
@@ -383,7 +389,7 @@ class EditorTest {
         tell(WindowOpened.TOPIC, new WindowOpened(CloseRequested.MAIN));
         assertEquals(List.of(new Recall()), took(Recall.class));
 
-        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(a, b), Optional.of(a), List.of(), dir));
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(a, b), Optional.of(a), List.of()));
         assertEquals(List.of(new Find(dir, Why.RESTORE_FOLDER)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class), "only the first file");
@@ -393,15 +399,33 @@ class EditorTest {
         tell(Messages.FILE_READ_TOPIC, new FileRead(b, Why.RESTORE_FILE, true, "b", false, "", ""));
         assertEquals(1, sent.stream().filter(FrontTab.class::isInstance).count(),
                 "the remembered front comes back to the front");
-        assertEquals(List.of(new Remember(Optional.of(dir), List.of(a, b), Optional.of(a))), took(Remember.class));
+        assertEquals(List.of(new Remember(Optional.of(dir), List.of(a, b), Optional.of(a), List.of())),
+                took(Remember.class));
     }
 
     @Test
     void anUnchangedSessionIsNotRememberedTwice() {
-        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.empty(), List.of(), Optional.empty(), List.of(), dir));
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
         assertEquals(1, took(Remember.class).size());
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.GO, Kind.FOLDER));
         assertTrue(took(Remember.class).isEmpty(), "the same folder again is the same session");
+    }
+
+    /** The recent folders come back with the session, the view hears them, and leaving a folder adds it. */
+    @Test
+    void recentFoldersAreBroughtBackToldAndRemembered() {
+        Path old = dir.resolve("old");
+        Path other = dir.resolve("other");
+        tell(Messages.RECALLED_TOPIC,
+                new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(old), List.of(), dir));
+        assertEquals(List.of(new Recent(List.of(old))), took(Recent.class));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        assertTrue(took(Recent.class).isEmpty(), "the first folder shown leaves nothing new behind");
+
+        tell(Messages.FOUND_TOPIC, new Found(other, Why.GO, Kind.FOLDER));
+        assertEquals(List.of(new Recent(List.of(dir, old))), sent.stream().filter(Recent.class::isInstance).toList());
+        assertEquals(List.of(new Remember(Optional.of(other), List.of(), Optional.empty(), List.of(dir, old))),
+                took(Remember.class));
     }
 
     /**
@@ -412,8 +436,8 @@ class EditorTest {
     void aWindowOnFilesAloneIsPlainAndKeepsNoSession() {
         Path a = file("a.txt");
         Path b = file("b.txt");
-        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.of(dir), List.of(b), Optional.of(b), List.of(a), dir));
-        assertEquals(List.of(new Plain(), new Find(a, Why.ARGUMENT)), List.copyOf(sent),
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(b), Optional.of(b), List.of(a)));
+        assertEquals(List.of(new Recent(List.of()), new Plain(), new Find(a, Why.ARGUMENT)), List.copyOf(sent),
                 "plain first, then only the argument: no folder, no remembered files");
         sent.clear();
         tell(Messages.FOUND_TOPIC, new Found(a, Why.ARGUMENT, Kind.FILE));
@@ -427,7 +451,7 @@ class EditorTest {
     /** A folder among the arguments is shown, which is what brings a plain window's navigator back. */
     @Test
     void aFolderArgumentIsShown() {
-        tell(Messages.RECALLED_TOPIC, new Recalled(Optional.empty(), List.of(), Optional.empty(), List.of(dir), dir));
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of(dir)));
         assertEquals(List.of(new Find(dir, Why.ARGUMENT)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.ARGUMENT, Kind.FOLDER));
         assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));

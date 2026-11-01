@@ -6,6 +6,7 @@ import dev.vexelray.framework.api.Job;
 import dev.vexelray.framework.core.Launch;
 import dev.vexelray.gui.core.app.Settings;
 
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,9 +17,10 @@ import java.util.Optional;
  * Read back what the last session remembered, and what the command line named, on the offload lane.
  *
  * <p>A job because the settings store is a file, and the {@link Editor}'s steps make no effects. It is also where a
- * remembered string becomes a path: one that is not a path any more is left out, because the person moved it and an
- * editor should not complain about it, and every path is made absolute here, so the editor never asks where the
- * application started. That is in the reply too ({@code started}), for a session that showed no folder.
+ * remembered string becomes a path: one that is not a path any more is left out, as is a recent folder that has gone,
+ * because the person moved it and an editor should not complain about it, and every path is made absolute here, so
+ * the editor never asks where the application started. That is in the reply too ({@code started}), for a session that
+ * showed no folder.
  */
 @Job
 public final class ReadSession {
@@ -26,6 +28,7 @@ public final class ReadSession {
     static final String FOLDER = "session.folder";
     static final String FILES = "session.files";
     static final String FRONT = "session.front";
+    static final String RECENT = "session.recent";
 
     private final Settings settings;
     private final Launch launch;
@@ -37,7 +40,13 @@ public final class ReadSession {
 
     public Recalled run(Recall r) {
         return new Recalled(path(settings.getString(FOLDER, "")), paths(settings.getList(FILES)),
-                path(settings.getString(FRONT, "")), paths(launch.rest()), Path.of("").toAbsolutePath());
+                path(settings.getString(FRONT, "")), folders(paths(settings.getList(RECENT))), paths(launch.rest()),
+                Path.of("").toAbsolutePath());
+    }
+
+    /** Those of {@code paths} that are still folders: a recent folder that has gone is not offered. */
+    private static List<Path> folders(List<Path> paths) {
+        return paths.stream().filter(Files::isDirectory).toList();
     }
 
     private static List<Path> paths(List<String> texts) {

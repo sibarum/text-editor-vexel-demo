@@ -19,6 +19,7 @@ import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Plain;
+import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
@@ -26,7 +27,11 @@ import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.input.ClaimScope;
 import dev.vexelray.gui.core.input.Shortcut;
+import dev.vexelray.gui.widget.Breadcrumb;
+import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
@@ -132,6 +137,7 @@ final class View {
         chord(Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT), Command.FOCUS_TREE);
         chord(Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT), Command.TOGGLE_FORMATTED);
         chord(Shortcut.of(Key.B, Modifier.CONTROL), Command.TOGGLE_NAVIGATOR);
+        chord(Shortcut.of(Key.O, Modifier.CONTROL), Command.TOGGLE_OPEN);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
         chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
@@ -166,6 +172,12 @@ final class View {
     @Subscribe
     public void plain(Plain m) {
         ui.showNavigator(false);
+    }
+
+    /** The folders shown before, for Open's Recent. */
+    @Subscribe
+    public void recent(Recent m) {
+        nav.picker().recent(m.folders());
     }
 
     @Subscribe
@@ -231,6 +243,8 @@ final class View {
     public void listed(Listed m) {
         if (m.tree().equals(nav.treeAddress())) {
             children.send(nav.children(m));
+        } else if (m.tree().equals(nav.picker().treeAddress())) {
+            children.send(nav.picker().children(m));
         }
     }
 
@@ -335,6 +349,16 @@ final class View {
     /** The tree wants a level: ask {@code ListFolder}, or answer an empty top when no folder is shown yet. */
     @Subscribe
     public void treeWanted(TreeView.ChildrenWanted m) {
+        if (m.tree().equals(nav.picker().treeAddress())) {
+            // Open's top is the one folder it starts at, known already; the levels under it are a listing.
+            Listing wanted = nav.picker().wanted(m.parent());
+            if (wanted != null) {
+                listing.send(wanted);
+            } else {
+                children.send(nav.picker().top());
+            }
+            return;
+        }
         if (!m.tree().equals(nav.treeAddress())) {
             return;
         }
@@ -354,17 +378,61 @@ final class View {
         }
     }
 
-    /** Enter on a folder opens it in place. */
+    /** Enter on a folder opens it in place; in Open, it picks it. */
     @Subscribe
     public void treeActivated(TreeView.Activated m) {
         if (m.tree().equals(nav.treeAddress()) && m.item() instanceof Path p && nav.isFolder(p)) {
             nav.expand(p);
+        } else if (m.tree().equals(nav.picker().treeAddress()) && m.item() instanceof Path p) {
+            pick(p);
+        }
+    }
+
+    /** A click on a folder in Open picks it. In the files a click is a selection, heard as one. */
+    @Subscribe
+    public void treeClicked(TreeView.Clicked m) {
+        if (m.tree().equals(nav.picker().treeAddress()) && m.item() instanceof Path p) {
+            pick(p);
+        }
+    }
+
+    /** The chip pressed or released: Open, or the files. */
+    @Subscribe
+    public void chipToggled(Button.Toggled m) {
+        if (m.button().equals(nav.chipAddress())) {
+            open(m.pressed());
+        }
+    }
+
+    /** A recent folder pressed in Open: picked. */
+    @Subscribe
+    public void buttonPressed(Button.Pressed m) {
+        Path p = nav.picker().recentAt(m.button());
+        if (p != null) {
+            pick(p);
+        }
+    }
+
+    /** One of Open's way up: its tree starts there instead. */
+    @Subscribe
+    public void ancestry(Breadcrumb.Navigated m) {
+        if (m.breadcrumb().equals(nav.picker().ancestryAddress()) && m.item() instanceof Path p) {
+            nav.widen(p);
+            claimEscape();
         }
     }
 
     /** One of a row's menu actions. */
     @Subscribe
     public void treeChosen(TreeView.Chosen m) {
+        if (m.at().equals(nav.picker().treeAddress()) && m.item() instanceof Path p) {
+            if (m.action().equals(Navigator.SHOW)) {
+                pick(p);
+            } else if (m.action().equals(Navigator.COPY_PATH)) {
+                gui.clipboard().set(p.toString());
+            }
+            return;
+        }
         if (!m.at().equals(nav.treeAddress()) || !(m.item() instanceof Path p)) {
             return;
         }
@@ -452,11 +520,46 @@ final class View {
     void toggleNavigator() {
         boolean show = !ui.navigatorShown();
         ui.showNavigator(show);
-        if (show) {
+        if (show && nav.folder() == null) {
+            open(true);   // no folder to list: what there is to do here is pick one
+        } else if (show) {
             nav.focusTree();
         } else if (ws.front() != null) {
             gui.focus(ws.front().keyboard());
         }
+    }
+
+    /** Ctrl+O: Open, or back to the files. */
+    void toggleOpen() {
+        open(!nav.opened() || !ui.navigatorShown());
+    }
+
+    /**
+     * Put Open up, bringing the navigator back if it was hidden, or take it away and give the keyboard to the files.
+     * Showing a folder takes it away too, without this: the navigator ends Open itself when it is shown one.
+     */
+    void open(boolean value) {
+        if (value) {
+            ui.showNavigator(true);
+            nav.open(true);
+            claimEscape();
+        } else if (nav.opened()) {
+            nav.open(false);
+            nav.focusTree();
+        }
+    }
+
+    /** Esc in Open's tree goes back to the files. Claimed on each tree, since Open builds one each time it starts. */
+    private void claimEscape() {
+        Node picker = nav.picker().treeNode();
+        if (picker != null) {
+            gui.claim(picker, Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents, new Intent(Command.LEAVE_OPEN));
+        }
+    }
+
+    /** A folder picked in Open: the editor shows it, as if it were typed in the path bar, and that ends Open. */
+    private void pick(Path folder) {
+        go.send(new Go(folder.toString()));
     }
 
     /** The path bar and the tree are the navigator's, so asking for either brings it back if it was hidden. */

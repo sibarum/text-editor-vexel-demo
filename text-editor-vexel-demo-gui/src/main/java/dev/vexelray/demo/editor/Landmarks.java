@@ -28,6 +28,14 @@ final class Landmarks {
     /** The navigator's tree. */
     static final String TREE = "navigator";
 
+    /** The chip saying the folder shown, which switches the navigator to Open and back. */
+    static final String FOLDER = "folder";
+
+    /** Open's recent folders, its way up, and its tree of folders. */
+    static final String RECENT = "recent";
+    static final String ANCESTRY = "ancestry";
+    static final String PICKER = "picker";
+
     /** The status line, and its four slots. */
     static final String STATUS = "status";
     static final String STATUS_FILE = "status.file";

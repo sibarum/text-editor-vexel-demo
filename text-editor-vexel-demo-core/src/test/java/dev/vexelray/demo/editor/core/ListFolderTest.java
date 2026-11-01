@@ -30,10 +30,17 @@ class ListFolderTest {
         Files.createFile(dir.resolve("A.txt"));
         Files.createDirectory(dir.resolve("zeta"));
         Files.createDirectory(dir.resolve("Alpha"));
-        Listed listed = new ListFolder().run(new Listing("tree", dir, true));
+        Listed listed = new ListFolder().run(new Listing("tree", dir, true, false));
         assertEquals(List.of("Alpha", "zeta", "A.txt", "b.txt"), names(listed.items()));
         assertEquals(List.of(true, true, false, false), listed.items().stream().map(Item::folder).toList());
         assertEquals("tree", listed.tree(), "the answer says which tree asked");
+    }
+
+    @Test
+    void opensTreeIsListedFoldersOnly() throws IOException {
+        Files.createFile(dir.resolve("a.txt"));
+        Files.createDirectory(dir.resolve("sub"));
+        assertEquals(List.of("sub"), names(new ListFolder().run(new Listing("picker", dir, false, true)).items()));
     }
 
     @Test

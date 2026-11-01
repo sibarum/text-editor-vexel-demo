@@ -35,7 +35,11 @@ public final class ListFolder {
             .thenComparing(i -> i.name().toLowerCase(Locale.ROOT));
 
     public Listed run(Listing l) {
-        return new Listed(l.tree(), l.dir(), l.roots(), list(l.dir()));
+        List<Item> items = list(l.dir());
+        if (l.foldersOnly()) {
+            items = items.stream().filter(Item::folder).toList();
+        }
+        return new Listed(l.tree(), l.dir(), l.roots(), items);
     }
 
     static List<Item> list(Path dir) {

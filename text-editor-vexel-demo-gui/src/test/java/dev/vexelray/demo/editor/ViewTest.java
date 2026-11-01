@@ -13,6 +13,7 @@ import dev.vexelray.framework.core.Picked;
 import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
+import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TextField;
@@ -245,6 +246,55 @@ class ViewTest {
         assertFalse(md.showingFormatted());
     }
 
+    /**
+     * Ctrl+O puts Open in place of the files, starting at the folder above the one shown with that one selected among
+     * its siblings; a click on another shows it and ends Open, and Esc's intent ends it without picking.
+     */
+    @Test
+    void openShowsTheFoldersSiblingsAndAClickPicksOne() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Path b = Files.createDirectory(dir.resolve("b")).toAbsolutePath().normalize();
+        Files.writeString(dir.resolve("note.txt"), "not a folder");
+        Navigator nav = wiring.ui().navigator();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a shown", () -> a.equals(nav.folder()));
+        assertEquals("a", nav.chipLabel());
+
+        tell(Intent.Command.TOGGLE_OPEN);
+        Picker picker = nav.picker();
+        eventually("Open, with a selected among its siblings", () -> nav.opened() && a.equals(picker.selected()));
+        eventually("b beside it", () -> picker.hasRow(b));
+        assertEquals(dir.toAbsolutePath().normalize(), picker.topFolder());
+        assertFalse(picker.hasRow(dir.resolve("note.txt").toAbsolutePath().normalize()), "folders only");
+
+        tell(Intent.Command.LEAVE_OPEN);
+        eventually("Esc to go back to the files", () -> !nav.opened());
+        assertEquals(a, nav.folder(), "nothing was picked");
+
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("Open again", () -> nav.opened() && picker.hasRow(b));
+        shell.bus().publish(TreeView.CLICKED, new TreeView.Clicked(picker.treeAddress(), b));
+        eventually("b shown, and Open over", () -> b.equals(nav.folder()) && !nav.opened());
+    }
+
+    /** The folder left is offered under Recent, and pressing it goes back there. */
+    @Test
+    void aFolderLeftIsRecentAndPressingItGoesBack() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Path b = Files.createDirectory(dir.resolve("b")).toAbsolutePath().normalize();
+        Navigator nav = wiring.ui().navigator();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a shown", () -> a.equals(nav.folder()));
+        shell.bus().publish(Messages.GO_TOPIC, new Go(b.toString()));
+        eventually("a recent", () -> nav.picker().recentLabels().equals(List.of("a")));
+
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("Open", nav::opened);
+        shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.picker().recentAddress(0)));
+        eventually("back in a", () -> a.equals(nav.folder()) && !nav.opened());
+        eventually("b recent now", () -> nav.picker().recentLabels().equals(List.of("b")));
+    }
+
     /** Plain puts the navigator out of the way; Ctrl+B brings it back, and so does a folder being shown. */
     @Test
     void aPlainWindowHidesTheNavigatorUntilAskedOrAFolderIsShown() throws Exception {
@@ -253,6 +303,7 @@ class ViewTest {
         eventually("the navigator to go", () -> !ui.navigatorShown());
         tell(Intent.Command.TOGGLE_NAVIGATOR);
         eventually("Ctrl+B to bring it back", ui::navigatorShown);
+        assertTrue(ui.navigator().opened(), "with no folder to list, it comes back as Open");
 
         shell.bus().publish(Messages.PLAIN_TOPIC, new Messages.Plain());
         eventually("the navigator to go", () -> !ui.navigatorShown());

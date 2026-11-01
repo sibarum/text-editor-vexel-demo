@@ -98,6 +98,15 @@ public final class Messages {
     public record Plain() {
     }
 
+    /** The folders shown before the one shown now, newest first: what the navigator's Open offers as Recent. */
+    public static final Topic<Recent> RECENT_TOPIC = Topic.edge(Recent.class);
+
+    public record Recent(List<Path> folders) {
+        public Recent {
+            folders = List.copyOf(folders);
+        }
+    }
+
     /** Point the navigator at a folder, or list it again. */
     public static final Topic<ShowFolder> SHOW_FOLDER_TOPIC = Topic.edge(ShowFolder.class);
 
@@ -252,27 +261,30 @@ public final class Messages {
 
     /**
      * What there is to bring back, every path absolute and normalised: the folder shown, the files open in tab order,
-     * the one in front, the command line's paths, and the folder the application started in, for when there is none.
+     * the one in front, the recent folders that are still there, the command line's paths, and the folder the
+     * application started in, for when there is none.
      */
     public static final Topic<Recalled> RECALLED_TOPIC = Topic.edge(Recalled.class);
 
-    public record Recalled(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> arguments,
-                           Path started) {
+    public record Recalled(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> recent,
+                           List<Path> arguments, Path started) {
         public Recalled {
             files = List.copyOf(files);
+            recent = List.copyOf(recent);
             arguments = List.copyOf(arguments);
         }
     }
 
     /**
-     * Keep the session for next time ({@link WriteSession}): the folder shown, the files open, the one in front. A
-     * value, so the editor tells whether it changed with {@code equals}.
+     * Keep the session for next time ({@link WriteSession}): the folder shown, the files open, the one in front, the
+     * folders shown before. A value, so the editor tells whether it changed with {@code equals}.
      */
     public static final Topic<Remember> REMEMBER_TOPIC = Topic.edge(Remember.class);
 
-    public record Remember(Optional<Path> folder, List<Path> files, Optional<Path> front) {
+    public record Remember(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> recent) {
         public Remember {
             files = List.copyOf(files);
+            recent = List.copyOf(recent);
         }
     }
 
@@ -281,8 +293,11 @@ public final class Messages {
     /** List one level of the navigator's tree ({@link ListFolder}): the folder shown's, or a folder in it. */
     public static final Topic<Listing> LISTING_TOPIC = Topic.edge(Listing.class);
 
-    /** {@code roots}: the level is the tree's top, the folder shown, rather than a folder opened in it. */
-    public record Listing(String tree, Path dir, boolean roots) {
+    /**
+     * {@code roots}: the level is the tree's top, the folder shown, rather than a folder opened in it.
+     * {@code foldersOnly}: Open's tree, which lists the folders a folder can be picked from and no files.
+     */
+    public record Listing(String tree, Path dir, boolean roots, boolean foldersOnly) {
     }
 
     /** One entry of a level: where it is, what its row says, and whether it opens. */

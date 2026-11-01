@@ -5,6 +5,7 @@ import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
 import dev.vexelray.gui.core.style.Relief;
+import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.style.Shading;
 import dev.vexelray.gui.core.style.Theme;
 
@@ -73,6 +74,27 @@ final class Look {
     static final Theme THEME = Theme.of(PALETTE, Shading.ON_DARK, Relief.STANDARD, true, false);
 
     // ---------------------------------------------------------------- roles of our own
+
+    /**
+     * The navigator in Open: the panel's level, steeped in the accent's hue, so picking a folder reads as somewhere
+     * else at a glance. Carried from the 0.1 editor.
+     */
+    static final Role PICKING = p -> {
+        Oklab level = Oklab.of(p.surface(2));
+        return Oklab.polar(level.l(), 0.030, p.accent().hueDegrees()).toColor();
+    };
+
+    /** The hairline round the navigator in Open: the accent itself. */
+    static final Role PICKING_RIM = p -> p.accent().toColor();
+
+    /**
+     * A folder under the pointer in Open: well above the card and strongly in the accent's hue, where a hovered row
+     * elsewhere is a quiet neutral. A click there changes the whole window, and the row says so by how it lights.
+     */
+    static final Role PICK_HOVER = p -> {
+        Oklab level = Oklab.of(p.surface(5));
+        return Oklab.polar(level.l(), 0.070, p.accent().hueDegrees()).toColor();
+    };
 
     /**
      * The code colours: a TextMate scope prefix and its colour, the first rule naming a token's most specific scope
