@@ -19,15 +19,20 @@ import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
+import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.NewScratch;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Picture;
 import dev.vexelray.demo.editor.core.Messages.Pictured;
 import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Recent;
+import dev.vexelray.demo.editor.core.Messages.Relocate;
+import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
+import dev.vexelray.demo.editor.core.Messages.ScratchFolderMade;
+import dev.vexelray.demo.editor.core.Messages.ScratchFolderWanted;
 import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ScratchesFound;
 import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
@@ -37,6 +42,8 @@ import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.NodeEvent;
+import dev.vexelray.gui.core.drop.DropEffect;
+import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.input.ClaimScope;
 import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.input.Shortcut;
@@ -114,6 +121,8 @@ final class View {
     private final Sender<Add> add;
     private final Sender<NewScratch> newScratch;
     private final Sender<ScratchesWanted> scratchesWanted;
+    private final Sender<Relocate> relocate;
+    private final Sender<ScratchFolderWanted> scratchFolderWanted;
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
@@ -125,10 +134,13 @@ final class View {
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
          Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
-         Sender<ScratchesWanted> scratchesWanted) {
+         Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
+         Sender<ScratchFolderWanted> scratchFolderWanted) {
         this.gui = gui;
         this.newScratch = newScratch;
         this.scratchesWanted = scratchesWanted;
+        this.relocate = relocate;
+        this.scratchFolderWanted = scratchFolderWanted;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
@@ -146,6 +158,8 @@ final class View {
         this.children = children;
         this.intents = intents;
         shortcuts();
+        gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
+                new Intent(Command.LEAVE_RENAME));
         for (int i = 0; i < Picker.RECENT; i++) {
             int slot = i;
             gui.hear(nav.picker().recentCell(i), NodeEvent.STATE, state -> recentHovered(slot, state));
@@ -289,6 +303,59 @@ final class View {
         }
     }
 
+    /**
+     * A scratch, or a folder of them, moved: the name field goes if it was for that, the scratches' tree lists it where
+     * it went and selects it, and a move the person made goes in the window's history. One that did not land, which the
+     * editor says why, leaves a name field up to be changed.
+     */
+    @Subscribe
+    public void relocated(Relocated m) {
+        boolean renaming = m.from().equals(nav.renaming());
+        if (!m.problem().isEmpty()) {
+            if (renaming) {
+                nav.refuseRename();
+            }
+            return;
+        }
+        if (renaming) {
+            nav.endRename();
+        }
+        if (m.undoable()) {
+            History history = gui.history();
+            if (history != null) {
+                history.record(new Moving(m.to(), m.from(), relocate));
+            }
+        }
+        nav.scratchMade(m.to());
+    }
+
+    /** A new folder among the scratches: listed, selected, and named at once. */
+    @Subscribe
+    public void scratchFolderMade(ScratchFolderMade m) {
+        if (!m.problem().isEmpty()) {
+            ui.status("Could not make a folder: " + m.problem(), true);
+            return;
+        }
+        nav.scratchMade(m.path());
+        nav.beginRename(m.path());
+    }
+
+    /** A tab's file moved: the document follows it, and takes the colours its new name says. */
+    @Subscribe
+    public void moved(Moved m) {
+        Buffer b = ws.byId(m.id());
+        if (b == null) {
+            return;
+        }
+        Mark wanted = b.moved(m.path());
+        if (wanted != null) {
+            mark.send(wanted);
+        }
+        if (b.id == front) {
+            ui.language(b.language());
+        }
+    }
+
     /** Whether there is a scratch: Open offers the scratches' folder once there is. */
     @Subscribe
     public void scratchesFound(ScratchesFound m) {
@@ -397,6 +464,19 @@ final class View {
      */
     @Subscribe
     public void fieldSubmitted(TextField.Submitted m) {
+        if (m.field().equals(nav.renameAddress())) {
+            Path from = nav.renaming();
+            Path to = nav.renamedTo(m.text());
+            if (from == null) {
+                return;
+            }
+            if (to == null) {
+                nav.refuseRename();
+            } else {
+                relocate.send(new Relocate(from, to, true));
+            }
+            return;
+        }
         if (m.field().equals(nav.pathAddress())) {
             Made what = nav.naming();
             Path from = nav.namingFrom();
@@ -527,9 +607,14 @@ final class View {
             return;
         }
         if (m.at().equals(nav.scratchAddress()) && m.item() instanceof Path p) {
+            // A file's row makes things beside it, in the folder it is in.
+            Path in = nav.isFolder(p) ? p : p.getParent();
             if (m.action().equals(Navigator.NEW_SCRATCH)) {
-                // A file's row makes one beside it, in the folder it is in.
-                newScratch.send(new NewScratch(Optional.of(nav.isFolder(p) ? p : p.getParent())));
+                newScratch.send(new NewScratch(Optional.of(in)));
+            } else if (m.action().equals(Navigator.NEW_FOLDER)) {
+                scratchFolderWanted.send(new ScratchFolderWanted(Optional.of(in)));
+            } else if (m.action().equals(Navigator.RENAME)) {
+                nav.beginRename(p);
             } else if (m.action().equals(Navigator.COPY_PATH)) {
                 gui.clipboard().set(p.toString());
             }
@@ -565,6 +650,20 @@ final class View {
             Path beside = p.getParent() != null ? p.getParent() : p;
             nav.startNew(beside, Made.LINK, Picker.label(p) + "-link", p);
             ui.status("Name the link to " + Picker.label(p) + ", then Enter", false);
+        }
+    }
+
+    /**
+     * A row dropped or pasted in the scratches' tree: moved there, if that is a move. The tree has drawn nothing for it;
+     * the listing after the move does.
+     */
+    @Subscribe
+    public void treePlaced(TreeView.Placed m) {
+        if (m.at().equals(nav.scratchAddress()) && m.item() instanceof Path p && m.effect() == DropEffect.MOVE) {
+            Path to = nav.placedTo(p, m.where());
+            if (to != null) {
+                relocate.send(new Relocate(p, to, true));
+            }
         }
     }
 
@@ -650,6 +749,11 @@ final class View {
             nav.focusTree();
         }
         picture();   // Open may have been what the scratches replaced
+    }
+
+    /** Escape in the name field: no rename, and the keyboard back in the scratches' tree. */
+    void leaveRename() {
+        nav.endRename();
     }
 
     void cycle(int delta) {

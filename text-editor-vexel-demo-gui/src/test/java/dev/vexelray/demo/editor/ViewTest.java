@@ -21,8 +21,11 @@ import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
 import dev.vexelray.gui.core.Cuts;
+import dev.vexelray.gui.core.drop.DropEffect;
+import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Modal;
+import dev.vexelray.gui.widget.Placement;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
@@ -521,6 +524,87 @@ class ViewTest {
         shell.bus().publish(Messages.GO_TOPIC, new Go(b.toString()));
         eventually("b, and its files", () -> b.equals(nav.folder()) && nav.place() == Navigator.Place.FILES);
         assertEquals("b", nav.chipLabel());
+    }
+
+    /**
+     * A scratch dropped onto a folder in the scratches' tree is moved there, and its tab follows it, unsaved work and
+     * all; the window's history then puts it back, and forward again.
+     */
+    @Test
+    void aScratchDroppedOnAFolderMovesThereWithItsTabAndUndoPutsItBack() throws Exception {
+        History history = new History();
+        shell.gui().history(history);
+        Path note = Files.writeString(Files.createDirectories(scratches()).resolve("note.md"), "n");
+        Path box = Files.createDirectories(scratches().resolve("box"));
+        Buffer b = opened(note);
+        b.field.insert("more ");
+        Navigator nav = wiring.ui().navigator();
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches, listed", () -> nav.hasScratchRow(note) && nav.hasScratchRow(box));
+
+        Path moved = box.resolve("note.md");
+        shell.bus().publish(TreeView.PLACED, new TreeView.Placed(nav.scratchAddress(), note, Placement.into(box),
+                DropEffect.MOVE));
+        eventually("moved, and the tab with it", () -> Files.isRegularFile(moved) && moved.equals(b.path));
+        assertFalse(Files.exists(note));
+        assertTrue(b.dirty(), "the unsaved work came too");
+        eventually("its row selected where it went", () -> moved.equals(nav.scratchSelected()));
+        eventually("in the history", history::canUndo);
+
+        history.undo();
+        eventually("back, and the tab with it", () -> Files.isRegularFile(note) && note.equals(b.path));
+        history.redo();
+        eventually("forward again", () -> Files.isRegularFile(moved) && moved.equals(b.path));
+        assertTrue(history.canUndo() && !history.canRedo(), "an undo or redo is no new entry");
+    }
+
+    /**
+     * Rename… puts the name field above the tree; Enter renames, and the tab takes the new name's language. A taken
+     * name leaves the field up, and Escape puts it away renaming nothing.
+     */
+    @Test
+    void renameNamesAScratchAndATakenNameIsRefused() throws Exception {
+        Path note = Files.writeString(Files.createDirectories(scratches()).resolve("note.md"), "class A {}");
+        Path other = Files.writeString(scratches().resolve("other.txt"), "o");
+        Buffer b = opened(note);
+        Navigator nav = wiring.ui().navigator();
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches, listed", () -> nav.hasScratchRow(note));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.scratchAddress(), Navigator.RENAME, note));
+        eventually("the name field, for it", () -> note.equals(nav.renaming()));
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.renameAddress(), "other.txt"));
+        eventually("refused, and said", () -> said.stream().anyMatch(s -> s instanceof Status st && st.alert()
+                && st.message().equals("Could not rename note.md: there is already a other.txt there")));
+        assertEquals(note, nav.renaming(), "the field stays up to be changed");
+        assertEquals("o", Files.readString(other));
+
+        Path java = scratches().resolve("A.java");
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.renameAddress(), "A.java"));
+        eventually("renamed, and the tab with it", () -> java.equals(b.path) && nav.renaming() == null);
+        assertEquals("Java", b.language());
+        assertTrue(said.contains(new Status("Renamed A.java", false)));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.scratchAddress(), Navigator.RENAME, java));
+        eventually("the name field again", () -> java.equals(nav.renaming()));
+        tell(Intent.Command.LEAVE_RENAME);
+        eventually("put away", () -> nav.renaming() == null);
+        assertTrue(Files.isRegularFile(java));
+    }
+
+    /** New folder here makes one in the row's folder, and opens the name field on it. */
+    @Test
+    void newFolderHereMakesOneAndNamesIt() throws Exception {
+        Path box = Files.createDirectories(scratches().resolve("box"));
+        Navigator nav = wiring.ui().navigator();
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches, listed", () -> nav.hasScratchRow(box));
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.scratchAddress(), Navigator.NEW_FOLDER, box));
+        Path made = box.resolve("Folder");
+        eventually("made, and being named", () -> Files.isDirectory(made) && made.equals(nav.renaming()));
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.renameAddress(), "ideas"));
+        eventually("named", () -> Files.isDirectory(box.resolve("ideas")) && nav.renaming() == null);
     }
 
     /** Plain puts the navigator out of the way; Ctrl+B brings it back, and so does a folder being shown. */

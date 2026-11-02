@@ -15,7 +15,7 @@ import java.util.Optional;
  * session, and changes it only by running its own declared steps. The view, in the {@code -gui} module, shows; it
  * owns the widgets. The jobs ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
  * {@link ReadSession}, {@link WriteSession}, {@link ListFolder}, {@link MarkText}, {@link SurveyFolder},
- * {@link MakeScratch}, {@link DropScratch}, {@link FindScratches}) touch the
+ * {@link MakeScratch}, {@link DropScratch}, {@link FindScratches}, {@link MoveScratch}, {@link MakeScratchFolder}) touch the
  * disk or do slow work, on the job lane. Each sends a record on a topic and the others hear it on their own lane, so no state is shared
  * and nothing needs a lock.
  *
@@ -107,6 +107,22 @@ public final class Messages {
     public record NewScratch(Optional<Path> in) {
     }
 
+    /**
+     * Move a scratch, or a folder of them, from {@code from} to {@code to} ({@link MoveScratch}): dragged, cut and
+     * pasted, or renamed in the scratches' tree, or an undo or redo of one of those. {@code undoable}: a move the person
+     * made, which the window's history takes in once it has landed; an undo or redo is already there.
+     */
+    public static final Topic<Relocate> RELOCATE_TOPIC = Topic.edge(Relocate.class);
+
+    public record Relocate(Path from, Path to, boolean undoable) {
+    }
+
+    /** A new folder among the scratches ({@link MakeScratchFolder}): in {@code in}, or in their own folder. */
+    public static final Topic<ScratchFolderWanted> SCRATCH_FOLDER_WANTED_TOPIC = Topic.edge(ScratchFolderWanted.class);
+
+    public record ScratchFolderWanted(Optional<Path> in) {
+    }
+
     // ------------------------------------------------------------------ the editor tells the view
 
     /**
@@ -164,6 +180,15 @@ public final class Messages {
     public static final Topic<Retitle> RETITLE_TOPIC = Topic.state(Retitle.class, Retitle::id);
 
     public record Retitle(long id, String title) {
+    }
+
+    /**
+     * Tab {@code id}'s file is at {@code path} now, moved or renamed among the scratches: the document follows it,
+     * unsaved work and all, and takes the language its new name says.
+     */
+    public static final Topic<Moved> MOVED_TOPIC = Topic.edge(Moved.class);
+
+    public record Moved(long id, Path path) {
     }
 
     /** The front tab's title, for the title bar and the status line; empty when nothing is open. */
@@ -299,6 +324,21 @@ public final class Messages {
     public static final Topic<ScratchMade> SCRATCH_MADE_TOPIC = Topic.edge(ScratchMade.class);
 
     public record ScratchMade(Path path, boolean crlf, String problem) {
+    }
+
+    /**
+     * What a {@link Relocate} did: {@code from} is {@code to} now, or why not ({@code problem}). The editor moves the
+     * tabs that were on it; the view lists the scratches again and puts a move the person made in the history.
+     */
+    public static final Topic<Relocated> RELOCATED_TOPIC = Topic.edge(Relocated.class);
+
+    public record Relocated(Path from, Path to, boolean undoable, String problem) {
+    }
+
+    /** What {@link ScratchFolderWanted} made, or why not ({@code problem}). */
+    public static final Topic<ScratchFolderMade> SCRATCH_FOLDER_MADE_TOPIC = Topic.edge(ScratchFolderMade.class);
+
+    public record ScratchFolderMade(Path path, String problem) {
     }
 
     /** A scratch this run made, closed with nothing ever written to it: it goes again ({@link DropScratch}). */

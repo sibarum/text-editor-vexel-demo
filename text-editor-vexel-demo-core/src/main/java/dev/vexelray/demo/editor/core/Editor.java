@@ -18,12 +18,14 @@ import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
 import dev.vexelray.demo.editor.core.Messages.Made;
+import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Recall;
 import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Recalled;
+import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
@@ -93,7 +95,7 @@ import java.util.Set;
  *
  * <p>The disk is the jobs' ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
  * {@link ReadSession}, {@link WriteSession}, {@link DropScratch}): a step sends a request and a later step acts on the
- * reply, as it acts on {@link MakeScratch}'s, which the view asked for. A slow disk is
+ * reply, as it acts on {@link MakeScratch}'s and {@link MoveScratch}'s, which the view asked for. A slow disk is
  * a slow answer, never a stalled lane. Jobs are not in order with each other, so the restored session asks for one
  * file at a time and asks for the next when the last is answered.
  *
@@ -108,9 +110,9 @@ import java.util.Set;
  */
 @Component
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
-        Created.class, ScratchMade.class, Fronted.class, Edited.class, Save.class, Written.class, Answer.class,
-        Close.class, CloseRequested.class})
-@Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class,
+        Created.class, ScratchMade.class, Relocated.class, Fronted.class, Edited.class, Save.class, Written.class,
+        Answer.class, Close.class, CloseRequested.class})
+@Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
         Dropping.class})
@@ -327,6 +329,7 @@ public final class Editor {
         Step<State, Found> found = b.step("found", Editor::found);
         Step<State, Created> created = b.step("created", Editor::created);
         Step<State, ScratchMade> scratchMade = b.step("scratchMade", Editor::scratchMade);
+        Step<State, Relocated> relocated = b.step("relocated", Editor::relocated);
         Step<State, Fronted> fronted = b.step("fronted", Editor::fronted);
         Step<State, Edited> edited = b.step("edited", Editor::edited);
         Step<State, Save> save = b.step("save", Editor::save);
@@ -350,6 +353,7 @@ public final class Editor {
                 .on(Messages.FOUND_TOPIC, found)
                 .on(Messages.CREATED_TOPIC, created)
                 .on(Messages.SCRATCH_MADE_TOPIC, scratchMade)
+                .on(Messages.RELOCATED_TOPIC, relocated)
                 .on(Messages.FRONTED_TOPIC, fronted)
                 .on(Messages.EDITED_TOPIC, edited)
                 .on(Messages.SAVE_TOPIC, save)
@@ -623,6 +627,46 @@ public final class Editor {
         State next = addTab(s.fresh(m.path(), true), m.path(), "", m.crlf(), true, out);
         say(out, "New scratch " + m.path().getFileName());
         return next;
+    }
+
+    /**
+     * A scratch, or a folder of them, moved or was renamed: every tab open on it, or on anything under it, follows it
+     * there, unsaved work and all, and the folder shown and the recent ones do too. A scratch filed away or given a name
+     * is one somebody means to keep, so closed empty it stays. The folder shown is listed again when the move was in
+     * it, as when the scratches are the folder shown.
+     */
+    private static State relocated(State s, Relocated r, Out out) {
+        Path from = r.from().toAbsolutePath().normalize();
+        Path to = r.to().toAbsolutePath().normalize();
+        boolean renamed = from.getParent().equals(to.getParent());
+        if (!r.problem().isEmpty()) {
+            refuse(out, "Could not " + (renamed ? "rename " : "move ") + from.getFileName() + ": " + r.problem());
+            return s;
+        }
+        Doc before = s.doc();
+        Doc after = before.relocated(from, to);
+        State next = s.withDoc(after);
+        for (Doc.Entry e : before.tabs()) {
+            if (e.path().startsWith(from)) {
+                out.send(Messages.MOVED_TOPIC, new Moved(e.id(), Doc.moved(e.path(), from, to)));
+                out.send(Messages.RETITLE_TOPIC, new Retitle(e.id(), after.entry(e.id()).title()));
+            }
+        }
+        for (Path p : s.fresh()) {
+            if (p.startsWith(from)) {
+                next = next.fresh(p, false);
+            }
+        }
+        Path folder = after.folder();
+        if (folder != null && (!folder.equals(before.folder()) || from.startsWith(folder) || to.startsWith(folder))) {
+            out.send(Messages.SHOW_FOLDER_TOPIC, new ShowFolder(folder));
+        }
+        if (!after.recent().equals(before.recent())) {
+            out.send(Messages.RECENT_TOPIC, new Recent(after.recent()));
+        }
+        caption(next, out);
+        say(out, (renamed ? "Renamed " : "Moved ") + to.getFileName());
+        return remember(next, out);
     }
 
     private static State addTab(State s, Path path, String text, boolean crlf, boolean focus, Out out) {

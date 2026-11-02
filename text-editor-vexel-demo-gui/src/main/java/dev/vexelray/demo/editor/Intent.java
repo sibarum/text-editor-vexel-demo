@@ -75,6 +75,12 @@ record Intent(Command command) {
                 view.toggleScratches();
             }
         },
+        LEAVE_RENAME {
+            @Override
+            void on(View view) {
+                view.leaveRename();
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

@@ -43,6 +43,9 @@ final class Landmarks {
     static final String SCRATCHES = "scratches";
     static final String NEW_SCRATCH = "new-scratch";
 
+    /** The name field Rename… puts above the scratches' tree. */
+    static final String RENAME_SCRATCH = "rename-scratch";
+
     /** Open's picture of a folder, where the editor stands, and its list of the folder's files. */
     static final String PREVIEW = "preview";
     static final String CONTENTS = "preview.files";

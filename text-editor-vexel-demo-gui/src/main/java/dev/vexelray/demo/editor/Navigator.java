@@ -14,7 +14,9 @@ import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
+import dev.vexelray.gui.core.drop.DropEffect;
 import dev.vexelray.gui.widget.MenuAction;
+import dev.vexelray.gui.widget.Placement;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
 
@@ -73,6 +75,11 @@ import java.util.Set;
  * files and Open, and it is edged in the accent as Open is, but not steeped in it, since the editor is still beside
  * it and still the thing being worked in. Above the tree is New scratch, and each row's menu has New scratch here.
  * A scratch made while it is up is listed and selected once its listing lands ({@link #scratchMade}).
+ *
+ * <p>The scratches are organised in their tree: a row dragged onto a folder, or between the rows of one, or cut and
+ * pasted there, is moved there ({@link #placedTo}), and Rename… puts a name field above the tree, Enter to rename and
+ * Escape to leave it. New folder here makes one and opens the field on it. The view asks {@code MoveScratch} for each,
+ * and the window's history takes in each that lands, so Ctrl+Z puts it back.
  */
 final class Navigator {
 
@@ -90,6 +97,7 @@ final class Navigator {
     static final String ARCHIVE = "archive";
     static final String LINK = "link";
     static final String NEW_SCRATCH = "new-scratch";
+    static final String RENAME = "rename";
 
     /** How many times a new scratch's row is looked for before it is left unselected. */
     private static final int REVEAL_TRIES = 10;
@@ -103,7 +111,11 @@ final class Navigator {
     private final Picker picker;
     private final TreeView<Path> scratchTree;
     private final Button newScratch;
+    /** Rename's field, above the scratches' tree while a row is being renamed. */
+    private final TextField renameField;
     private final Node scratchPane;
+    /** The scratch or folder the name field is for, or null while it is put away. */
+    private Path renaming;
     private final Node root;
     /** Where the card is. */
     private Place place = Place.FILES;
@@ -161,19 +173,28 @@ final class Navigator {
         picker = new Picker(gui, scratches);
         picker.node().visible(false);
 
+        // The one tree here that changes the disk: a row dragged onto a folder or between the rows of one, or cut and
+        // pasted there, is moved there. The tree refuses in the frame what it can see (onto a file, into itself); what
+        // only the disk knows, a name taken there, the job refuses when the move is asked for.
         scratchTree = new TreeView<Path>(gui, "scratches").motion(motion.arrival)
                 .action(MenuAction.of(NEW_SCRATCH, "+", "New scratch here"))
-                .action(MenuAction.of(COPY_PATH, "Copy path"));
+                .action(MenuAction.of(NEW_FOLDER, "New folder here"))
+                .action(MenuAction.of(RENAME, "Rename…"))
+                .action(MenuAction.of(COPY_PATH, "Copy path"))
+                .reorderable(DropEffect.MOVE);
         scratchTree.node().width(Length.FILL).height(Length.grow(1f));
         gui.landmark(Landmarks.SCRATCHES, scratchTree.node());
         newScratch = new Button(gui, "New scratch").kind(Button.Kind.GHOST).name("new-scratch");
         newScratch.node().font(Type.UI).width(Length.FILL);
         gui.landmark(Landmarks.NEW_SCRATCH, newScratch.node());
+        renameField = new TextField(gui, "").name("rename");
+        renameField.node().width(Length.FILL).font(Type.UI).textSize(Type.SMALL).visible(false);
+        gui.landmark(Landmarks.RENAME_SCRATCH, renameField.node());
         scratchPane = gui.column()
                 .width(Length.FILL).height(Length.grow(1f))
                 .gap(Type.TIGHT)
                 .alignItems(AlignItems.STRETCH)
-                .children(newScratch.node(), scratchTree.node());
+                .children(newScratch.node(), renameField.node(), scratchTree.node());
         scratchPane.visible(false);
 
         // The edge is there in every place, in the panel's own colour while the files are shown, so it costs no
@@ -213,6 +234,7 @@ final class Navigator {
         scratchPane.visible(to == Place.SCRATCHES);
         if (to != Place.SCRATCHES) {
             scratchWanted = null;
+            endRename();   // a rename left unfinished when the scratches went is a rename not made
         }
         paint();
         if (to != Place.FILES) {
@@ -335,6 +357,78 @@ final class Navigator {
         scratchTries--;
         scratchWalking = true;
         scratchTree.revealPath(chain);
+    }
+
+    /**
+     * Where a row dropped or pasted at {@code where} in the scratches' tree goes: into the folder it is on, the folder
+     * of the rows it is between, or the scratches' own; null where that is no move ({@link Scratches#into}).
+     */
+    Path placedTo(Path moved, Placement<?> where) {
+        Path folder;
+        if (where.isRoot()) {
+            folder = scratches.dir();
+        } else if (where.relation() == Placement.Relation.INTO && where.reference() instanceof Path p) {
+            folder = p;
+        } else if (where.reference() instanceof Path p) {
+            folder = p.getParent();
+        } else {
+            return null;
+        }
+        return scratches.into(moved, folder);
+    }
+
+    /**
+     * Rename on a row's menu: the name field, holding {@code item}'s name with all but a file's extension selected, so
+     * typing replaces the part that is usually meant.
+     */
+    void beginRename(Path item) {
+        if (!scratches.holds(item) || scratches.is(item)) {
+            return;
+        }
+        renaming = item;
+        String name = String.valueOf(item.getFileName());
+        int dot = name.lastIndexOf('.');
+        renameField.text(name);
+        renameField.select(0, dot > 0 && !isFolder(item) ? dot : name.length());
+        renameField.node().visible(true);
+        gui.focus(renameField.node());
+    }
+
+    /** What the name field is for, or null while it is put away. */
+    Path renaming() {
+        return renaming;
+    }
+
+    /** Where what is being renamed would be once called {@code name}; null for a name that cannot be one. */
+    Path renamedTo(String name) {
+        return renaming == null ? null : scratches.named(renaming, name);
+    }
+
+    /** A name that cannot be had: the field stays, ringed, to be changed. */
+    void refuseRename() {
+        motion.cues.play(renameField.node(), Cue.ring(gui.theme().color(Role.DANGER), 1));
+        gui.focus(renameField.node());
+    }
+
+    /** Put the name field away, and the keyboard back in the tree if the field had it. */
+    void endRename() {
+        if (renaming == null) {
+            return;
+        }
+        renaming = null;
+        renameField.node().visible(false);
+        if (scratching()) {
+            scratchTree.focus();
+        }
+    }
+
+    /** The name field's address, which its messages carry, and its node, for Escape. */
+    String renameAddress() {
+        return renameField.address();
+    }
+
+    Node renameNode() {
+        return renameField.node();
     }
 
     /** Whether the scratches' tree has a row for {@code item}. */

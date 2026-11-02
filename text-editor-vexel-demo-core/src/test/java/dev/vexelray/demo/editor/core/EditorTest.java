@@ -8,6 +8,8 @@ import dev.vexelray.demo.editor.core.Messages.Create;
 import dev.vexelray.demo.editor.core.Messages.Created;
 import dev.vexelray.demo.editor.core.Messages.Dropping;
 import dev.vexelray.demo.editor.core.Messages.Made;
+import dev.vexelray.demo.editor.core.Messages.Moved;
+import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.FileRead;
 import dev.vexelray.demo.editor.core.Messages.Find;
@@ -90,7 +92,7 @@ class EditorTest {
                 Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
                 Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
-                Messages.DROPPING_TOPIC)) {
+                Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -378,6 +380,61 @@ class EditorTest {
         tell(CloseRequested.TOPIC, new CloseRequested(CloseRequested.MAIN, 5));
         assertEquals(List.of(new Dropping(file("s.md"))), sent.stream().filter(Dropping.class::isInstance).toList());
         assertEquals(List.of(new CloseAnswer(5, true)), took(CloseAnswer.class));
+    }
+
+    @Test
+    void aTabOnAScratchRenamedFollowsItUnsavedWorkAndAll() {
+        long s = scratch("s.md");
+        tell(Messages.EDITED_TOPIC, new Edited(s, true));
+        sent.clear();
+        tell(Messages.RELOCATED_TOPIC, new Relocated(file("s.md"), file("s.java"), true, ""));
+        assertEquals(List.of(new Moved(s, file("s.java"))), sent.stream().filter(Moved.class::isInstance).toList());
+        assertTrue(sent.contains(new Retitle(s, "• s.java")));
+        assertTrue(sent.contains(new Caption("• s.java")));
+        assertTrue(sent.contains(new Status("Renamed s.java", false)));
+        assertTrue(editor.state().fresh().isEmpty(), "a scratch given a name is kept");
+        sent.clear();
+
+        tell(Messages.SAVE_TOPIC, new Save(s, "x", true));
+        assertEquals(file("s.java"), took(Write.class).getFirst().path(), "saved to where it is now");
+    }
+
+    @Test
+    void tabsUnderAFolderMovedFollowIt() {
+        Path from = file("notes");
+        Path to = file("kept").resolve("notes");
+        long a = scratch("notes/a.md");
+        long b = opened("b.txt", "b");
+        tell(Messages.RELOCATED_TOPIC, new Relocated(from, to, true, ""));
+        assertEquals(List.of(new Moved(a, to.resolve("a.md"))),
+                sent.stream().filter(Moved.class::isInstance).toList());
+        assertTrue(sent.contains(new Status("Moved notes", false)));
+        assertEquals(to.resolve("a.md"), editor.state().doc().entry(a).path());
+        assertEquals(file("b.txt"), editor.state().doc().entry(b).path(), "another file stays where it was");
+    }
+
+    @Test
+    void theFolderShownFollowsAMoveOfItAndIsListedAgainForOneInIt() {
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
+        sent.clear();
+        tell(Messages.RELOCATED_TOPIC, new Relocated(file("a.md"), file("b.md"), true, ""));
+        assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class), "listed again");
+
+        Path elsewhere = dir.resolve("elsewhere").toAbsolutePath().normalize();
+        tell(Messages.RELOCATED_TOPIC, new Relocated(dir, elsewhere, true, ""));
+        assertEquals(List.of(new ShowFolder(elsewhere)), took(ShowFolder.class));
+        assertEquals(elsewhere, editor.state().doc().folder());
+    }
+
+    @Test
+    void aMoveThatDidNotLandIsSaidAndMovesNoTab() {
+        long s = scratch("s.md");
+        sent.clear();
+        tell(Messages.RELOCATED_TOPIC, new Relocated(file("s.md"), file("t.md"), true, "there is already a t.md there"));
+        assertTrue(sent.contains(new Status("Could not rename s.md: there is already a t.md there", true)));
+        assertTrue(took(Moved.class).isEmpty());
+        assertEquals(file("s.md"), editor.state().doc().entry(s).path());
+        assertEquals(java.util.Set.of(file("s.md")), editor.state().fresh(), "still fresh");
     }
 
     // ------------------------------------------------------------------ quitting: the same chain, another way in

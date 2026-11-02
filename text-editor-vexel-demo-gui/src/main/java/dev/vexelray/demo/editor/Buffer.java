@@ -14,6 +14,7 @@ import dev.vexelray.gui.core.text.Whitespace;
 import dev.vexelray.gui.widget.TextField;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * One open file: its {@link TextField}, its colours, and what a save needs to know. The {@link View}'s, on the GUI
@@ -40,19 +41,21 @@ import java.nio.file.Path;
 final class Buffer implements AutoCloseable {
 
     final long id;
-    final Path path;
+    /** Where the file is: changed only when the editor says it moved ({@link #moved}). */
+    Path path;
     final TextField field;
 
+    private final Gui gui;
     /** What the tab shows: the field, or for Markdown the formatted view in its place. */
     private final Node page;
-    /** Built only for Markdown, which is all that has a formatted view; null otherwise. */
-    private final FormattedView formatted;
+    /** Built only for Markdown, which is all that has a formatted view, the first time the file is; null before. */
+    private FormattedView formatted;
     /** Whether the formatted view is shown in place of the field. */
     private boolean showingFormatted;
     /** The text the formatted view was last asked for. */
     private String formattedText;
     /** The TextMate scope of the file's format, or null for plain text. */
-    private final String scope;
+    private String scope;
     /** The version of the field's last change, which a colouring has to match. */
     private long version = -1;
     /** The text the colours were last asked for, so a change that only moved the colours asks nothing. */
@@ -67,6 +70,7 @@ final class Buffer implements AutoCloseable {
 
     Buffer(Gui gui, long id, Path path, String initial) {
         this.id = id;
+        this.gui = gui;
         this.path = path;
         this.scope = Grammars.scopeFor(String.valueOf(path.getFileName()));
         // A document: its past is its own, so Ctrl+Z in one file never reaches into another, and its save mark
@@ -121,7 +125,33 @@ final class Buffer implements AutoCloseable {
 
     /** Whether this document has a formatted view: whether it is Markdown, by its name. */
     boolean formattable() {
-        return formatted != null;
+        return formatted != null && Markdown.handles(name());
+    }
+
+    /**
+     * The file is at {@code to} now, moved or renamed: the document stays as it is, unsaved work and all, and takes the
+     * format the new name says, its face and its colours with it. What to ask {@code MarkText}, or null when it is plain
+     * text now, whose colours are taken off.
+     */
+    Mark moved(Path to) {
+        path = to;
+        scope = Grammars.scopeFor(name());
+        field.node().font(scope != null ? Type.MONO : Type.UI);
+        if (showingFormatted && !Markdown.handles(name())) {
+            showFormatted(false);
+        }
+        if (formatted == null && Markdown.handles(name())) {
+            formatted = new FormattedView(gui);
+            formatted.node().visible(false);
+            page.append(formatted.node());
+        }
+        marked = null;
+        if (scope == null) {
+            field.setSpans(List.of());
+            return null;
+        }
+        marked = field.text();
+        return new Mark(address(), marked, version, scope);
     }
 
     boolean showingFormatted() {

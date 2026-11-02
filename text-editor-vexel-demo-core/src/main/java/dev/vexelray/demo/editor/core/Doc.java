@@ -55,6 +55,10 @@ record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent) {
         Entry withDirty(boolean value) {
             return new Entry(id, path, value, crlf);
         }
+
+        Entry withPath(Path value) {
+            return new Entry(id, value, dirty, crlf);
+        }
     }
 
     Doc {
@@ -116,6 +120,25 @@ record Doc(List<Entry> tabs, long active, Path folder, List<Path> recent) {
             next.add(e.id() == id ? e.withDirty(dirty) : e);
         }
         return new Doc(next, active, folder, recent);
+    }
+
+    /**
+     * Whatever was at {@code from}, or under it, is at {@code to} now: the tabs on it, the folder shown and the recent
+     * folders follow it there.
+     */
+    Doc relocated(Path from, Path to) {
+        List<Entry> next = new ArrayList<>(tabs.size());
+        for (Entry e : tabs) {
+            next.add(e.path().startsWith(from) ? e.withPath(moved(e.path(), from, to)) : e);
+        }
+        List<Path> again = recent.stream().map(p -> p.startsWith(from) ? moved(p, from, to) : p).toList();
+        Path shown = folder != null && folder.startsWith(from) ? moved(folder, from, to) : folder;
+        return new Doc(next, active, shown, recentWithout(again, shown));
+    }
+
+    /** Where {@code path}, at or under {@code from}, is once {@code from} is {@code to}. */
+    static Path moved(Path path, Path from, Path to) {
+        return to.resolve(from.relativize(path));
     }
 
     Doc withActive(long id) {
