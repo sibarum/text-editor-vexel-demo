@@ -65,8 +65,19 @@ import java.util.Set;
  *
  * <p>The scratches' folder ({@link Scratches}) is a folder like any other once it is shown, but for its name: the chip
  * says Scratches rather than the folder's own, which is only where the editor keeps them.
+ *
+ * <h2>The scratches can be laid over the files</h2>
+ *
+ * <p>Alt+N puts a tree of the scratches where the files were, without showing their folder: the folder shown stays
+ * the one shown, and Alt+N again, or the chip, puts its files back. It is the third place the card can be, beside the
+ * files and Open, and it is edged in the accent as Open is, but not steeped in it, since the editor is still beside
+ * it and still the thing being worked in. Above the tree is New scratch, and each row's menu has New scratch here.
+ * A scratch made while it is up is listed and selected once its listing lands ({@link #scratchMade}).
  */
 final class Navigator {
+
+    /** Where the card is: the folder's files, Open in their place, or the scratches over them. */
+    enum Place { FILES, OPEN, SCRATCHES }
 
     /** The rows' menu actions, by the id {@code TreeView.CHOSEN} carries back. */
     static final String OPEN = "open";
@@ -78,6 +89,10 @@ final class Navigator {
     static final String NEW_MODULE = "new-module";
     static final String ARCHIVE = "archive";
     static final String LINK = "link";
+    static final String NEW_SCRATCH = "new-scratch";
+
+    /** How many times a new scratch's row is looked for before it is left unselected. */
+    private static final int REVEAL_TRIES = 10;
 
     private final Gui gui;
     private final Motion motion;
@@ -86,9 +101,17 @@ final class Navigator {
     private final TreeView<Path> tree;
     private final Button chip;
     private final Picker picker;
+    private final TreeView<Path> scratchTree;
+    private final Button newScratch;
+    private final Node scratchPane;
     private final Node root;
-    /** Whether Open is up, in place of the files. */
-    private boolean opened;
+    /** Where the card is. */
+    private Place place = Place.FILES;
+    /** A scratch made while the scratches are up, to select once its row is there; null for none. */
+    private Path scratchWanted;
+    /** Whether a walk to it is under way, and how many more may be tried. */
+    private boolean scratchWalking;
+    private int scratchTries;
     /** What the chip says, which a node does not give back. */
     private String chipText = NO_FOLDER;
     /** Every folder a listing has shown, so a row's kind is known without the disk. */
@@ -138,31 +161,75 @@ final class Navigator {
         picker = new Picker(gui, scratches);
         picker.node().visible(false);
 
-        // The edge is there in both places, in the panel's own colour while the files are shown, so it costs no
+        scratchTree = new TreeView<Path>(gui, "scratches").motion(motion.arrival)
+                .action(MenuAction.of(NEW_SCRATCH, "+", "New scratch here"))
+                .action(MenuAction.of(COPY_PATH, "Copy path"));
+        scratchTree.node().width(Length.FILL).height(Length.grow(1f));
+        gui.landmark(Landmarks.SCRATCHES, scratchTree.node());
+        newScratch = new Button(gui, "New scratch").kind(Button.Kind.GHOST).name("new-scratch");
+        newScratch.node().font(Type.UI).width(Length.FILL);
+        gui.landmark(Landmarks.NEW_SCRATCH, newScratch.node());
+        scratchPane = gui.column()
+                .width(Length.FILL).height(Length.grow(1f))
+                .gap(Type.TIGHT)
+                .alignItems(AlignItems.STRETCH)
+                .children(newScratch.node(), scratchTree.node());
+        scratchPane.visible(false);
+
+        // The edge is there in every place, in the panel's own colour while the files are shown, so it costs no
         // layout when it turns to the accent.
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .gap(Type.TIGHT)
                 .padding(Type.TIGHT, Type.TIGHT)
                 .alignItems(AlignItems.STRETCH)
-                .children(chip.node(), path.node(), tree.node(), picker.node());
+                .children(chip.node(), path.node(), tree.node(), picker.node(), scratchPane);
         paint();
     }
 
     /** What the chip says while no folder is shown. */
     static final String NO_FOLDER = "No folder";
 
-    /** The card's colours for where it is: the panel, or steeped in the accent for Open. */
+    /** The card's colours for where it is: the panel, steeped in the accent for Open, edged in it for the scratches. */
     private void paint() {
-        root.background(gui.theme().color(opened ? Look.PICKING : Role.PANEL))
-                .border(Type.RULE, gui.theme().color(opened ? Look.PICKING_RIM : Role.PANEL));
+        root.background(gui.theme().color(place == Place.OPEN ? Look.PICKING : Role.PANEL))
+                .border(Type.RULE, gui.theme().color(place == Place.FILES ? Role.PANEL : Look.PICKING_RIM));
+    }
+
+    /**
+     * Put the card in {@code to}: the chip pressed and saying where it is, the place's own nodes shown and the rest
+     * hidden, and a sweep down it as it leaves the files, so the change is seen from the document.
+     */
+    private void place(Place to) {
+        if (to == place) {
+            return;
+        }
+        place = to;
+        chip.show(to != Place.FILES);
+        chip.label(chipLabel());
+        path.node().visible(to != Place.SCRATCHES);
+        tree.node().visible(to == Place.FILES);
+        picker.node().visible(to == Place.OPEN);
+        scratchPane.visible(to == Place.SCRATCHES);
+        if (to != Place.SCRATCHES) {
+            scratchWanted = null;
+        }
+        paint();
+        if (to != Place.FILES) {
+            motion.cues.play(root, Cue.scanline(gui.theme().color(Role.ACCENT)));
+        }
+    }
+
+    /** Where the card is. */
+    Place place() {
+        return place;
     }
 
     // ------------------------------------------------------------------ Open
 
     /** Whether Open is up. */
     boolean opened() {
-        return opened;
+        return place == Place.OPEN;
     }
 
     /**
@@ -170,19 +237,129 @@ final class Navigator {
      * goes to Open's tree when it comes.
      */
     void open(boolean value) {
-        if (value == opened) {
+        if (value == opened()) {
             return;
         }
-        opened = value;
-        chip.show(value);
-        tree.node().visible(!value);
-        picker.node().visible(value);
-        paint();
+        place(value ? Place.OPEN : Place.FILES);
         if (value) {
             picker.start(folder);
             picker.focus();
-            motion.cues.play(root, Cue.scanline(gui.theme().color(Role.ACCENT)));
         }
+    }
+
+    // ------------------------------------------------------------------ the scratches
+
+    /** Whether the scratches are laid over the files. */
+    boolean scratching() {
+        return place == Place.SCRATCHES;
+    }
+
+    /**
+     * Lay the scratches over the files, listed afresh and with the keyboard in their tree, or put the files back.
+     * Coming up ends Open, since there is one place for either.
+     */
+    void scratches(boolean value) {
+        if (value == scratching()) {
+            return;
+        }
+        place(value ? Place.SCRATCHES : Place.FILES);
+        if (value) {
+            scratchTree.refresh();
+            scratchTree.focus();
+        }
+    }
+
+    /** What to ask {@code ListFolder} for a level the scratches' tree wants: the folder opened, or their own. */
+    Listing scratchesWanted(Object parent) {
+        return parent instanceof Path dir ? new Listing(scratchAddress(), dir, false, false)
+                : new Listing(scratchAddress(), scratches.dir(), true, false);
+    }
+
+    /** {@code ListFolder}'s answer for the scratches' tree, whose every row offers the same two actions. */
+    TreeView.Children scratchChildren(Listed listed) {
+        List<TreeView.Entry> entries = new ArrayList<>(listed.items().size());
+        for (Item item : listed.items()) {
+            if (item.folder()) {
+                folders.add(item.path());
+                entries.add(TreeView.Entry.branch(item.path(), item.name()));
+            } else {
+                entries.add(TreeView.Entry.leaf(item.path(), item.name()));
+            }
+        }
+        return new TreeView.Children(scratchAddress(), listed.roots() ? null : listed.dir(), entries);
+    }
+
+    /**
+     * A scratch was made: while the scratches are up, list them again and select its row once it is there. The row
+     * comes with the refresh's answers, which land after this frame, so the walk to it is begun as each lands
+     * ({@link #scratchListed}) and tried again when it ends short ({@link #scratchRevealed}), a few times at most.
+     */
+    void scratchMade(Path file) {
+        if (!scratching()) {
+            return;
+        }
+        scratchWanted = file;
+        scratchTries = REVEAL_TRIES;
+        scratchWalking = false;
+        scratchTree.refresh();
+    }
+
+    /** A level of the scratches' tree was answered: look for the scratch wanted, if no look is under way. */
+    void scratchListed() {
+        if (scratchWanted != null && !scratchWalking) {
+            walkToScratch();
+        }
+    }
+
+    /** A walk in the scratches' tree ended: done when it got there, and tried again when it did not. */
+    void scratchRevealed(Object item, boolean reached) {
+        if (scratchWanted == null || !item.equals(scratchWanted)) {
+            return;
+        }
+        scratchWalking = false;
+        if (reached) {
+            scratchWanted = null;
+        } else if (scratchTries > 0) {
+            walkToScratch();
+        } else {
+            scratchWanted = null;
+        }
+    }
+
+    private void walkToScratch() {
+        List<Path> chain = ListFolder.chain(scratches.dir(), scratchWanted);
+        if (chain.isEmpty()) {
+            scratchWanted = null;
+            return;
+        }
+        scratchTries--;
+        scratchWalking = true;
+        scratchTree.revealPath(chain);
+    }
+
+    /** Whether the scratches' tree has a row for {@code item}. */
+    boolean hasScratchRow(Path item) {
+        return scratchTree.rowNode(item) != null;
+    }
+
+    /** The row selected in the scratches' tree, or null. */
+    Path scratchSelected() {
+        return scratchTree.selected();
+    }
+
+    /** Open a folder's row in the scratches' tree. */
+    void expandScratch(Path item) {
+        scratchTree.expand(item);
+    }
+
+    /** The scratches' tree's address, which its messages carry. */
+    String scratchAddress() {
+        return scratchTree.address();
+    }
+
+    /** New scratch's address, which its {@code Pressed} carries. */
+    String newScratchAddress() {
+        return newScratch.address();
     }
 
     /** Start Open's tree at {@code from}, one of its way up's ancestors. */
@@ -200,9 +377,9 @@ final class Navigator {
         return chip.address();
     }
 
-    /** What the chip says: the folder shown's name. */
+    /** What the chip says: the folder shown's name, or Scratches while they are over its files. */
     String chipLabel() {
-        return chipText;
+        return scratching() ? Scratches.NAME : chipText;
     }
 
     Node node() {
@@ -231,17 +408,21 @@ final class Navigator {
 
     /**
      * Show {@code shown}: say in the path bar which folder it is, and have the tree ask for its levels again, which
-     * the view answers as it answers every question the tree asks.
+     * the view answers as it answers every question the tree asks. Another folder puts the files back from wherever
+     * the card was; the same one again, which is the editor saying its files have changed, ends only Open.
      */
     void show(Path shown) {
+        boolean another = !shown.equals(folder);
         folder = shown;
         naming = Made.FILE;
         namingFrom = null;
         path.text(String.valueOf(shown));
         chipText = scratches.is(shown) ? Scratches.NAME : Picker.label(shown);
-        chip.label(chipText);
         tree.refresh();
-        open(false);
+        if (another || opened()) {
+            place(Place.FILES);
+        }
+        chip.label(chipLabel());
     }
 
     /**
@@ -320,8 +501,12 @@ final class Navigator {
         }
     }
 
-    /** Put the keyboard in the path bar, everything in it selected so typing replaces it. */
+    /**
+     * Put the keyboard in the path bar, everything in it selected so typing replaces it. The scratches hide the bar,
+     * so they go first.
+     */
     void focusPath() {
+        scratches(false);
         naming = Made.FILE;
         namingFrom = null;
         gui.focus(path.node());
@@ -378,8 +563,12 @@ final class Navigator {
         return asked;
     }
 
-    /** Put the keyboard in the tree. */
+    /** Put the keyboard in the tree shown: the scratches' while they are up, the files' otherwise. */
     void focusTree() {
-        tree.focus();
+        if (scratching()) {
+            scratchTree.focus();
+        } else {
+            tree.focus();
+        }
     }
 }

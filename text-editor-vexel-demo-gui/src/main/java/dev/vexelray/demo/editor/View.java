@@ -28,6 +28,7 @@ import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
+import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ScratchesFound;
 import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
@@ -165,6 +166,7 @@ final class View {
         chord(Shortcut.of(Key.B, Modifier.CONTROL), Command.TOGGLE_NAVIGATOR);
         chord(Shortcut.of(Key.O, Modifier.CONTROL), Command.TOGGLE_OPEN);
         chord(Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT), Command.NEW_SCRATCH);
+        chord(Shortcut.of(Key.N, Modifier.ALT), Command.TOGGLE_SCRATCHES);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
         chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
@@ -273,6 +275,17 @@ final class View {
             children.send(nav.children(m));
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             children.send(nav.picker().children(m));
+        } else if (m.tree().equals(nav.scratchAddress())) {
+            children.send(nav.scratchChildren(m));
+            nav.scratchListed();
+        }
+    }
+
+    /** A scratch made: the editor opens it, and the scratches' tree, if it is up, lists it and selects it. */
+    @Subscribe
+    public void scratchMade(ScratchMade m) {
+        if (m.problem().isEmpty()) {
+            nav.scratchMade(m.path());
         }
     }
 
@@ -409,6 +422,10 @@ final class View {
             }
             return;
         }
+        if (m.tree().equals(nav.scratchAddress())) {
+            listing.send(nav.scratchesWanted(m.parent()));
+            return;
+        }
         if (!m.tree().equals(nav.treeAddress())) {
             return;
         }
@@ -423,7 +440,8 @@ final class View {
     /** A file selected in the tree opens, and the keyboard stays in the tree, so walking it keeps walking. */
     @Subscribe
     public void treeSelected(TreeView.Selected m) {
-        if (m.tree().equals(nav.treeAddress()) && m.item() instanceof Path p && !nav.isFolder(p)) {
+        boolean files = m.tree().equals(nav.treeAddress()) || m.tree().equals(nav.scratchAddress());
+        if (files && m.item() instanceof Path p && !nav.isFolder(p)) {
             open.send(new Open(p, false));
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             picture();
@@ -444,6 +462,8 @@ final class View {
     public void treeActivated(TreeView.Activated m) {
         if (m.tree().equals(nav.treeAddress()) && m.item() instanceof Path p && nav.isFolder(p)) {
             nav.expand(p);
+        } else if (m.tree().equals(nav.scratchAddress()) && m.item() instanceof Path p && nav.isFolder(p)) {
+            nav.expandScratch(p);
         } else if (m.tree().equals(nav.picker().treeAddress()) && m.item() instanceof Path p) {
             pick(p);
         }
@@ -457,17 +477,26 @@ final class View {
         }
     }
 
-    /** The chip pressed or released: Open, or the files. */
+    /** The chip pressed or released: Open, or the files, from Open or from the scratches. */
     @Subscribe
     public void chipToggled(Button.Toggled m) {
-        if (m.button().equals(nav.chipAddress())) {
+        if (!m.button().equals(nav.chipAddress())) {
+            return;
+        }
+        if (!m.pressed() && nav.scratching()) {
+            toggleScratches();
+        } else {
             open(m.pressed());
         }
     }
 
-    /** A recent folder pressed in Open, or the scratches: picked. */
+    /** A recent folder pressed in Open, or the scratches: picked. New scratch over the scratches: one made. */
     @Subscribe
     public void buttonPressed(Button.Pressed m) {
+        if (m.button().equals(nav.newScratchAddress())) {
+            newScratch();
+            return;
+        }
         Path p = m.button().equals(nav.picker().scratchesAddress()) ? nav.picker().scratchesFolder()
                 : nav.picker().recentAt(m.button());
         if (p != null) {
@@ -492,6 +521,15 @@ final class View {
         if (m.at().equals(nav.picker().treeAddress()) && m.item() instanceof Path p) {
             if (m.action().equals(Navigator.SHOW)) {
                 pick(p);
+            } else if (m.action().equals(Navigator.COPY_PATH)) {
+                gui.clipboard().set(p.toString());
+            }
+            return;
+        }
+        if (m.at().equals(nav.scratchAddress()) && m.item() instanceof Path p) {
+            if (m.action().equals(Navigator.NEW_SCRATCH)) {
+                // A file's row makes one beside it, in the folder it is in.
+                newScratch.send(new NewScratch(Optional.of(nav.isFolder(p) ? p : p.getParent())));
             } else if (m.action().equals(Navigator.COPY_PATH)) {
                 gui.clipboard().set(p.toString());
             }
@@ -534,6 +572,8 @@ final class View {
     public void treeRevealed(TreeView.Revealed m) {
         if (m.tree().equals(nav.treeAddress())) {
             nav.revealed(m.item(), m.reached());
+        } else if (m.tree().equals(nav.scratchAddress())) {
+            nav.scratchRevealed(m.item(), m.reached());
         }
     }
 
@@ -594,6 +634,22 @@ final class View {
     /** Ctrl+Shift+N: a new scratch, which the editor opens in front once it is made. */
     void newScratch() {
         newScratch.send(new NewScratch(Optional.empty()));
+    }
+
+    /**
+     * Alt+N: the scratches over the navigator's files, bringing the navigator back if it was hidden, or the files
+     * again with the keyboard in them.
+     */
+    void toggleScratches() {
+        boolean show = !nav.scratching() || !ui.navigatorShown();
+        if (show) {
+            ui.showNavigator(true);
+            nav.scratches(true);
+        } else {
+            nav.scratches(false);
+            nav.focusTree();
+        }
+        picture();   // Open may have been what the scratches replaced
     }
 
     void cycle(int delta) {

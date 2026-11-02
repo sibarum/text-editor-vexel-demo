@@ -69,6 +69,12 @@ record Intent(Command command) {
                 view.newScratch();
             }
         },
+        TOGGLE_SCRATCHES {
+            @Override
+            void on(View view) {
+                view.toggleScratches();
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

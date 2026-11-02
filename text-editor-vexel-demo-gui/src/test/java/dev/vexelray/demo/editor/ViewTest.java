@@ -445,6 +445,84 @@ class ViewTest {
         assertEquals(List.of(), nav.picker().recentLabels(), "the scratches are not a recent folder");
     }
 
+    /**
+     * Alt+N lays the scratches over the files without showing their folder: the chip says Scratches, a file picked
+     * there opens, and Alt+N again, or the chip released, puts the files back.
+     */
+    @Test
+    void altNLaysTheScratchesOverTheFilesAndBack() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Path note = Files.writeString(Files.createDirectories(scratches()).resolve("note.md"), "n");
+        Navigator nav = wiring.ui().navigator();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a shown", () -> a.equals(nav.folder()));
+
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches, listed", () -> nav.scratching() && nav.hasScratchRow(note));
+        assertEquals("Scratches", nav.chipLabel());
+        assertEquals(a, nav.folder(), "the folder shown is still the one shown");
+
+        shell.bus().publish(TreeView.SELECTED, new TreeView.Selected(nav.scratchAddress(), note));
+        eventually("the scratch open", () -> ws.find(note) != null);
+
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the files again", () -> !nav.scratching());
+        assertEquals("a", nav.chipLabel());
+
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches again", nav::scratching);
+        shell.bus().publish(Button.TOGGLED, new Button.Toggled(nav.chipAddress(), false));
+        eventually("the chip released for the files", () -> !nav.scratching());
+    }
+
+    /**
+     * Over the scratches, New scratch makes one, which the tree lists and selects; a row's New scratch here makes one
+     * in its folder. The scratches' own folder being the one shown, its files listed again keep the scratches up.
+     */
+    @Test
+    void newScratchOverTheScratchesListsAndSelectsIt() throws Exception {
+        Path inner = Files.createDirectories(scratches().resolve("inner"));
+        Navigator nav = wiring.ui().navigator();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(scratches().toString()));
+        eventually("the scratches' folder shown", () -> scratches().equals(nav.folder()));
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches, listed", () -> nav.scratching() && nav.hasScratchRow(inner));
+
+        shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.newScratchAddress()));
+        eventually("a scratch in front", () -> ws.front() != null && ws.front().path.startsWith(scratches()));
+        Path made = ws.front().path;
+        eventually("its row selected", () -> made.equals(nav.scratchSelected()));
+        assertTrue(nav.scratching(), "the folder shown listed again is no reason to leave");
+
+        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.scratchAddress(), Navigator.NEW_SCRATCH, inner));
+        eventually("one in inner, in front", () -> ws.front() != null && inner.equals(ws.front().path.getParent()));
+        Path here = ws.front().path;
+        eventually("its row selected, inner opened to it", () -> here.equals(nav.scratchSelected()));
+    }
+
+    /** Open takes the scratches' place, and another folder shown puts the files back. */
+    @Test
+    void openAndAnotherFolderTakeTheScratchesAway() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Path b = Files.createDirectory(dir.resolve("b")).toAbsolutePath().normalize();
+        Navigator nav = wiring.ui().navigator();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a shown", () -> a.equals(nav.folder()));
+
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches", nav::scratching);
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("Open in their place", () -> nav.opened() && !nav.scratching());
+        tell(Intent.Command.LEAVE_OPEN);
+        eventually("the files", () -> nav.place() == Navigator.Place.FILES);
+
+        tell(Intent.Command.TOGGLE_SCRATCHES);
+        eventually("the scratches", nav::scratching);
+        shell.bus().publish(Messages.GO_TOPIC, new Go(b.toString()));
+        eventually("b, and its files", () -> b.equals(nav.folder()) && nav.place() == Navigator.Place.FILES);
+        assertEquals("b", nav.chipLabel());
+    }
+
     /** Plain puts the navigator out of the way; Ctrl+B brings it back, and so does a folder being shown. */
     @Test
     void aPlainWindowHidesTheNavigatorUntilAskedOrAFolderIsShown() throws Exception {

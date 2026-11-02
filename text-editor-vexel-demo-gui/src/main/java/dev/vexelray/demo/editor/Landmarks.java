@@ -39,6 +39,10 @@ final class Landmarks {
     /** Open's button that shows the scratches' folder; there once there is at least one scratch. */
     static final String OPEN_SCRATCHES = "open-scratches";
 
+    /** The scratches' tree, laid over the navigator's by Alt+N, and its New scratch button. */
+    static final String SCRATCHES = "scratches";
+    static final String NEW_SCRATCH = "new-scratch";
+
     /** Open's picture of a folder, where the editor stands, and its list of the folder's files. */
     static final String PREVIEW = "preview";
     static final String CONTENTS = "preview.files";
