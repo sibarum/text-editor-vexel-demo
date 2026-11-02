@@ -7,6 +7,7 @@ import dev.vexelray.demo.editor.core.Messages.Close;
 import dev.vexelray.demo.editor.core.Messages.CloseTabs;
 import dev.vexelray.demo.editor.core.Messages.Create;
 import dev.vexelray.demo.editor.core.Messages.Created;
+import dev.vexelray.demo.editor.core.Messages.Dropping;
 import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.FileRead;
 import dev.vexelray.demo.editor.core.Messages.Find;
@@ -27,6 +28,7 @@ import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
+import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.Why;
@@ -90,7 +92,8 @@ import java.util.Set;
  * <h2>Effects are jobs</h2>
  *
  * <p>The disk is the jobs' ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
- * {@link ReadSession}, {@link WriteSession}): a step sends a request and a later step acts on the reply. A slow disk is
+ * {@link ReadSession}, {@link WriteSession}, {@link DropScratch}): a step sends a request and a later step acts on the
+ * reply, as it acts on {@link MakeScratch}'s, which the view asked for. A slow disk is
  * a slow answer, never a stalled lane. Jobs are not in order with each other, so the restored session asks for one
  * file at a time and asks for the next when the last is answered.
  *
@@ -105,11 +108,12 @@ import java.util.Set;
  */
 @Component
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
-        Created.class, Fronted.class, Edited.class, Save.class, Written.class, Answer.class,
+        Created.class, ScratchMade.class, Fronted.class, Edited.class, Save.class, Written.class, Answer.class,
         Close.class, CloseRequested.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
-        Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class})
+        Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
+        Dropping.class})
 public final class Editor {
 
     /**
@@ -137,67 +141,83 @@ public final class Editor {
      * @param armed     whether the restore is done: before then a write would overwrite what is being restored
      * @param keeps     whether this window's session is kept: not when the command line named what to open
      * @param last      the session last sent to be remembered, so an unchanged one is not written again
+     * @param fresh     scratches this run made and nothing has been written to since: closed like that, they go again
      */
     record State(Doc doc, long ids, Set<Path> reading, Map<Long, Closing> closings, List<Restore> restoring,
                  Optional<Path> front, Optional<Path> started, boolean armed, boolean keeps,
-                 Optional<Remember> last) {
+                 Optional<Remember> last, Set<Path> fresh) {
 
         State {
             reading = Set.copyOf(reading);
             closings = Map.copyOf(closings);
             restoring = List.copyOf(restoring);
+            fresh = Set.copyOf(fresh);
         }
 
         static State initial() {
             return new State(Doc.initial(), 0, Set.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(),
-                    false, true, Optional.empty());
+                    false, true, Optional.empty(), Set.of());
         }
 
         State withDoc(Doc value) {
-            return new State(value, ids, reading, closings, restoring, front, started, armed, keeps, last);
+            return new State(value, ids, reading, closings, restoring, front, started, armed, keeps, last, fresh);
         }
 
         /** A new tab's id, taken. */
         State withNextId() {
-            return new State(doc, ids + 1, reading, closings, restoring, front, started, armed, keeps, last);
+            return new State(doc, ids + 1, reading, closings, restoring, front, started, armed, keeps, last, fresh);
         }
 
         State reading(Path file, boolean asked) {
-            Set<Path> next = new HashSet<>(reading);
-            if (asked) {
-                next.add(file);
-            } else {
-                next.remove(file);
-            }
-            return new State(doc, ids, next, closings, restoring, front, started, armed, keeps, last);
+            return new State(doc, ids, with(reading, file, asked), closings, restoring, front, started, armed, keeps,
+                    last, fresh);
         }
 
         State withClosing(long run, Closing value) {
             Map<Long, Closing> next = new HashMap<>(closings);
             next.put(run, value);
-            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last);
+            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last, fresh);
         }
 
         State withoutClosing(long run) {
             Map<Long, Closing> next = new HashMap<>(closings);
             next.remove(run);
-            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last);
+            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last, fresh);
         }
 
         State withRestoring(List<Restore> steps, Optional<Path> inFront, Path startedIn, boolean keeping) {
-            return new State(doc, ids, reading, closings, steps, inFront, Optional.of(startedIn), armed, keeping, last);
+            return new State(doc, ids, reading, closings, steps, inFront, Optional.of(startedIn), armed, keeping, last,
+                    fresh);
         }
 
         State withRestoring(List<Restore> steps) {
-            return new State(doc, ids, reading, closings, steps, front, started, armed, keeps, last);
+            return new State(doc, ids, reading, closings, steps, front, started, armed, keeps, last, fresh);
         }
 
         State withArmed() {
-            return new State(doc, ids, reading, closings, restoring, Optional.empty(), started, true, keeps, last);
+            return new State(doc, ids, reading, closings, restoring, Optional.empty(), started, true, keeps, last,
+                    fresh);
         }
 
         State withLast(Remember value) {
-            return new State(doc, ids, reading, closings, restoring, front, started, armed, keeps, Optional.of(value));
+            return new State(doc, ids, reading, closings, restoring, front, started, armed, keeps, Optional.of(value),
+                    fresh);
+        }
+
+        /** {@code scratch} counted as fresh, or no longer. */
+        State fresh(Path scratch, boolean value) {
+            return new State(doc, ids, reading, closings, restoring, front, started, armed, keeps, last,
+                    with(fresh, scratch, value));
+        }
+
+        private static Set<Path> with(Set<Path> paths, Path path, boolean in) {
+            Set<Path> next = new HashSet<>(paths);
+            if (in) {
+                next.add(path);
+            } else {
+                next.remove(path);
+            }
+            return next;
         }
     }
 
@@ -306,6 +326,7 @@ public final class Editor {
         Step<State, FileRead> fileRead = b.step("fileRead", Editor::fileRead);
         Step<State, Found> found = b.step("found", Editor::found);
         Step<State, Created> created = b.step("created", Editor::created);
+        Step<State, ScratchMade> scratchMade = b.step("scratchMade", Editor::scratchMade);
         Step<State, Fronted> fronted = b.step("fronted", Editor::fronted);
         Step<State, Edited> edited = b.step("edited", Editor::edited);
         Step<State, Save> save = b.step("save", Editor::save);
@@ -328,6 +349,7 @@ public final class Editor {
                 .on(Messages.FILE_READ_TOPIC, fileRead)
                 .on(Messages.FOUND_TOPIC, found)
                 .on(Messages.CREATED_TOPIC, created)
+                .on(Messages.SCRATCH_MADE_TOPIC, scratchMade)
                 .on(Messages.FRONTED_TOPIC, fronted)
                 .on(Messages.EDITED_TOPIC, edited)
                 .on(Messages.SAVE_TOPIC, save)
@@ -585,6 +607,24 @@ public final class Editor {
         return next;
     }
 
+    /**
+     * A new scratch is made: open it, empty, in front, and count it fresh until something is written to it. The folder
+     * shown is listed again if the scratch is in it, as when the scratches are the folder shown.
+     */
+    private static State scratchMade(State s, ScratchMade m, Out out) {
+        if (!m.problem().isEmpty()) {
+            refuse(out, "Could not make a scratch: " + m.problem());
+            return s;
+        }
+        Path folder = s.doc().folder();
+        if (folder != null && m.path().startsWith(folder)) {
+            out.send(Messages.SHOW_FOLDER_TOPIC, new ShowFolder(folder));
+        }
+        State next = addTab(s.fresh(m.path(), true), m.path(), "", m.crlf(), true, out);
+        say(out, "New scratch " + m.path().getFileName());
+        return next;
+    }
+
     private static State addTab(State s, Path path, String text, boolean crlf, boolean focus, Out out) {
         State next = s.withNextId();
         long id = next.ids();
@@ -656,7 +696,8 @@ public final class Editor {
             return failed(s, w.id(), out);
         }
         say(out, "Saved " + name);
-        return landed(s, w.id(), out);
+        // A scratch written to is one somebody means to keep: closed empty after all, it stays.
+        return landed(s.fresh(w.path(), false), w.id(), out);
     }
 
     /** A save landed: the closing waiting on it goes on once it waits on nothing else. */
@@ -794,17 +835,25 @@ public final class Editor {
         return s.withoutClosing(out.run());
     }
 
-    /** What a closing does at its end: close its tabs, or let the window close. */
+    /**
+     * What a closing does at its end: close its tabs, or let the window close. A fresh scratch among what closes goes
+     * again; the job looks first, and leaves one that is not empty after all.
+     */
     private static State close(State s, Closing c, Out out) {
         if (c.gate() != NO_GATE) {
+            State next = s;
+            for (Doc.Entry e : s.doc().tabs()) {
+                next = drop(next, e.path(), out);
+            }
             out.send(CloseAnswer.TOPIC, new CloseAnswer(c.gate(), true));
-            return s;
+            return next;
         }
         State next = s;
         List<Long> closed = new ArrayList<>();
         for (long id : c.tabs()) {
-            if (next.doc().entry(id) != null) {
-                next = next.withDoc(next.doc().without(id));
+            Doc.Entry entry = next.doc().entry(id);
+            if (entry != null) {
+                next = drop(next.withDoc(next.doc().without(id)), entry.path(), out);
                 closed.add(id);
             }
         }
@@ -813,6 +862,15 @@ public final class Editor {
         }
         caption(next, out);
         return remember(next, out);
+    }
+
+    /** {@code file} has closed: if it is a fresh scratch, it goes. */
+    private static State drop(State s, Path file, Out out) {
+        if (!s.fresh().contains(file)) {
+            return s;
+        }
+        out.send(Messages.DROPPING_TOPIC, new Dropping(file));
+        return s.fresh(file, false);
     }
 
     private static String names(Doc doc, List<Long> ids) {

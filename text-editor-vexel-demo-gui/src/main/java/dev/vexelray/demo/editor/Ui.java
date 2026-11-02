@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
@@ -48,7 +49,7 @@ final class Ui {
     private final Motion motion;
     private final Color danger;
 
-    Ui(Gui gui, Motion motion, TitleBar titleBar) {
+    Ui(Gui gui, Motion motion, TitleBar titleBar, Scratches scratches) {
         this.titleBar = titleBar;
         this.motion = motion;
         this.danger = gui.theme().color(Role.DANGER);
@@ -66,7 +67,7 @@ final class Ui {
         }
 
         workspace = new Workspace(gui, motion);
-        navigator = new Navigator(gui, motion);
+        navigator = new Navigator(gui, motion, scratches);
 
         // In Open the editor steps aside for a picture of the folder being considered: the two share the place
         // beside the navigator, one showing at a time, and the tabs keep everything they had while hidden.

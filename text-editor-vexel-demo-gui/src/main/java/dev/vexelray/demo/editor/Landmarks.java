@@ -36,6 +36,9 @@ final class Landmarks {
     static final String ANCESTRY = "ancestry";
     static final String PICKER = "picker";
 
+    /** Open's button that shows the scratches' folder; there once there is at least one scratch. */
+    static final String OPEN_SCRATCHES = "open-scratches";
+
     /** Open's picture of a folder, where the editor stands, and its list of the folder's files. */
     static final String PREVIEW = "preview";
     static final String CONTENTS = "preview.files";

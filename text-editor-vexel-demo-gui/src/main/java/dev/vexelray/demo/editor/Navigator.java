@@ -6,6 +6,7 @@ import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
+import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
@@ -61,6 +62,9 @@ import java.util.Set;
  * were, to pick another folder from. The chip stays pressed while Open is up, so the way back is the same name pressed
  * again, and the card steeps in the accent and wears it as its edge, with a sweep down it as it changes, so the switch
  * is seen even by an eye that was on the document. Showing a folder ends Open.
+ *
+ * <p>The scratches' folder ({@link Scratches}) is a folder like any other once it is shown, but for its name: the chip
+ * says Scratches rather than the folder's own, which is only where the editor keeps them.
  */
 final class Navigator {
 
@@ -77,6 +81,7 @@ final class Navigator {
 
     private final Gui gui;
     private final Motion motion;
+    private final Scratches scratches;
     private final TextField path;
     private final TreeView<Path> tree;
     private final Button chip;
@@ -102,9 +107,10 @@ final class Navigator {
     /** Whether rows offer "Link to this…": where the platform makes links without privilege, or a test says so. */
     private boolean links = CreateFile.links();
 
-    Navigator(Gui gui, Motion motion) {
+    Navigator(Gui gui, Motion motion, Scratches scratches) {
         this.gui = gui;
         this.motion = motion;
+        this.scratches = scratches;
 
         path = new TextField(gui, "").name("path");
         path.node().width(Length.FILL).font(Type.UI).textSize(Type.SMALL);
@@ -129,7 +135,7 @@ final class Navigator {
         chip.node().font(Type.UI).width(Length.FILL);
         gui.landmark(Landmarks.FOLDER, chip.node());
 
-        picker = new Picker(gui);
+        picker = new Picker(gui, scratches);
         picker.node().visible(false);
 
         // The edge is there in both places, in the panel's own colour while the files are shown, so it costs no
@@ -232,7 +238,7 @@ final class Navigator {
         naming = Made.FILE;
         namingFrom = null;
         path.text(String.valueOf(shown));
-        chipText = Picker.label(shown);
+        chipText = scratches.is(shown) ? Scratches.NAME : Picker.label(shown);
         chip.label(chipText);
         tree.refresh();
         open(false);

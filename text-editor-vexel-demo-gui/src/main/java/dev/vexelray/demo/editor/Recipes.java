@@ -1,10 +1,12 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Grammars;
+import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.framework.api.Configuration;
 import dev.vexelray.framework.api.Provides;
 import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.gui.core.Gui;
+import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.text.FontSet;
@@ -58,8 +60,18 @@ final class Recipes {
      * <p>The clock is for motion: {@link Motion} makes the ramps every widget here animates with.
      */
     @Provides
-    Ui ui(Gui gui, TitleBar titleBar) {
-        return new Ui(gui, new Motion(gui), titleBar);
+    Ui ui(Gui gui, TitleBar titleBar, Scratches scratches) {
+        return new Ui(gui, new Motion(gui), titleBar, scratches);
+    }
+
+    /**
+     * The scratches' folder, beside the settings ({@code ~/.text-editor-vexel-demo/scratches}): the editor's own, so
+     * it moves with the settings when the home does ({@code text-editor-vexel-demo.home}), which is how a test keeps
+     * its scratches out of the person's.
+     */
+    @Provides
+    Scratches scratches(Settings settings) {
+        return new Scratches(settings.path().resolveSibling("scratches"));
     }
 
     /**

@@ -63,6 +63,12 @@ record Intent(Command command) {
                 view.open(false);
             }
         },
+        NEW_SCRATCH {
+            @Override
+            void on(View view) {
+                view.newScratch();
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

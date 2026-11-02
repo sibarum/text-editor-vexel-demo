@@ -4,6 +4,7 @@ import dev.vexelray.demo.editor.core.ListFolder;
 import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
+import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.CursorShape;
@@ -25,7 +26,8 @@ import java.util.List;
  *
  * <h2>Recent first, then the folder above</h2>
  *
- * <p>The folders shown before, newest first, are the shortest way back, so they come first, one button each. Under
+ * <p>The folders shown before, newest first, are the shortest way back, so they come first, one button each, and under
+ * them, once there is a scratch, the way to the scratches as a folder of their own ({@link Scratches}). Under
  * them is a tree of folders only, starting at the folder above the one shown, which is unfolded and selected among its
  * siblings. Above the tree is the way up: the start's own ancestors, each a button that starts the tree there instead.
  * Going up does not change the folder shown; it only widens what can be picked.
@@ -58,6 +60,11 @@ final class Picker {
     private final Button[] recentButtons = new Button[RECENT];
     private final Node[] recentCells = new Node[RECENT];
     private final Path[] recentPaths = new Path[RECENT];
+    private final Scratches scratches;
+    /** The way to the scratches as a folder of their own: under the recent folders, once there is a scratch. */
+    private final Button scratchesButton;
+    private boolean recentShown;
+    private boolean scratchesShown;
     private final Breadcrumb<Path> ancestry;
     /** Where the tree goes: replaced, tree and all, each time Open starts somewhere. */
     private final Node treeSlot;
@@ -65,8 +72,9 @@ final class Picker {
     /** Where the tree starts: its one top row. */
     private Path top;
 
-    Picker(Gui gui) {
+    Picker(Gui gui, Scratches scratches) {
         this.gui = gui;
+        this.scratches = scratches;
 
         recentLabel = gui.text("Recent").font(Type.UI).textSize(Type.SMALL).textColor(gui.theme().color(Role.DIM))
                 .visible(false);
@@ -80,7 +88,11 @@ final class Picker {
             recentCells[i] = gui.row().alignItems(AlignItems.STRETCH).visible(false).children(b.node());
             recent.append(recentCells[i]);
         }
+        scratchesButton = new Button(gui, Scratches.NAME).kind(Button.Kind.GHOST).name("scratches");
+        scratchesButton.node().font(Type.UI).width(Length.FILL).visible(false);
+        recent.append(scratchesButton.node());
         gui.landmark(Landmarks.RECENT, recent);
+        gui.landmark(Landmarks.OPEN_SCRATCHES, scratchesButton.node());
 
         ancestry = new Breadcrumb<Path>(gui, Picker::label).name("ancestry").font(Type.UI).maxSegments(2);
         // Two segments can still be wider than the navigator, when a folder's name is long: cut at its edge rather
@@ -122,16 +134,48 @@ final class Picker {
         return null;
     }
 
-    /** The recent folders, as the editor last said them. */
+    /**
+     * The recent folders, as the editor last said them, but the scratches, which have a button of their own and are
+     * not one of the folders a person was working in.
+     */
     void recent(List<Path> folders) {
+        List<Path> shown = folders.stream().filter(p -> !scratches.is(p)).toList();
         for (int i = 0; i < RECENT; i++) {
-            Path p = i < folders.size() ? folders.get(i) : null;
+            Path p = i < shown.size() ? shown.get(i) : null;
             recentPaths[i] = p;
             recentButtons[i].label(p == null ? "" : label(p));
             recentCells[i].visible(p != null);
         }
-        recentLabel.visible(!folders.isEmpty());
-        rule.visible(!folders.isEmpty());
+        recentShown = !shown.isEmpty();
+        heading();
+    }
+
+    /** Whether there is a scratch to offer, as {@code FindScratches} last said. */
+    void scratchesThere(boolean any) {
+        scratchesShown = any;
+        scratchesButton.node().visible(any);
+        heading();
+    }
+
+    /** Recent's heading and the line under it, there while anything is offered above the tree. */
+    private void heading() {
+        recentLabel.visible(recentShown || scratchesShown);
+        rule.visible(recentShown || scratchesShown);
+    }
+
+    /** Whether the Scratches button is offered: for a test. */
+    boolean scratchesOffered() {
+        return scratchesShown;
+    }
+
+    /** The Scratches button's address, which its {@code Pressed} carries. */
+    String scratchesAddress() {
+        return scratchesButton.address();
+    }
+
+    /** The scratches' folder, which the Scratches button picks. */
+    Path scratchesFolder() {
+        return scratches.dir();
     }
 
     /** The cell round the recent button at {@code index}: hovered while the pointer is on the button. */

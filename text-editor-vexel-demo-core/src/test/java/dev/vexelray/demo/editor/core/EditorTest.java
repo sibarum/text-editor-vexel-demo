@@ -6,6 +6,7 @@ import dev.vexelray.demo.editor.core.Messages.Close;
 import dev.vexelray.demo.editor.core.Messages.CloseTabs;
 import dev.vexelray.demo.editor.core.Messages.Create;
 import dev.vexelray.demo.editor.core.Messages.Created;
+import dev.vexelray.demo.editor.core.Messages.Dropping;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Edited;
 import dev.vexelray.demo.editor.core.Messages.FileRead;
@@ -25,6 +26,7 @@ import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
+import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.Why;
@@ -87,7 +89,8 @@ class EditorTest {
                 Messages.CLOSE_TABS_TOPIC, Messages.RETITLE_TOPIC, Messages.CAPTION_TOPIC, Messages.STATUS_TOPIC,
                 Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
-                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC)) {
+                Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
+                Messages.DROPPING_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -314,6 +317,67 @@ class EditorTest {
         tell(Answer.TOPIC, new Answer(question, 0));
         tell(Answer.TOPIC, new Answer(question, 1));
         assertTrue(took(CloseTabs.class).isEmpty(), "the run waits on the write, not on another answer");
+    }
+
+    // ------------------------------------------------------------------ scratches
+
+    /** A scratch as {@code MakeScratch} would answer it: opened, and its tab's id returned. */
+    private long scratch(String name) {
+        Path made = file(name);
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(made, false, ""));
+        List<AddTab> added = took(AddTab.class);
+        assertEquals(List.of(new AddTab(added.getFirst().id(), made, "", true)), added);
+        return added.getFirst().id();
+    }
+
+    @Test
+    void aNewScratchOpensEmptyInFrontAndIsSaid() {
+        Path made = file("2026-11-01-1432.md");
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(made, false, ""));
+        assertTrue(sent.contains(new AddTab(1, made, "", true)));
+        assertTrue(sent.contains(new Status("New scratch 2026-11-01-1432.md", false)));
+        assertEquals(java.util.Set.of(made), editor.state().fresh());
+    }
+
+    @Test
+    void aScratchThatCouldNotBeMadeIsRefused() {
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(dir, false, "denied"));
+        assertTrue(sent.contains(new Status("Could not make a scratch: denied", true)));
+        assertTrue(took(AddTab.class).isEmpty());
+    }
+
+    @Test
+    void aNewScratchInTheFolderShownListsItAgain() {
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
+        sent.clear();
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(file("t.md"), false, ""));
+        assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));
+    }
+
+    @Test
+    void aFreshScratchClosedGoesAgainAndAnotherFileDoesNot() {
+        long s = scratch("s.md");
+        long a = opened("a.txt", "a");
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(s, a)));
+        assertEquals(List.of(new Dropping(file("s.md"))), took(Dropping.class));
+        assertTrue(editor.state().fresh().isEmpty());
+    }
+
+    @Test
+    void aScratchWrittenToIsKeptWhenClosed() {
+        long s = scratch("s.md");
+        tell(Messages.SAVE_TOPIC, new Save(s, "note", true));
+        tell(Messages.WRITTEN_TOPIC, new Written(s, took(Write.class).getFirst().path(), ""));
+        tell(Messages.CLOSE_TOPIC, new Close(List.of(s)));
+        assertTrue(took(Dropping.class).isEmpty());
+    }
+
+    @Test
+    void quittingTakesFreshScratchesAway() {
+        scratch("s.md");
+        tell(CloseRequested.TOPIC, new CloseRequested(CloseRequested.MAIN, 5));
+        assertEquals(List.of(new Dropping(file("s.md"))), sent.stream().filter(Dropping.class::isInstance).toList());
+        assertEquals(List.of(new CloseAnswer(5, true)), took(CloseAnswer.class));
     }
 
     // ------------------------------------------------------------------ quitting: the same chain, another way in

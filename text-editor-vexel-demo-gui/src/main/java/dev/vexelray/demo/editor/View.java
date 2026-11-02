@@ -19,6 +19,7 @@ import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
+import dev.vexelray.demo.editor.core.Messages.NewScratch;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Picture;
 import dev.vexelray.demo.editor.core.Messages.Pictured;
@@ -27,6 +28,8 @@ import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
+import dev.vexelray.demo.editor.core.Messages.ScratchesFound;
+import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.framework.api.Subscribe;
@@ -108,6 +111,8 @@ final class View {
     private final Sender<Intent> intents;
     private final Sender<Picture> picture;
     private final Sender<Add> add;
+    private final Sender<NewScratch> newScratch;
+    private final Sender<ScratchesWanted> scratchesWanted;
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
@@ -118,8 +123,11 @@ final class View {
     View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
          Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
-         Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add) {
+         Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
+         Sender<ScratchesWanted> scratchesWanted) {
         this.gui = gui;
+        this.newScratch = newScratch;
+        this.scratchesWanted = scratchesWanted;
         this.ui = ui;
         this.ws = ui.workspace();
         this.nav = ui.navigator();
@@ -156,6 +164,7 @@ final class View {
         chord(Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT), Command.TOGGLE_FORMATTED);
         chord(Shortcut.of(Key.B, Modifier.CONTROL), Command.TOGGLE_NAVIGATOR);
         chord(Shortcut.of(Key.O, Modifier.CONTROL), Command.TOGGLE_OPEN);
+        chord(Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT), Command.NEW_SCRATCH);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
         chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
@@ -265,6 +274,12 @@ final class View {
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             children.send(nav.picker().children(m));
         }
+    }
+
+    /** Whether there is a scratch: Open offers the scratches' folder once there is. */
+    @Subscribe
+    public void scratchesFound(ScratchesFound m) {
+        nav.picker().scratchesThere(m.any());
     }
 
     /** A folder's picture: drawn if it is still the one wanted, and the next asked for if the pointer has moved on. */
@@ -450,10 +465,11 @@ final class View {
         }
     }
 
-    /** A recent folder pressed in Open: picked. */
+    /** A recent folder pressed in Open, or the scratches: picked. */
     @Subscribe
     public void buttonPressed(Button.Pressed m) {
-        Path p = nav.picker().recentAt(m.button());
+        Path p = m.button().equals(nav.picker().scratchesAddress()) ? nav.picker().scratchesFolder()
+                : nav.picker().recentAt(m.button());
         if (p != null) {
             pick(p);
         }
@@ -575,6 +591,11 @@ final class View {
         ui.status(b.showingFormatted() ? "Formatted view" : "Source view", false);
     }
 
+    /** Ctrl+Shift+N: a new scratch, which the editor opens in front once it is made. */
+    void newScratch() {
+        newScratch.send(new NewScratch(Optional.empty()));
+    }
+
     void cycle(int delta) {
         ws.cycle(delta);
     }
@@ -608,6 +629,7 @@ final class View {
                 ui.preview().forget();   // each visit looks at the disk again
                 recentHover = null;
                 treeHover = null;
+                scratchesWanted.send(new ScratchesWanted());
             }
             ui.showNavigator(true);
             nav.open(true);

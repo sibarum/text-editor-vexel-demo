@@ -9,6 +9,7 @@ import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Picture;
+import dev.vexelray.demo.editor.core.Messages.ScratchesFound;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.SurveyFolder;
 import dev.vexelray.framework.core.Answer;
@@ -73,8 +74,12 @@ class ViewTest {
         throw new AssertionError("asked unexpectedly: " + modal.title());
     };
 
+    /** The application's home, in this test's folder: the scratches go beside the settings, so they are made here. */
+    private static final String HOME = TextEditor.APP + ".home";
+
     @BeforeEach
     void build() {
+        System.setProperty(HOME, dir.resolve("home").toString());
         wiring = new TextEditorAppWiring();
         shell = VexelApplication.tree(wiring, new String[0]);
         // This test's dialogs in place of the framework's, which would hold every question for a window that never
@@ -114,6 +119,7 @@ class ViewTest {
         List<Cuts.Cut> found = cuts.found();
         cuts.close();
         shell.disposer().close();
+        System.clearProperty(HOME);
         assertEquals(List.of(), found, "changed on screen in one frame; keep the node and change it (see cuts)");
     }
 
@@ -369,6 +375,74 @@ class ViewTest {
         shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.picker().recentAddress(0)));
         eventually("back in a", () -> a.equals(nav.folder()) && !nav.opened());
         eventually("b recent now", () -> nav.picker().recentLabels().equals(List.of("b")));
+    }
+
+    /** The scratches' folder, beside this test's settings. */
+    private Path scratches() {
+        return dir.resolve("home").resolve("scratches").toAbsolutePath().normalize();
+    }
+
+    /** Ctrl+Shift+N makes a scratch and opens it in front; closed with nothing written to it, it goes again. */
+    @Test
+    void aNewScratchOpensInFrontAndGoesAgainIfClosedEmpty() throws Exception {
+        tell(Intent.Command.NEW_SCRATCH);
+        eventually("a scratch in front", () -> ws.front() != null && ws.front().path.startsWith(scratches()));
+        Path made = ws.front().path;
+        assertTrue(Files.isRegularFile(made));
+        assertTrue(made.getFileName().toString().endsWith(".md"), made.toString());
+        eventually("said", () -> said.contains(new Status("New scratch " + made.getFileName(), false)));
+
+        tell(Intent.Command.CLOSE_FRONT);
+        eventually("the tab closed and the scratch gone", () -> ws.all().isEmpty() && !Files.exists(made));
+    }
+
+    /** A scratch written to is kept: closed, even emptied again, it stays. */
+    @Test
+    void aScratchWrittenToIsKept() throws Exception {
+        tell(Intent.Command.NEW_SCRATCH);
+        eventually("a scratch in front", () -> ws.front() != null && ws.front().path.startsWith(scratches()));
+        Buffer b = ws.front();
+        b.field.insert("a note");
+        tell(Intent.Command.SAVE_FRONT);
+        eventually("saved", () -> said.contains(new Status("Saved " + b.path.getFileName(), false)));
+
+        tell(Intent.Command.CLOSE_FRONT);
+        eventually("the tab closed", () -> ws.all().isEmpty());
+        assertEquals("a note", Files.readString(b.path));
+    }
+
+    /**
+     * Open offers the scratches once there is one; pressed, they are the folder shown, which the chip calls Scratches,
+     * and leaving them does not make them one of the recent folders.
+     */
+    @Test
+    void openOffersTheScratchesOnceThereIsOne() throws Exception {
+        Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
+        Navigator nav = wiring.ui().navigator();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a shown", () -> a.equals(nav.folder()));
+
+        List<ScratchesFound> found = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.SCRATCHES_FOUND_TOPIC, found::add);
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("Open, and the scratches looked for", () -> nav.opened() && !found.isEmpty());
+        VexelApplication.frame(shell);
+        assertFalse(nav.picker().scratchesOffered(), "no scratch yet");
+        tell(Intent.Command.LEAVE_OPEN);
+        eventually("the files again", () -> !nav.opened());
+
+        Files.createDirectories(scratches());
+        Files.writeString(scratches().resolve("note.md"), "n");
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("the scratches offered", () -> nav.opened() && nav.picker().scratchesOffered());
+        shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.picker().scratchesAddress()));
+        eventually("the scratches shown", () -> scratches().equals(nav.folder()) && !nav.opened());
+        assertEquals("Scratches", nav.chipLabel());
+
+        shell.bus().publish(Messages.GO_TOPIC, new Go(a.toString()));
+        eventually("a again", () -> a.equals(nav.folder()));
+        assertEquals("a", nav.chipLabel());
+        assertEquals(List.of(), nav.picker().recentLabels(), "the scratches are not a recent folder");
     }
 
     /** Plain puts the navigator out of the way; Ctrl+B brings it back, and so does a folder being shown. */

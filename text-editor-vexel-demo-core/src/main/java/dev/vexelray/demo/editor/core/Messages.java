@@ -14,7 +14,8 @@ import java.util.Optional;
  * <p>The application is three kinds of part, and none of them holds another. The {@link Editor} decides; it owns the
  * session, and changes it only by running its own declared steps. The view, in the {@code -gui} module, shows; it
  * owns the widgets. The jobs ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
- * {@link ReadSession}, {@link WriteSession}, {@link ListFolder}, {@link MarkText}, {@link SurveyFolder}) touch the
+ * {@link ReadSession}, {@link WriteSession}, {@link ListFolder}, {@link MarkText}, {@link SurveyFolder},
+ * {@link MakeScratch}, {@link DropScratch}, {@link FindScratches}) touch the
  * disk or do slow work, on the job lane. Each sends a record on a topic and the others hear it on their own lane, so no state is shared
  * and nothing needs a lock.
  *
@@ -95,6 +96,15 @@ public final class Messages {
     public static final Topic<Save> SAVE_TOPIC = Topic.edge(Save.class);
 
     public record Save(long id, String text, boolean open) {
+    }
+
+    /**
+     * Ctrl+Shift+N: a new, empty scratch ({@link MakeScratch}), in {@code in} if that is among the scratches, else in
+     * the scratches' own folder. The job answers the editor, which opens it.
+     */
+    public static final Topic<NewScratch> NEW_SCRATCH_TOPIC = Topic.edge(NewScratch.class);
+
+    public record NewScratch(Optional<Path> in) {
     }
 
     // ------------------------------------------------------------------ the editor tells the view
@@ -282,6 +292,21 @@ public final class Messages {
     public record Created(Path path, Made what, String text, boolean crlf, String note, String problem) {
     }
 
+    /**
+     * What {@link NewScratch} made: the new, empty scratch, with the line endings a save gives it, or why not
+     * ({@code problem}, and {@code path} the scratches' folder).
+     */
+    public static final Topic<ScratchMade> SCRATCH_MADE_TOPIC = Topic.edge(ScratchMade.class);
+
+    public record ScratchMade(Path path, boolean crlf, String problem) {
+    }
+
+    /** A scratch this run made, closed with nothing ever written to it: it goes again ({@link DropScratch}). */
+    public static final Topic<Dropping> DROPPING_TOPIC = Topic.edge(Dropping.class);
+
+    public record Dropping(Path path) {
+    }
+
     /** Read back what the last session remembered, and what the command line named ({@link ReadSession}). */
     public static final Topic<Recall> RECALL_TOPIC = Topic.edge(Recall.class);
 
@@ -342,6 +367,17 @@ public final class Messages {
         public Listed {
             items = List.copyOf(items);
         }
+    }
+
+    /** Whether there is a scratch, for Open's Scratches button ({@link FindScratches}): asked each time Open comes up. */
+    public static final Topic<ScratchesWanted> SCRATCHES_WANTED_TOPIC = Topic.edge(ScratchesWanted.class);
+
+    public record ScratchesWanted() {
+    }
+
+    public static final Topic<ScratchesFound> SCRATCHES_FOUND_TOPIC = Topic.edge(ScratchesFound.class);
+
+    public record ScratchesFound(boolean any) {
     }
 
     /** Picture a folder for Open ({@link SurveyFolder}): the one under the pointer, or selected. */
