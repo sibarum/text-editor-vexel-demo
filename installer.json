@@ -15,7 +15,7 @@
     "binaries": [
       {
         "name": "text-editor",
-        "source": "text-editor-vexel-demo-gui/target/text-editor.exe",
+        "source": "text-editor-vexel-demo-gui/target/text-editor-vexel-demo.exe",
         "icon": "text-editor-vexel-demo-gui/src/main/rc/editor.ico",
         "addToPath": true,
         "shortcuts": { "desktop": true, "startMenu": true, "label": "VexelRay IDE" },
@@ -51,7 +51,7 @@
       },
       {
         "name": "text-editor-ffmpeg-record",
-        "source": "text-editor-vexel-demo-gui/target/text-editor-ffmpeg-record-windows-x86_64.zip",
+        "source": "text-editor-vexel-demo-gui/target/text-editor-vexel-demo-ffmpeg-record-windows-x86_64.zip",
         "dir": "ffmpeg-record"
       },
       { "name": "notices", "source": "THIRD-PARTY-NOTICES.txt" }
