@@ -93,7 +93,10 @@ isolation check (rightly) refuses an `os.name` test outside an OS module, and `P
 Done here: always on; elsewhere a fit stops a row short now and then. What vex-suite-common could do: answer it from
 the pty (`PtyPlatform.pseudoconsole()`), or have the widget ask the platform itself.
 
-## FN-8 · A menu cannot be walked from the keyboard 🔬
+## FN-8 · A menu cannot be walked from the keyboard 🔬 (fixed 2026-11-04)
+
+*Fixed in vexelray-gui `afd2dbb`: an open menu takes Up, Down, Home, End, Enter, Right and Left, and `TitleBar.open`
+starts it on its first line, so F5, Down, Enter runs Compile with no pointer. Kept below as found.*
 
 `ContextMenu` answers Escape and nothing else: no arrows, no Enter, no first-letter jump, and no line under the
 keyboard when it opens. So F5 drops the Run menu (`TitleBar.open`) and a click still has to choose. What the framework

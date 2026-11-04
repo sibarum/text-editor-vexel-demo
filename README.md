@@ -131,7 +131,7 @@ Copy output and Close. Finished runs past the last five close by themselves, old
 To a script, the menu is `titlebar-menu.run` and its items `menu.<label>` (`click menu.compile`), the console is
 `window console`, and its tabs `console.tabs`; Run… is `menu.run`, and its window `window run`, with `run.command`,
 `run.dir`, `run.environment`, `run.path` and the button `run.go`. `await status.message Compile:` waits for a run to
-end. The menus answer no arrow keys yet, so F5 drops the menu and a click chooses.
+end. F5 opens the menu on its first line; Up and Down move, Enter runs, Escape closes.
 
 ## How it is put together
 
