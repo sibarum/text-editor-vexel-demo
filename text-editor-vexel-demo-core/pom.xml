@@ -75,10 +75,46 @@
             <artifactId>concordance-project</artifactId>
             <version>${concordance.version}</version>
         </dependency>
+        <!-- The pseudo-terminal a run is started on (Runner), and what is a program here and how to run it (Runs).
+             The platform's own implementation is a runtime dependency of -gui's. -->
+        <dependency>
+            <groupId>dev.sibarum</groupId>
+            <artifactId>vex-suite-common-pty</artifactId>
+            <version>${vex-suite-common.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
         </dependency>
     </dependencies>
+
+    <!-- RunsTest asks the platform what a program is: exactly one pty OS module, for the tests only. The application
+         gets its own from -gui's platform profiles. -->
+    <profiles>
+        <profile>
+            <id>platform-windows</id>
+            <activation><os><family>windows</family></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.sibarum</groupId>
+                    <artifactId>vex-suite-common-pty-windows</artifactId>
+                    <version>${vex-suite-common.version}</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>platform-linux</id>
+            <activation><os><family>unix</family><name>linux</name></os></activation>
+            <dependencies>
+                <dependency>
+                    <groupId>dev.sibarum</groupId>
+                    <artifactId>vex-suite-common-pty-linux</artifactId>
+                    <version>${vex-suite-common.version}</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>

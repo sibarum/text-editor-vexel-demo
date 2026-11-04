@@ -15,8 +15,10 @@ import java.util.Optional;
  * session, and changes it only by running its own declared steps. The view, in the {@code -gui} module, shows; it
  * owns the widgets. The jobs ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
  * {@link ReadSession}, {@link WriteSession}, {@link ListFolder}, {@link MarkText}, {@link SurveyFolder},
- * {@link MakeScratch}, {@link DropScratch}, {@link FindScratches}, {@link MoveScratch}, {@link MakeScratchFolder}) touch the
- * disk or do slow work, on the job lane. Each sends a record on a topic and the others hear it on their own lane, so no state is shared
+ * {@link MakeScratch}, {@link DropScratch}, {@link FindScratches}, {@link MoveScratch}, {@link MakeScratchFolder},
+ * {@link FindRuns}) touch the
+ * disk or do slow work, on the job lane; the {@link Runner} keeps a program running on a pseudo-terminal for each run.
+ * Each sends a record on a topic and the others hear it on their own lane, so no state is shared
  * and nothing needs a lock.
  *
  * <p>A record here is what crossed, and it crosses as itself: the processor refuses a payload that is not deeply
@@ -464,5 +466,83 @@ public final class Messages {
         public Formatted {
             blocks = List.copyOf(blocks);
         }
+    }
+
+    // ------------------------------------------------------------------ running things
+
+    /**
+     * What the Run menu should offer for the folder shown and the file in front ({@link FindRuns}): asked by the view
+     * whenever either changes, and after a save, since what is on disk is what is offered.
+     */
+    public static final Topic<RunsWanted> RUNS_WANTED_TOPIC = Topic.edge(RunsWanted.class);
+
+    public record RunsWanted(Optional<Path> folder, Optional<Path> file) {
+    }
+
+    /**
+     * One thing the Run menu offers: what its line says, the shell line that runs it, the folder it runs in, and the
+     * group it is listed in (a rule between groups).
+     */
+    public record Offer(String label, String line, Path dir, int group) {
+    }
+
+    /** What {@link RunsWanted} found, for the folder and file it was asked about, in the menu's order. */
+    public static final Topic<RunsOffered> RUNS_OFFERED_TOPIC = Topic.edge(RunsOffered.class);
+
+    public record RunsOffered(Optional<Path> folder, Optional<Path> file, List<Offer> offers) {
+        public RunsOffered {
+            offers = List.copyOf(offers);
+        }
+    }
+
+    /**
+     * The person chose something to run, from the Run menu, Run…, or a console tab's Run again. The editor saves every
+     * unsaved file first, since what runs is what is on disk, and then launches it.
+     */
+    public static final Topic<RunThis> RUN_THIS_TOPIC = Topic.edge(RunThis.class);
+
+    public record RunThis(Offer offer) {
+    }
+
+    /**
+     * Start {@code line} in {@code dir} on a pseudo-terminal {@code cols} by {@code rows} ({@link Runner}): one run per
+     * id, which the console's tab and every message about the run carry.
+     */
+    public static final Topic<Launch> LAUNCH_TOPIC = Topic.edge(Launch.class, Launch::run);
+
+    public record Launch(long run, Offer offer, int cols, int rows) {
+    }
+
+    /** What run {@code run}'s program wrote, as it wrote it: VT sequences and UTF-8, for the console to draw. */
+    public static final Topic<Output> OUTPUT_TOPIC = Topic.edge(Output.class);
+
+    public record Output(long run, String text) {
+    }
+
+    /**
+     * Run {@code run} is over: its program exited with {@code code}, or was stopped. {@code problem} is why it never
+     * started, empty when it did.
+     */
+    public static final Topic<Ended> ENDED_TOPIC = Topic.edge(Ended.class);
+
+    public record Ended(long run, int code, boolean stopped, String problem) {
+    }
+
+    /** Stop run {@code run}: its program is ended, and its terminal released. */
+    public static final Topic<StopRun> STOP_RUN_TOPIC = Topic.edge(StopRun.class, StopRun::run);
+
+    public record StopRun(long run) {
+    }
+
+    /** {@code text} goes to run {@code run}'s program, as if typed: a key, a paste, or the terminal's own answer. */
+    public static final Topic<Typed> TYPED_TOPIC = Topic.edge(Typed.class, Typed::run);
+
+    public record Typed(long run, String text) {
+    }
+
+    /** Run {@code run}'s terminal is now {@code cols} by {@code rows} cells, which its pseudo-terminal is told. */
+    public static final Topic<Fitted> FITTED_TOPIC = Topic.edge(Fitted.class, Fitted::run);
+
+    public record Fitted(long run, int cols, int rows) {
     }
 }

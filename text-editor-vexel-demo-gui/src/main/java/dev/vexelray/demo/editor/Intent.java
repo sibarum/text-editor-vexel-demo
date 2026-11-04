@@ -81,6 +81,12 @@ record Intent(Command command) {
                 view.leaveRename();
             }
         },
+        RUN_MENU {
+            @Override
+            void on(View view) {
+                view.runMenu();
+            }
+        },
         FOCUS_PATH {
             @Override
             void on(View view) {

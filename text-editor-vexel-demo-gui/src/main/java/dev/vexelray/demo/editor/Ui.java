@@ -1,9 +1,12 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.demo.editor.core.Messages.Offer;
+import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.input.Menu;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.LayoutEnums.Direction;
 import dev.vexelray.gui.core.layout.Length;
@@ -12,6 +15,9 @@ import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.SplitPane;
 import dev.vexelray.gui.widget.StatusBar;
 import dev.vexelray.gui.widget.TitleBar;
+import sibarum.atchung.Sender;
+
+import java.util.List;
 
 /**
  * The window: the framework's title bar, the navigator beside the open files, and a status line under both.
@@ -88,6 +94,8 @@ final class Ui {
         // Two cards on the page. The title bar and the status line are the page too, not chrome: the cards are
         // what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
+        // The Run menu is there from the first frame, greyed until the folder or the file in front gives it something.
+        titleBar.menu(RUN, "Run", Menu.NONE);
         status.node().background(gui.theme().color(Role.PAGE));
         status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
         Node body = gui.box()
@@ -138,6 +146,31 @@ final class Ui {
     /** Whether the navigator is on screen: the split's own answer, which it does not give, kept here beside it. */
     boolean navigatorShown() {
         return navigatorShown;
+    }
+
+    /** The Run menu's name in the title bar: its landmark is {@link Landmarks#RUN_MENU}. */
+    static final String RUN = "run";
+
+    /**
+     * The Run menu, declared again: each offer a line that sends it to be run, a rule between groups, in the order
+     * found. Empty until there is something to run, when it stays in place, greyed.
+     */
+    void runMenu(List<Offer> offers, Sender<RunThis> run) {
+        Menu.Builder menu = Menu.builder();
+        int group = offers.isEmpty() ? 0 : offers.getFirst().group();
+        for (Offer o : offers) {
+            if (o.group() != group) {
+                menu.separator();
+                group = o.group();
+            }
+            menu.item(o.label(), run, new RunThis(o));
+        }
+        titleBar.menu(RUN, "Run", menu.build());
+    }
+
+    /** Drop the Run menu, or put it away: F5. */
+    void openRunMenu() {
+        titleBar.open(RUN);
     }
 
     /** The front file's title, dot and all, in the title bar and the status line; empty when nothing is open. */

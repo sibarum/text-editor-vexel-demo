@@ -29,6 +29,10 @@ import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Relocate;
 import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
+import dev.vexelray.demo.editor.core.Messages.Offer;
+import dev.vexelray.demo.editor.core.Messages.RunThis;
+import dev.vexelray.demo.editor.core.Messages.RunsOffered;
+import dev.vexelray.demo.editor.core.Messages.RunsWanted;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
 import dev.vexelray.demo.editor.core.Messages.ScratchFolderMade;
@@ -123,6 +127,10 @@ final class View {
     private final Sender<ScratchesWanted> scratchesWanted;
     private final Sender<Relocate> relocate;
     private final Sender<ScratchFolderWanted> scratchFolderWanted;
+    private final Sender<RunsWanted> runsWanted;
+    private final Sender<RunThis> runThis;
+    /** What the Run menu was last asked about, so an answer about anything else is left. */
+    private RunsWanted runsAsked = new RunsWanted(Optional.empty(), Optional.empty());
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
@@ -135,7 +143,9 @@ final class View {
          Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
-         Sender<ScratchFolderWanted> scratchFolderWanted) {
+         Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis) {
+        this.runsWanted = runsWanted;
+        this.runThis = runThis;
         this.gui = gui;
         this.newScratch = newScratch;
         this.scratchesWanted = scratchesWanted;
@@ -181,6 +191,7 @@ final class View {
         chord(Shortcut.of(Key.O, Modifier.CONTROL), Command.TOGGLE_OPEN);
         chord(Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT), Command.NEW_SCRATCH);
         chord(Shortcut.of(Key.N, Modifier.ALT), Command.TOGGLE_SCRATCHES);
+        chord(Shortcut.of(Key.F5), Command.RUN_MENU);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
         chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
         chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
@@ -210,6 +221,7 @@ final class View {
         nav.show(m.path());
         ui.showNavigator(true);
         picture();
+        wantRuns();
     }
 
     /** A window on files alone: the navigator out of the way until a folder is shown or Ctrl+B asks for it. */
@@ -253,6 +265,37 @@ final class View {
     @Subscribe
     public void caption(Caption m) {
         ui.caption(m.file());
+        wantRuns();
+    }
+
+    // ------------------------------------------------------------------ the Run menu
+
+    /**
+     * Ask what the Run menu should offer for the folder shown and the file in front. Asked when either changes: a
+     * folder shown, and every caption, which the editor sends when the front file changes, is saved or goes.
+     */
+    private void wantRuns() {
+        Buffer front = ws.front();
+        runsAsked = new RunsWanted(Optional.ofNullable(nav.folder()),
+                Optional.ofNullable(front == null ? null : front.path));
+        runsWanted.send(runsAsked);
+    }
+
+    /**
+     * What can be run: the title bar's Run menu, declared again. Run… first, then each group of offers under a rule.
+     * An answer about another folder or file than the last asked is stale, and left.
+     */
+    @Subscribe
+    public void runsOffered(RunsOffered m) {
+        if (!m.folder().equals(runsAsked.folder()) || !m.file().equals(runsAsked.file())) {
+            return;
+        }
+        ui.runMenu(m.offers(), runThis);
+    }
+
+    /** F5: the Run menu, dropped from the title bar as a click on it would. */
+    void runMenu() {
+        ui.openRunMenu();
     }
 
     @Subscribe

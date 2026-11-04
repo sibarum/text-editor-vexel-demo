@@ -5,6 +5,7 @@ import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.framework.api.Configuration;
 import dev.vexelray.framework.api.Provides;
 import dev.vexelray.framework.shell.Appearance;
+import dev.vexelray.framework.shell.Windows;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
@@ -69,6 +70,12 @@ final class Recipes {
      * it moves with the settings when the home does ({@code text-editor-vexel-demo.home}), which is how a test keeps
      * its scratches out of the person's.
      */
+    /** The console: a window of its own, one tab per run, brought up when something is run. */
+    @Provides
+    Console console(Windows windows, FontSet fonts) {
+        return new Console(windows.named(Console.KEY, "Console", 960, 600), fonts);
+    }
+
     @Provides
     Scratches scratches(Settings settings) {
         return new Scratches(settings.path().resolveSibling("scratches"));

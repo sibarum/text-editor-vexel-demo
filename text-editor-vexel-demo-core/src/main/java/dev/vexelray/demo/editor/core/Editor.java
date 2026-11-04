@@ -17,8 +17,10 @@ import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
+import dev.vexelray.demo.editor.core.Messages.Launch;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Moved;
+import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recent;
@@ -28,6 +30,7 @@ import dev.vexelray.demo.editor.core.Messages.Recalled;
 import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
+import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
 import dev.vexelray.demo.editor.core.Messages.ScratchMade;
@@ -114,11 +117,11 @@ import java.util.Set;
 @Component
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
         Created.class, ScratchMade.class, Relocated.class, Fronted.class, Edited.class, Save.class, Written.class,
-        Answer.class, Close.class, CloseRequested.class})
+        Answer.class, Close.class, CloseRequested.class, RunThis.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
-        Dropping.class})
+        Dropping.class, Launch.class})
 public final class Editor {
 
     /**
@@ -227,15 +230,17 @@ public final class Editor {
     }
 
     /**
-     * One close or quit in flight.
+     * One close, quit or run in flight: whatever waits on unsaved work being saved first.
      *
-     * @param tabs    the tabs it closes; none for a quit, which closes the window instead
-     * @param unsaved those of them with unsaved work, which the question is about
+     * @param tabs    the tabs it closes; none for a quit, which closes the window instead, or a run
+     * @param unsaved those of them with unsaved work, which the question is about; for a run, every unsaved tab
      * @param gate    the close gate to answer, or {@link #NO_GATE}
      * @param held    the run, held while it waits for the person's answer or for its saves to land
      * @param waiting the tabs whose saves have still to land
+     * @param launch  what a run starts once its saves have landed; empty for a close or a quit
      */
-    record Closing(List<Long> tabs, List<Long> unsaved, long gate, Optional<Chain.Resume> held, Set<Long> waiting) {
+    record Closing(List<Long> tabs, List<Long> unsaved, long gate, Optional<Chain.Resume> held, Set<Long> waiting,
+                   Optional<Offer> launch) {
 
         Closing {
             tabs = List.copyOf(tabs);
@@ -243,18 +248,23 @@ public final class Editor {
             waiting = Set.copyOf(waiting);
         }
 
+        /** A close or a quit: nothing to launch. */
+        Closing(List<Long> tabs, List<Long> unsaved, long gate, Optional<Chain.Resume> held, Set<Long> waiting) {
+            this(tabs, unsaved, gate, held, waiting, Optional.empty());
+        }
+
         Closing holding(Chain.Resume run, Set<Long> saves) {
-            return new Closing(tabs, unsaved, gate, Optional.of(run), saves);
+            return new Closing(tabs, unsaved, gate, Optional.of(run), saves, launch);
         }
 
         Closing landed(long id) {
             Set<Long> next = new HashSet<>(waiting);
             next.remove(id);
-            return new Closing(tabs, unsaved, gate, held, next);
+            return new Closing(tabs, unsaved, gate, held, next, launch);
         }
 
         Closing released() {
-            return new Closing(tabs, unsaved, gate, Optional.empty(), Set.of());
+            return new Closing(tabs, unsaved, gate, Optional.empty(), Set.of(), launch);
         }
     }
 
@@ -348,6 +358,11 @@ public final class Editor {
         Step<State, Stop> stop = b.step("stop", Editor::stop);
         Step<State, TimedOut> late = b.step("late", Editor::late);
 
+        Step<State, RunThis> runAsked = b.step("runAsked", Editor::runAsked);
+        Step<State, Ready> launch = b.step("launch", Editor::launch);
+        Step<State, Failed> notRun = b.step("notRun", Editor::notRun);
+        Step<State, TimedOut> runLate = b.step("runLate", Editor::runLate);
+
         b.on(WindowOpened.TOPIC, begin)
                 .on(Messages.RECALLED_TOPIC, recalled)
                 .on(Messages.GO_TOPIC, go)
@@ -369,6 +384,13 @@ public final class Editor {
                 stop, late);
         closing(Chain.start("quit", ledger, quitAsked).on(CloseRequested.TOPIC), ask, saveThem, discard, finish, stop,
                 late);
+
+        // Running: save what is unsaved, then launch. No question: what runs is what is on disk, so a run saves first.
+        Chain.start("run", ledger, runAsked).on(Messages.RUN_THIS_TOPIC)
+                .then(Ready.class, ledger, launch)
+                .or(Failed.class, ledger, notRun)
+                .or(TimedOut.class, ledger, runLate)
+                .build();
     }
 
     /**
@@ -923,6 +945,52 @@ public final class Editor {
         }
         caption(next, out);
         return remember(next, out);
+    }
+
+    // ------------------------------------------------------------------ running: the chain's steps
+
+    /** The console's size when a run starts; it is told its real size as soon as its tab is laid out. */
+    static final int COLS = 120;
+    static final int ROWS = 30;
+
+    /**
+     * Run what was chosen: at once if nothing is unsaved, else save every unsaved tab first and hold the run until the
+     * writes land, as a close does. The run's id is the chain's, which the console's tab is known by.
+     */
+    private static State runAsked(State s, RunThis r, Out out) {
+        List<Long> unsaved = new ArrayList<>();
+        for (Doc.Entry e : s.doc().tabs()) {
+            if (e.dirty()) {
+                unsaved.add(e.id());
+            }
+        }
+        Closing c = new Closing(List.of(), unsaved, NO_GATE, Optional.empty(), Set.of(), Optional.of(r.offer()));
+        if (unsaved.isEmpty()) {
+            out.result(new Ready());
+            return s.withClosing(out.run(), c);
+        }
+        out.send(Messages.FLUSH_TOPIC, new Flush(unsaved));
+        return s.withClosing(out.run(), c.holding(out.hold(), Set.copyOf(unsaved)));
+    }
+
+    /** Everything is saved: start it. */
+    private static State launch(State s, Ready ready, Out out) {
+        Closing c = s.closings().get(out.run());
+        Offer offer = c.launch().orElseThrow();
+        out.send(Messages.LAUNCH_TOPIC, new Launch(out.run(), offer, COLS, ROWS));
+        say(out, "Running " + offer.label());
+        return s.withoutClosing(out.run());
+    }
+
+    /** A save did not land, and said so: what would have run on it is not run. */
+    private static State notRun(State s, Failed why, Out out) {
+        return s.withoutClosing(out.run());
+    }
+
+    /** The saves did not land in time: nothing is run, and the status line says why. */
+    private static State runLate(State s, TimedOut late, Out out) {
+        refuse(out, "Saving took too long, so nothing was run");
+        return s.withoutClosing(out.run());
     }
 
     /** {@code file} has closed: if it is a fresh scratch, it goes. */

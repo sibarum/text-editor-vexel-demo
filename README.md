@@ -90,6 +90,7 @@ groups the button with other Java programs, and pinning it pins Java. The native
 | Ctrl+F | find in the file (Enter / Shift+Enter step, Escape closes) |
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
+| F5 | the Run menu (see *Running things*) |
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and Reveal in navigator. A bullet in
@@ -97,6 +98,31 @@ front of a tab's name means unsaved changes; closing anything unsaved asks first
 
 There is no file dialog, by choice: the path bar is the whole of "open", and it works the same in a test as in use. The
 framework brings native pickers (a `PickFile` message, answered by `Picked`) for a project that wants them.
+
+### Running things
+
+**Run**, in the title bar after the application's name (or F5), is a menu of what can be run for the folder shown and
+the file in front, worked out from what is on disk by the `FindRuns` job (`Runs`), each group under a rule:
+
+- the file in front: **Run *Class*.main()** for a Java file with a `main` (through Maven, `mvn -q compile exec:java`,
+  when it is in a module; with the JDK's source launcher otherwise), or the file itself when it is a program;
+- the Maven project: **Compile**, **Clean Install**, **Package** unless the packaging is `pom`, **Execute** when the
+  pom configures exec-maven-plugin's `exec`, and **Run Recent Build** for the newest program or runnable jar in
+  `target/`;
+- the programs in the folder, four folders deep at most, as the platform counts them (`PtyPlatform.programLine`).
+
+The menu is greyed while there is nothing to run. Before anything runs, every unsaved document is saved, since what
+runs is what is on disk; a save that fails runs nothing (the editor's `run` chain).
+
+Runs are shown in the **console**, a window of its own with one tab per run, the newest in front. Each run is a
+program on a pseudo-terminal of its own (the `Runner`, the framework's source-and-destination part, keyed by the run),
+drawn by `vex-suite-common-tty`'s `TerminalScreen`, so Maven colours its output and a program that asks a question can
+be answered by typing. Its first line is what ran and where; its last says how it ended, *Finished*, *Failed with exit
+code n*, *Stopped* or *Could not start*, and so does the main window's status line. A tab's menu has Stop, Run again,
+Copy output and Close. Finished runs past the last five close by themselves, oldest first, never the one in front.
+
+To a script, the menu is `titlebar-menu.run` and its items `menu.<label>` (`click menu.compile`), the console is
+`window console`, and its tabs `console.tabs`. `await status.message Compile:` waits for a run to end.
 
 ## How it is put together
 

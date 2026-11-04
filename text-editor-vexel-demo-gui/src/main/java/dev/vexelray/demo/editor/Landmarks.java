@@ -57,6 +57,12 @@ final class Landmarks {
     static final String STATUS_LANGUAGE = "status.language";
     static final String STATUS_POSITION = "status.position";
 
+    /** The application's Run menu in the title bar ({@code TitleBar.menuLandmark}); its items are {@code menu.<label>}. */
+    static final String RUN_MENU = "titlebar-menu.run";
+
+    /** The console window's tab bar, one tab per run ({@code ottermate --window console}). */
+    static final String CONSOLE_TABS = "console.tabs";
+
     private Landmarks() {
     }
 }

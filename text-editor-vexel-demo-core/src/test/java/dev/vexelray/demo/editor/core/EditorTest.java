@@ -18,6 +18,9 @@ import dev.vexelray.demo.editor.core.Messages.Found;
 import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
+import dev.vexelray.demo.editor.core.Messages.Launch;
+import dev.vexelray.demo.editor.core.Messages.Offer;
+import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Plain;
 import dev.vexelray.demo.editor.core.Messages.Read;
@@ -97,7 +100,7 @@ class EditorTest {
                 Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
                 Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
-                Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC)) {
+                Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC, Messages.LAUNCH_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -611,5 +614,62 @@ class EditorTest {
         assertEquals(List.of(new Find(dir, Why.ARGUMENT)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.ARGUMENT, Kind.FOLDER));
         assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));
+    }
+
+    // ------------------------------------------------------------------ running
+
+    private Offer compile() {
+        return new Offer("Compile", "mvn compile", dir, 0);
+    }
+
+    @Test
+    void aRunWithNothingUnsavedLaunchesAtOnce() {
+        opened("a.txt", "a");
+        sent.clear();
+        tell(Messages.RUN_THIS_TOPIC, new RunThis(compile()));
+        List<Launch> launched = took(Launch.class);
+        assertEquals(1, launched.size());
+        assertEquals(compile(), launched.getFirst().offer());
+        assertTrue(took(Flush.class).isEmpty(), "nothing to save");
+        assertTrue(editor.state().closings().isEmpty());
+    }
+
+    @Test
+    void aRunSavesEveryUnsavedFileFirstThenLaunches() {
+        long a = unsaved("a.txt");
+        long b = unsaved("b.txt");
+        tell(Messages.RUN_THIS_TOPIC, new RunThis(compile()));
+        assertEquals(List.of(new Flush(List.of(a, b))), took(Flush.class));
+        assertTrue(took(Launch.class).isEmpty(), "what runs is what is on disk, so nothing runs before the writes");
+
+        tell(Messages.SAVE_TOPIC, new Save(a, "a2", true));
+        tell(Messages.SAVE_TOPIC, new Save(b, "b2", true));
+        List<Write> writes = took(Write.class);
+        tell(Messages.WRITTEN_TOPIC, new Written(a, writes.get(0).path(), ""));
+        assertTrue(took(Launch.class).isEmpty(), "one write still to land");
+        tell(Messages.WRITTEN_TOPIC, new Written(b, writes.get(1).path(), ""));
+        assertEquals(1, took(Launch.class).size());
+        assertTrue(editor.state().closings().isEmpty());
+    }
+
+    @Test
+    void aSaveThatFailsRunsNothing() {
+        long a = unsaved("a.txt");
+        tell(Messages.RUN_THIS_TOPIC, new RunThis(compile()));
+        took(Flush.class);
+        tell(Messages.SAVE_TOPIC, new Save(a, "a2", true));
+        Write w = took(Write.class).getFirst();
+        tell(Messages.WRITTEN_TOPIC, new Written(a, w.path(), "disk full"));
+        assertTrue(took(Launch.class).isEmpty());
+        assertTrue(editor.state().closings().isEmpty());
+    }
+
+    @Test
+    void eachRunHasItsOwnId() {
+        tell(Messages.RUN_THIS_TOPIC, new RunThis(compile()));
+        tell(Messages.RUN_THIS_TOPIC, new RunThis(compile()));
+        List<Launch> launched = took(Launch.class);
+        assertEquals(2, launched.size());
+        assertTrue(launched.get(0).run() != launched.get(1).run(), "a console tab is known by its run's id");
     }
 }
