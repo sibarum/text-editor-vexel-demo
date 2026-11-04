@@ -55,3 +55,67 @@ refused. Done here: each button sits in a cell of its own, and the view hears th
 while the pointer is on anything inside it (`Picker.recentCell`). Costs a node per button and a paragraph explaining
 it. What the framework could do: a `Button.Hovered` state topic, as `TreeView` has.
 
+
+## FN-3 · Overriding three roles takes a whole forwarding theme 🔬
+
+The October design puts a selected row, a scrollbar thumb, every line and every well somewhere other than the
+framework's roles do (`Look`). `Theme` has no seam for "these roles, mapped": the only way is an anonymous `Theme`
+that forwards `palette`, `shading`, `relief`, `lit`, `letterpress`, `focusRing`, `icons` and both `color`s, and maps
+in the two `color`s. Thirteen methods to change four colours, and one forgotten forward is silent: a theme written
+before `icons()` existed would quietly drop an application's icon effects. What the framework could do: a
+`Theme.map(UnaryOperator<Role>)` (or `Theme.with(Role from, Role to)`) that keeps every other decision, as
+`focusRing(FocusRing)` and `icons(IconEffects)` already do for theirs.
+
+## FN-4 · A fill fading to Role.NONE fades through black 🔬
+
+A tab header lifted when selected and clear at rest faded its background from the lifted colour to `Role.NONE`, which
+is transparent *black*; `ViewTest` caught it as a change in one frame. Done here: the rest colour is the lifted one at
+alpha 0 (`Look.TAB_REST`). Every widget that clears a fill on a state change has the same trap. What the framework
+could do: fade an alpha-0 end in the other end's colour, so `NONE` means "none of this", whatever this is.
+
+## FN-5 · TextField and TreeView always bring their own well 🔬
+
+Both paint a well, a 0.5rem corner and a `LINE` border on their own node. Set into a card, as the design's navigator and
+document are, each instance has the frame taken off again by hand (`Navigator`'s trees, `Buffer`'s field,
+`FormattedView` matching it). What the framework could do: a frame style the widget takes (`framed(false)`, or a
+`Frame` value with `WELL`/`NONE`), so "flush in its container" is one word.
+
+## FN-6 · A menu line cannot show its shortcut 🔬
+
+The Run menu's F5 has nowhere to go: `MenuItem` has an icon, a label and an action, and no right-hand column for a
+chord. The README says F5 instead. What the framework could do: a `shortcut` on `MenuItem` and `Menu.Builder.item`,
+drawn dim at the right, which a declared chord could fill in by itself.
+
+## FN-7 · TerminalScreen asks the application which platform it is on 🔬
+
+`TerminalScreen.pseudoconsole()` works round a conhost flaw, so the console should call it on Windows only. The build's
+isolation check (rightly) refuses an `os.name` test outside an OS module, and `PtyPlatform`, which knows, does not say.
+Done here: always on; elsewhere a fit stops a row short now and then. What vex-suite-common could do: answer it from
+the pty (`PtyPlatform.pseudoconsole()`), or have the widget ask the platform itself.
+
+## FN-8 · A menu cannot be walked from the keyboard 🔬
+
+`ContextMenu` answers Escape and nothing else: no arrows, no Enter, no first-letter jump, and no line under the
+keyboard when it opens. So F5 drops the Run menu (`TitleBar.open`) and a click still has to choose. What the framework
+could do: Up/Down through the enabled lines, Right/Left into and out of a submenu, Enter to choose, and a menu opened
+by a key starting with its first line marked, as every desktop menu does.
+
+## FN-9 · TerminalScreen draws a gap where the colour changes 🔬
+
+Maven's `[INFO]` reads `[ INFO ]` in the console, and every coloured run has the same gap either side: the cells are
+right (copy gives `[INFO]`), so it is the drawing of a styled span. In vex-suite-common-tty, not worked round here.
+
+## FN-10 · A record state grows a field in every constructor call 🔬
+
+The run chain waits on saves exactly as a close does, and wanted a map of its own in `Editor.State`. `State` has eleven
+fields and twelve `with…` methods, each a full constructor call; a twelfth field is a change to all of them. Done
+here: the run reuses `Closing`, which gained an optional `launch`, so `landed` and `failed` serve both, at the price of
+a name that now means "whatever waits on saves". The ledger pattern makes this the normal way to grow: what the
+framework could do is generate the withers for a step's state record (the processor already reads it), or let a chain
+keep its waiting state on its run rather than in the component's.
+
+## FN-11 · A driven run writes the person's settings 💡
+
+Checking Run… with ottermate wrote `run.command` and its siblings into the person's own settings, since an automated run
+uses the real profile unless `text-editor-vexel-demo.home` says otherwise. A launch under `--automation` could default
+the home to a scratch one, the way a test's is.
