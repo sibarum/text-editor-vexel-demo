@@ -2,6 +2,10 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Grammars;
+import dev.vexelray.gui.core.input.InteractionState;
+import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.FocusRing;
+import dev.vexelray.gui.core.style.IconEffects;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
 import dev.vexelray.gui.core.style.Relief;
@@ -12,51 +16,55 @@ import dev.vexelray.gui.core.style.Theme;
 import java.util.List;
 
 /**
- * The palette, as anchors.
+ * The palette, as anchors, measured from the October 2026 design.
  *
  * <h2>A palette is a construction, not a list of colours</h2>
  *
  * <p>{@link Palette} takes a handful of anchors and derives the rest: surfaces are an even ladder from the page
- * at a fixed lightness step, and text is the ink blended towards the page at a fixed rate. That is the point --
- * every surface in the application stays in step with every other one for free, and a design change is a
- * number here rather than fifteen hex codes spread across the tree.
+ * at a fixed lightness step, and text is the ink blended towards the page at a fixed rate. Every surface in the
+ * application stays in step with every other one for free, and a design change is a number here.
  *
- * <p>So when a design has fifteen authored colours, the first job is to <b>measure them in Oklab</b> and find
- * out how many decisions they actually are. Usually far fewer, and the ones that do not fit the construction
- * are the interesting ones -- declare those as roles of your own, at their measured values, and note the gap
- * rather than absorbing it. A theme that silently rounds a designer's colour is a theme nobody can check.
+ * <h2>The design is six decisions</h2>
  *
- * <p>What is here is a neutral dark starting point, and it is meant to be replaced. The two families are:
- * a cool near-black page with a neutral ink, and one accent. Anything the framework does not name --
- * a rule that has to read against a panel, an accent at its brightest -- goes at the bottom as its own role.
+ * <p>Carried from the 0.1 editor, which measured them from the design's mockup in Oklab: a near-black page, cards one
+ * step up from it, a ladder of 0.044 that lands on the current-line, selected-row and edge colours, a cool neutral ink
+ * fading 0.284 a step, and one teal accent. The hex each was measured from is in its comment.
+ *
+ * <p>Five things in the design are not where the framework's roles put them, and are overridden by name in
+ * {@link #THEME} rather than absorbed: a selected row is tinted with the accent, a scrollbar thumb is quiet, every line
+ * is one step above the card it bounds, a well (a field, a tree set into a card) is cut down to the page rather than
+ * below it, and the focus ring is a quiet teal rather than the full accent.
  */
 final class Look {
 
     // ---------------------------------------------------------------- anchors
 
-    /** The page: the colour behind everything, and what the frame clears to. */
-    private static final Oklab PAGE = Oklab.polar(0.2141, 0.0278, -82.48);
+    /** The page: the window behind the cards, the title bar and the status line. Measured {@code #07080c}. */
+    private static final Oklab PAGE = Oklab.polar(0.1351, 0.0100, -95.0);
 
-    /** Primary text. Neutral, so it does not tint every label in the application. */
-    private static final Oklab INK = Oklab.polar(0.9352, 0.0054, -73.70);
+    /** Primary text: a heading, the selected tab. Measured {@code #eaf0f5}. */
+    private static final Oklab INK = Oklab.polar(0.9520, 0.0093, -117.2);
 
-    /** The one chromatic decision: a hover wash, a selected row, a focus ring. */
-    private static final Oklab ACCENT = Oklab.polar(0.6600, 0.1245, -70.45);
+    /** The one chromatic decision: the active tab's mark, the caret, the divider. Measured {@code #63d5e1}. */
+    private static final Oklab ACCENT = Oklab.polar(0.8100, 0.1040, -153.0);
 
-    /** The fill of a filled control, and the border of anything the accent has claimed. */
-    private static final Oklab ACTION = Oklab.polar(0.4801, 0.1041, -70.46);
+    /** The fill of a filled control: the accent's hue, dark enough that the ink reads on it. Derived, not measured. */
+    private static final Oklab ACTION = Oklab.polar(0.5000, 0.0900, -153.0);
 
-    /** The accent's chroma taken round to red, so a confirmation dialog belongs to this palette. */
-    private static final Oklab DANGER = Oklab.polar(0.5894, 0.1448, 18.40);
+    /** Destructive: the accent's chroma taken round to red, dark enough to carry a white label. */
+    private static final Oklab DANGER = Oklab.polar(0.5600, 0.1500, 22.0);
 
     /** Shadows: near-black, at the page's hue rather than a neutral grey. */
-    private static final Oklab DEPTH = Oklab.polar(0.1236, 0.0130, -86.65);
+    private static final Oklab DEPTH = Oklab.polar(0.0800, 0.0080, -95.0);
 
-    /** How far one surface is from the next. Two steps from the page is a panel. */
-    private static final double STEP = 0.0271;
+    /**
+     * How far one surface is from the next. One step is a card ({@code #0e1218}), two the current line and the
+     * cards' edges ({@code #141c25}), three a selected row ({@code #17262c}).
+     */
+    private static final double STEP = 0.044;
 
-    /** How fast the ink fades towards the page: text(1) is DIM, text(2) is FAINT. */
-    private static final double FADE = 0.202;
+    /** How fast the ink fades towards the page: text(1) is a label ({@code #9fa6b3}), text(2) a line number. */
+    private static final double FADE = 0.284;
 
     /** How dark a shadow is. */
     private static final double SHADOW_ALPHA = 0.60;
@@ -64,16 +72,116 @@ final class Look {
     static final Palette PALETTE =
             new Palette(PAGE, STEP, INK, FADE, ACCENT, ACTION, DANGER, DEPTH, SHADOW_ALPHA);
 
-    /**
-     * Lit surfaces on, letterpress off.
-     *
-     * <p>The edge light is what gives a dark panel its glint. Letterpress is the opposite call: it buys
-     * contrast for white-on-fill labels by spending crispness, which small text can least afford. Both are
-     * decisions to make against a real design rather than defaults to leave alone.
-     */
-    static final Theme THEME = Theme.of(PALETTE, Shading.ON_DARK, Relief.STANDARD, true, false);
-
     // ---------------------------------------------------------------- roles of our own
+
+    /** A card: the navigator, and the tabs with their document. The framework's CHROME, named for what it is here. */
+    static final Role CARD = Role.CHROME;
+
+    /** The hairline round a card, and every other line in this design: one step above the card it bounds. */
+    static final Role RIM = p -> p.surface(2);
+
+    /** The selected tab's header: two steps up, neutral, so the accent mark under it is the only colour there. */
+    static final Role TAB = p -> p.surface(2);
+
+    /**
+     * A header at rest: {@link #TAB}'s colour with none of it showing, so selecting or leaving a header fades its
+     * background rather than cutting it (a fade from transparent black would change it in one frame).
+     */
+    static final Role TAB_REST = p -> Color.withAlpha(p.surface(2), 0f);
+
+    /**
+     * A selected row: three steps up, carrying a little of the accent's hue. The framework's SELECTION is a neutral
+     * level 4, which in this design reads as a grey bar; the design's row is measured at chroma 0.023 on a teal hue.
+     */
+    static final Role SELECTED = p -> {
+        Oklab level = Oklab.of(p.surface(3));
+        return Oklab.polar(level.l(), 0.024, p.accent().hueDegrees()).toColor();
+    };
+
+    /** A scrollbar thumb: level 5 ({@code #313a47}), where the framework's GRIP is a loud level 10. */
+    static final Role THUMB = p -> p.surface(5);
+
+    /**
+     * The ring round whatever has the keyboard: the accent's hue at under half its chroma, three tenths of the way
+     * from the page to the ink. The full accent round a whole card pulled the eye off the text (found in 0.1).
+     */
+    static final Role FOCUS = p -> {
+        double l = p.page().l() + 0.30 * (p.ink().l() - p.page().l());
+        return Oklab.polar(l, 0.0400, p.accent().hueDegrees()).toColor();
+    };
+
+    /**
+     * Flat: lit surfaces and letterpress off, since the design's cards stand off the page by colour and edge alone.
+     * Selection, grip and line are overridden by identity, which reaches every widget that names them.
+     */
+    static final Theme THEME = theme(PALETTE);
+
+    private static Theme theme(Palette palette) {
+        Theme base = Theme.of(palette, Shading.ON_DARK, Relief.STANDARD, false, false,
+                FocusRing.STANDARD.color(FOCUS).width(Length.rem(0.1f)));
+        return new Theme() {
+            @Override
+            public Palette palette() {
+                return base.palette();
+            }
+
+            @Override
+            public Shading shading() {
+                return base.shading();
+            }
+
+            @Override
+            public Relief relief() {
+                return base.relief();
+            }
+
+            @Override
+            public boolean lit() {
+                return base.lit();
+            }
+
+            @Override
+            public boolean letterpress() {
+                return base.letterpress();
+            }
+
+            @Override
+            public FocusRing focusRing() {
+                return base.focusRing();
+            }
+
+            @Override
+            public IconEffects icons() {
+                return base.icons();
+            }
+
+            @Override
+            public Color color(Role role) {
+                return base.color(mapped(role));
+            }
+
+            @Override
+            public Color color(Role role, InteractionState state) {
+                return base.color(mapped(role), state);
+            }
+
+            private Role mapped(Role role) {
+                if (role == Role.SELECTION) {
+                    return SELECTED;
+                }
+                if (role == Role.GRIP) {
+                    return THUMB;
+                }
+                if (role == Role.LINE) {
+                    return RIM;
+                }
+                if (role == Role.WELL) {
+                    return Role.PAGE;
+                }
+                return role;
+            }
+        };
+    }
 
     /**
      * The navigator in Open: the panel's level, steeped in the accent's hue, so picking a folder reads as somewhere
@@ -92,9 +200,6 @@ final class Look {
         Oklab level = Oklab.of(p.surface(3));
         return Oklab.polar(level.l(), 0.034, p.accent().hueDegrees()).toColor();
     };
-
-    /** A quiet hairline: a chip's edge in Open's picture, and the languages that are not named. */
-    static final Role RIM = p -> p.surface(2);
 
     /**
      * A folder under the pointer in Open: well above the card and strongly in the accent's hue, where a hovered row

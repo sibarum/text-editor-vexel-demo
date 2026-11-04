@@ -80,7 +80,11 @@ final class Buffer implements AutoCloseable {
         this.field = new TextField(gui, "").name("buffer-" + id).history(new History()).multiline(true)
                 .lineNumbers(true).wordWrap(true).whitespace(Whitespace.BOUNDARY).lineEnds(true);
         field.node().width(Length.FILL).height(Length.FILL).font(scope != null ? Type.MONO : Type.UI)
-                .textSize(Type.CODE);
+                .textSize(Type.CODE)
+                // The text sits on the card, not in a well of its own: the card is the document's edge. The border
+                // keeps its width in the card's colour, as FormattedView's does, so switching views moves nothing.
+                .background(gui.theme().color(Look.CARD))
+                .border(Length.rem(0.1f), gui.theme().color(Look.CARD));
         this.formatted = Markdown.handles(name()) ? new FormattedView(gui) : null;
         this.page = gui.column().width(Length.FILL).height(Length.FILL).children(field.node());
         if (formatted != null) {

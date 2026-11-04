@@ -58,8 +58,14 @@ final class Type {
     /** A border. Not scaled by zoom; a hairline is a hairline. */
     static final Length RULE = Length.dp(1);
 
-    /** The corner radius of a panel or a control. */
-    static final Length CORNER = Length.dp(6);
+    /** The corner radius of a card: the navigator, the open files, Open's picture. */
+    static final Length CORNER = Length.dp(10);
+
+    /** The gap between two cards, which is also the divider's whole drag target. */
+    static final Length SEAM = Length.dp(10);
+
+    /** The divider's painted line, centred in the {@link #SEAM}: a hairline at rest, the accent while dragged. */
+    static final Length SEAM_LINE = Length.dp(2);
 
     private Type() {
     }

@@ -76,13 +76,29 @@ final class Ui {
                 .alignItems(AlignItems.STRETCH)
                 .children(workspace.node(), preview.node());
 
+        // The gap between the two cards is the divider: all of it the drag target, a hairline down its middle that
+        // fades to the accent under the pointer and holds it for the whole drag.
         split = new SplitPane(gui, SplitPane.Orientation.SIDE_BY_SIDE, navigator.node(), stage)
+                .gutter(Type.SEAM)
+                .line(Type.SEAM_LINE)
+                .motion(motion.change)
                 .size(NAVIGATOR);
-        split.node().width(Length.FILL).height(Length.grow(1f));
+        split.node().width(Length.FILL).height(Length.FILL);
+
+        // Two cards on the page. The title bar and the status line are the page too, not chrome: the cards are
+        // what stand off it.
+        titleBar.node().background(gui.theme().color(Role.PAGE));
+        status.node().background(gui.theme().color(Role.PAGE));
+        status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
+        Node body = gui.box()
+                .width(Length.FILL).height(Length.grow(1f))
+                .padding(Length.ZERO, Type.GAP)
+                .scroll(false, false)
+                .children(split.node());
 
         gui.root().direction(Direction.COLUMN)
                 .background(gui.theme().color(Role.PAGE))
-                .children(titleBar.node(), split.node(), status.node());
+                .children(titleBar.node(), body, status.node());
     }
 
     Workspace workspace() {

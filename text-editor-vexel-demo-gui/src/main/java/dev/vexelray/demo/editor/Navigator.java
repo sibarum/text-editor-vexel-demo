@@ -199,10 +199,15 @@ final class Navigator {
 
         // The edge is there in every place, in the panel's own colour while the files are shown, so it costs no
         // layout when it turns to the accent.
+        // The trees sit in the card rather than in wells of their own.
+        for (TreeView<Path> t : List.of(tree, scratchTree)) {
+            t.node().background(gui.theme().color(Role.NONE)).border(Length.ZERO, gui.theme().color(Role.NONE));
+        }
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .gap(Type.TIGHT)
-                .padding(Type.TIGHT, Type.TIGHT)
+                .padding(Type.GAP, Type.GAP)
+                .corner(Type.CORNER)
                 .alignItems(AlignItems.STRETCH)
                 .children(chip.node(), path.node(), tree.node(), picker.node(), scratchPane);
         paint();
@@ -213,8 +218,8 @@ final class Navigator {
 
     /** The card's colours for where it is: the panel, steeped in the accent for Open, edged in it for the scratches. */
     private void paint() {
-        root.background(gui.theme().color(place == Place.OPEN ? Look.PICKING : Role.PANEL))
-                .border(Type.RULE, gui.theme().color(place == Place.FILES ? Role.PANEL : Look.PICKING_RIM));
+        root.background(gui.theme().color(place == Place.OPEN ? Look.PICKING : Look.CARD))
+                .border(Type.RULE, gui.theme().color(place == Place.FILES ? Look.RIM : Look.PICKING_RIM));
     }
 
     /**

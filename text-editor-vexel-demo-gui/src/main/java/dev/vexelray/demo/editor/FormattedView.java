@@ -63,9 +63,9 @@ final class FormattedView {
         this.root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .scroll(false, true)
-                .background(color(Role.WELL))
+                .background(color(Look.CARD))
                 .corner(Length.rem(0.5f))
-                .border(Length.rem(0.1f), color(Role.LINE))
+                .border(Length.rem(0.1f), color(Look.CARD))
                 .visible(false)
                 .focusRing(FocusRing.NONE);
         // It takes the keyboard in the field's place, and stays lit while the keyboard is in any of its blocks too:
@@ -74,7 +74,7 @@ final class FormattedView {
         gui.focusable(root, true);
         this.ring = gui.bus().subscribe(gui.focusEvents(), e -> {
             if (ours(e.nodeId())) {
-                root.border(Length.rem(0.1f), color(e.gained() ? Role.ACCENT : Role.LINE));
+                root.border(Length.rem(0.1f), color(e.gained() ? Look.FOCUS : Look.CARD));
             }
         });
     }

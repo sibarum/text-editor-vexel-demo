@@ -3,6 +3,7 @@ package dev.vexelray.demo.editor;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.LayoutEnums.Justify;
 import dev.vexelray.gui.core.layout.Length;
@@ -10,6 +11,7 @@ import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.Tabs;
+import dev.vexelray.text.TextLayout;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -59,7 +61,11 @@ final class Workspace {
         this.motion = motion;
         this.accent = gui.theme().color(Role.ACCENT);
 
+        // Flat labels on the card, the selected one lifted a step and underlined by an accent mark that glides to the
+        // next selection: the design's bar. Set before any tab is added, so every header is painted this way.
         tabs = new Tabs(gui).name("documents").closable(false).slide(motion.change)
+                .skin(Workspace::skin)
+                .indicator(motion.arrival)
                 .action(MenuAction.of(SAVE, "Save"))
                 .action(MenuAction.of(CLOSE, "Close"))
                 .action(MenuAction.of(CLOSE_OTHERS, "Close others"))
@@ -78,7 +84,25 @@ final class Workspace {
                 .justify(Justify.CENTER).alignItems(AlignItems.CENTER)
                 .children(empty);
 
-        root = gui.column().width(Length.FILL).height(Length.FILL).children(hint, tabs.node());
+        tabs.bar().padding(Length.ZERO, Type.TIGHT).gap(Length.dp(2));
+
+        // The second card: the tabs and their pages, rounded and edged like the navigator's.
+        root = gui.column().width(Length.FILL).height(Length.FILL)
+                .background(gui.theme().color(Look.CARD))
+                .corner(Type.CORNER)
+                .border(Type.RULE, gui.theme().color(Look.RIM))
+                .clip(true)
+                .children(hint, tabs.node());
+    }
+
+    /** A header: quiet ink on the card, lit a step under the pointer; the selected one lifted, in the ink. */
+    private static void skin(Node header, boolean selected, InteractionState state) {
+        header.padding(Length.dp(6), Length.dp(14))
+                .textSize(Type.LABEL)
+                .align(TextLayout.HAlign.CENTER, TextLayout.VAlign.MIDDLE)
+                .corner(Length.dp(7), Length.ZERO)
+                .background(selected ? Look.TAB : state == InteractionState.NORMAL ? Look.TAB_REST : Look.RIM)
+                .textColor(selected ? Role.INK : Role.DIM);
     }
 
     Node node() {
