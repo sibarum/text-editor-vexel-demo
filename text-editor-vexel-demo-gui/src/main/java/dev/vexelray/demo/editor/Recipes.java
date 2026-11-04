@@ -65,17 +65,23 @@ final class Recipes {
         return new Ui(gui, new Motion(gui), titleBar, scratches);
     }
 
-    /**
-     * The scratches' folder, beside the settings ({@code ~/.text-editor-vexel-demo/scratches}): the editor's own, so
-     * it moves with the settings when the home does ({@code text-editor-vexel-demo.home}), which is how a test keeps
-     * its scratches out of the person's.
-     */
     /** The console: a window of its own, one tab per run, brought up when something is run. */
     @Provides
     Console console(Windows windows, FontSet fonts) {
         return new Console(windows.named(Console.KEY, "Console", 960, 600), fonts);
     }
 
+    /** Run…: a window for a command of the person's own, starting from what it last ran. */
+    @Provides
+    RunDialog runDialog(Windows windows, Settings settings) {
+        return new RunDialog(windows.named(RunDialog.KEY, "Run…", 640, 520), settings);
+    }
+
+    /**
+     * The scratches' folder, beside the settings ({@code ~/.text-editor-vexel-demo/scratches}): the editor's own, so
+     * it moves with the settings when the home does ({@code text-editor-vexel-demo.home}), which is how a test keeps
+     * its scratches out of the person's.
+     */
     @Provides
     Scratches scratches(Settings settings) {
         return new Scratches(settings.path().resolveSibling("scratches"));

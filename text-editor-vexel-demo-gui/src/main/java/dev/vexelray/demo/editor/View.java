@@ -43,6 +43,7 @@ import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.framework.api.Subscribe;
+import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.NodeEvent;
@@ -129,6 +130,7 @@ final class View {
     private final Sender<ScratchFolderWanted> scratchFolderWanted;
     private final Sender<RunsWanted> runsWanted;
     private final Sender<RunThis> runThis;
+    private final Sender<WindowCommand> windows;
     /** What the Run menu was last asked about, so an answer about anything else is left. */
     private RunsWanted runsAsked = new RunsWanted(Optional.empty(), Optional.empty());
 
@@ -143,7 +145,9 @@ final class View {
          Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
-         Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis) {
+         Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
+         Sender<WindowCommand> windows) {
+        this.windows = windows;
         this.runsWanted = runsWanted;
         this.runThis = runThis;
         this.gui = gui;
@@ -168,6 +172,7 @@ final class View {
         this.children = children;
         this.intents = intents;
         shortcuts();
+        ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
                 new Intent(Command.LEAVE_RENAME));
         for (int i = 0; i < Picker.RECENT; i++) {
@@ -290,7 +295,7 @@ final class View {
         if (!m.folder().equals(runsAsked.folder()) || !m.file().equals(runsAsked.file())) {
             return;
         }
-        ui.runMenu(m.offers(), runThis);
+        ui.runMenu(m.offers(), runThis, windows);
     }
 
     /** F5: the Run menu, dropped from the title bar as a click on it would. */

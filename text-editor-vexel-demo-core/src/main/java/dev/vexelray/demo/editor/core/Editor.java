@@ -17,7 +17,7 @@ import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Kind;
-import dev.vexelray.demo.editor.core.Messages.Launch;
+import dev.vexelray.demo.editor.core.Messages.StartRun;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.Offer;
@@ -121,7 +121,7 @@ import java.util.Set;
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
-        Dropping.class, Launch.class})
+        Dropping.class, StartRun.class})
 public final class Editor {
 
     /**
@@ -977,7 +977,7 @@ public final class Editor {
     private static State launch(State s, Ready ready, Out out) {
         Closing c = s.closings().get(out.run());
         Offer offer = c.launch().orElseThrow();
-        out.send(Messages.LAUNCH_TOPIC, new Launch(out.run(), offer, COLS, ROWS));
+        out.send(Messages.START_RUN_TOPIC, new StartRun(out.run(), offer, COLS, ROWS));
         say(out, "Running " + offer.label());
         return s.withoutClosing(out.run());
     }

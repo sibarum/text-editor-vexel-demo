@@ -508,9 +508,9 @@ public final class Messages {
      * Start {@code line} in {@code dir} on a pseudo-terminal {@code cols} by {@code rows} ({@link Runner}): one run per
      * id, which the console's tab and every message about the run carry.
      */
-    public static final Topic<Launch> LAUNCH_TOPIC = Topic.edge(Launch.class, Launch::run);
+    public static final Topic<StartRun> START_RUN_TOPIC = Topic.edge(StartRun.class, StartRun::run);
 
-    public record Launch(long run, Offer offer, int cols, int rows) {
+    public record StartRun(long run, Offer offer, int cols, int rows) {
     }
 
     /** What run {@code run}'s program wrote, as it wrote it: VT sequences and UTF-8, for the console to draw. */
@@ -538,6 +538,22 @@ public final class Messages {
     public static final Topic<Typed> TYPED_TOPIC = Topic.edge(Typed.class, Typed::run);
 
     public record Typed(long run, String text) {
+    }
+
+    /**
+     * What was typed into Run…, to be checked, remembered for next time and made an {@link Offer} ({@link TypeRun}):
+     * the command, the folder it runs in, environment variables one {@code NAME=value} a line, and folders to put
+     * ahead of the {@code PATH}, one a line.
+     */
+    public static final Topic<RunTyped> RUN_TYPED_TOPIC = Topic.edge(RunTyped.class);
+
+    public record RunTyped(String command, String dir, String environment, String path) {
+    }
+
+    /** What {@link RunTyped} made: the offer to run, or why there is none ({@code problem}, then no offer). */
+    public static final Topic<RunChecked> RUN_CHECKED_TOPIC = Topic.edge(RunChecked.class);
+
+    public record RunChecked(Optional<Offer> offer, String problem) {
     }
 
     /** Run {@code run}'s terminal is now {@code cols} by {@code rows} cells, which its pseudo-terminal is told. */

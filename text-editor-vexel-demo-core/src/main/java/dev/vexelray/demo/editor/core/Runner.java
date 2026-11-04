@@ -4,7 +4,7 @@ import dev.sibarum.suite.tty.Pty;
 import dev.sibarum.suite.tty.Utf8Chunks;
 import dev.vexelray.demo.editor.core.Messages.Ended;
 import dev.vexelray.demo.editor.core.Messages.Fitted;
-import dev.vexelray.demo.editor.core.Messages.Launch;
+import dev.vexelray.demo.editor.core.Messages.StartRun;
 import dev.vexelray.demo.editor.core.Messages.Output;
 import dev.vexelray.demo.editor.core.Messages.StopRun;
 import dev.vexelray.demo.editor.core.Messages.Typed;
@@ -46,7 +46,7 @@ public final class Runner {
     }
 
     /** Start the program on a pseudo-terminal of the console's size, in the folder it runs in. */
-    public Connection open(Launch launch) {
+    public Connection open(StartRun launch) {
         try {
             String dir = launch.offer().dir() == null ? null : launch.offer().dir().toString();
             // The cursor inherited: on Windows a pseudoconsole would otherwise clear the screen, and the console's first
@@ -60,7 +60,7 @@ public final class Runner {
     }
 
     /** Read what the program writes and send it, until it exits or the run is stopped; then say how it ended. */
-    public Ended run(Launch launch, Connection c) {
+    public Ended run(StartRun launch, Connection c) {
         if (c.pty() == null) {
             return new Ended(launch.run(), -1, false, c.problem());
         }

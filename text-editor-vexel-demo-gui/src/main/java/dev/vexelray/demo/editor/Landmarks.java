@@ -63,6 +63,13 @@ final class Landmarks {
     /** The console window's tab bar, one tab per run ({@code ottermate --window console}). */
     static final String CONSOLE_TABS = "console.tabs";
 
+    /** Run…'s window ({@code ottermate --window run}): its fields and its Run button. */
+    static final String RUN_COMMAND = "run.command";
+    static final String RUN_DIR = "run.dir";
+    static final String RUN_ENVIRONMENT = "run.environment";
+    static final String RUN_PATH = "run.path";
+    static final String RUN_GO = "run.go";
+
     private Landmarks() {
     }
 }

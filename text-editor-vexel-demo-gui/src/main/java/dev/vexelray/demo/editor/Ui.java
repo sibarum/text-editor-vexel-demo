@@ -15,6 +15,7 @@ import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.widget.SplitPane;
 import dev.vexelray.gui.widget.StatusBar;
 import dev.vexelray.gui.widget.TitleBar;
+import dev.vexelray.framework.core.WindowCommand;
 import sibarum.atchung.Sender;
 
 import java.util.List;
@@ -94,7 +95,7 @@ final class Ui {
         // Two cards on the page. The title bar and the status line are the page too, not chrome: the cards are
         // what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
-        // The Run menu is there from the first frame, greyed until the folder or the file in front gives it something.
+        // The Run menu is there from the first frame; the view declares what is on it.
         titleBar.menu(RUN, "Run", Menu.NONE);
         status.node().background(gui.theme().color(Role.PAGE));
         status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
@@ -152,12 +153,12 @@ final class Ui {
     static final String RUN = "run";
 
     /**
-     * The Run menu, declared again: each offer a line that sends it to be run, a rule between groups, in the order
-     * found. Empty until there is something to run, when it stays in place, greyed.
+     * The Run menu, declared again: Run… first, which brings up its window, then each offer a line that sends it to be
+     * run, a rule before each group, in the order found.
      */
-    void runMenu(List<Offer> offers, Sender<RunThis> run) {
-        Menu.Builder menu = Menu.builder();
-        int group = offers.isEmpty() ? 0 : offers.getFirst().group();
+    void runMenu(List<Offer> offers, Sender<RunThis> run, Sender<WindowCommand> windows) {
+        Menu.Builder menu = Menu.builder().item("Run…", windows, WindowCommand.show(RunDialog.KEY));
+        int group = -1;
         for (Offer o : offers) {
             if (o.group() != group) {
                 menu.separator();

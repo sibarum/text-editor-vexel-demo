@@ -111,7 +111,14 @@ the file in front, worked out from what is on disk by the `FindRuns` job (`Runs`
   `target/`;
 - the programs in the folder, four folders deep at most, as the platform counts them (`PtyPlatform.programLine`).
 
-The menu is greyed while there is nothing to run. Before anything runs, every unsaved document is saved, since what
+**Run…**, always first, opens a window (`RunDialog`) for a command of your own: the folder it runs in (the folder
+shown, until you give one), environment variables one `NAME=value` a line, and folders to put ahead of the `PATH`,
+one a line. Run, or Enter in the command or the folder, runs it; Escape closes. The `TypeRun` job checks it (a line
+that is not `NAME=value`, a folder that is not there; the problem stays in the window) and remembers it in the
+settings for next time. The variables and the `PATH` are set in the line itself (`set "NAME=value" && …` for `cmd`,
+`export` for `sh`), so the console's first line is still the whole of what ran and Run again repeats it.
+
+Before anything runs, every unsaved document is saved, since what
 runs is what is on disk; a save that fails runs nothing (the editor's `run` chain).
 
 Runs are shown in the **console**, a window of its own with one tab per run, the newest in front. Each run is a
@@ -122,7 +129,9 @@ code n*, *Stopped* or *Could not start*, and so does the main window's status li
 Copy output and Close. Finished runs past the last five close by themselves, oldest first, never the one in front.
 
 To a script, the menu is `titlebar-menu.run` and its items `menu.<label>` (`click menu.compile`), the console is
-`window console`, and its tabs `console.tabs`. `await status.message Compile:` waits for a run to end.
+`window console`, and its tabs `console.tabs`; Run… is `menu.run`, and its window `window run`, with `run.command`,
+`run.dir`, `run.environment`, `run.path` and the button `run.go`. `await status.message Compile:` waits for a run to
+end. The menus answer no arrow keys yet, so F5 drops the menu and a click chooses.
 
 ## How it is put together
 

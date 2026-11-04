@@ -3,7 +3,7 @@ package dev.vexelray.demo.editor;
 import dev.sibarum.suite.tty.TerminalScreen;
 import dev.vexelray.demo.editor.core.Messages.Ended;
 import dev.vexelray.demo.editor.core.Messages.Fitted;
-import dev.vexelray.demo.editor.core.Messages.Launch;
+import dev.vexelray.demo.editor.core.Messages.StartRun;
 import dev.vexelray.demo.editor.core.Messages.Output;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Messages.StopRun;
@@ -45,7 +45,7 @@ public final class ConsoleView {
 
     /** A run was launched: its tab in front, and the console brought up to show it. */
     @Subscribe
-    public void launched(Launch m) {
+    public void launched(StartRun m) {
         console.launched(m.run(), m.offer());
         windows.send(WindowCommand.show(Console.KEY));
     }
