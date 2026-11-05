@@ -2,10 +2,8 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Grammars;
-import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.FocusRing;
-import dev.vexelray.gui.core.style.IconEffects;
 import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Palette;
 import dev.vexelray.gui.core.style.Relief;
@@ -84,12 +82,6 @@ final class Look {
     static final Role TAB = p -> p.surface(2);
 
     /**
-     * A header at rest: {@link #TAB}'s colour with none of it showing, so selecting or leaving a header fades its
-     * background rather than cutting it (a fade from transparent black would change it in one frame).
-     */
-    static final Role TAB_REST = p -> Color.withAlpha(p.surface(2), 0f);
-
-    /**
      * A selected row: three steps up, carrying a little of the accent's hue. The framework's SELECTION is a neutral
      * level 4, which in this design reads as a grey bar; the design's row is measured at chroma 0.023 on a teal hue.
      */
@@ -117,70 +109,12 @@ final class Look {
     static final Theme THEME = theme(PALETTE);
 
     private static Theme theme(Palette palette) {
-        Theme base = Theme.of(palette, Shading.ON_DARK, Relief.STANDARD, false, false,
-                FocusRing.STANDARD.color(FOCUS).width(Length.rem(0.1f)));
-        return new Theme() {
-            @Override
-            public Palette palette() {
-                return base.palette();
-            }
-
-            @Override
-            public Shading shading() {
-                return base.shading();
-            }
-
-            @Override
-            public Relief relief() {
-                return base.relief();
-            }
-
-            @Override
-            public boolean lit() {
-                return base.lit();
-            }
-
-            @Override
-            public boolean letterpress() {
-                return base.letterpress();
-            }
-
-            @Override
-            public FocusRing focusRing() {
-                return base.focusRing();
-            }
-
-            @Override
-            public IconEffects icons() {
-                return base.icons();
-            }
-
-            @Override
-            public Color color(Role role) {
-                return base.color(mapped(role));
-            }
-
-            @Override
-            public Color color(Role role, InteractionState state) {
-                return base.color(mapped(role), state);
-            }
-
-            private Role mapped(Role role) {
-                if (role == Role.SELECTION) {
-                    return SELECTED;
-                }
-                if (role == Role.GRIP) {
-                    return THUMB;
-                }
-                if (role == Role.LINE) {
-                    return RIM;
-                }
-                if (role == Role.WELL) {
-                    return Role.PAGE;
-                }
-                return role;
-            }
-        };
+        return Theme.of(palette, Shading.ON_DARK, Relief.STANDARD, false, false,
+                        FocusRing.STANDARD.color(FOCUS).width(Length.rem(0.1f)))
+                .map(Role.SELECTION, SELECTED)
+                .map(Role.GRIP, THUMB)
+                .map(Role.LINE, RIM)
+                .map(Role.WELL, Role.PAGE);
     }
 
     /**

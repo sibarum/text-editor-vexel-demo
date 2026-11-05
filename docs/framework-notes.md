@@ -56,7 +56,10 @@ while the pointer is on anything inside it (`Picker.recentCell`). Costs a node p
 it. What the framework could do: a `Button.Hovered` state topic, as `TreeView` has.
 
 
-## FN-3 · Overriding three roles takes a whole forwarding theme 🔬
+## FN-3 · Overriding three roles takes a whole forwarding theme 🔬 (fixed 2026-11-05)
+
+*Fixed in vexelray-gui: `Theme.map(Role, Role)` keeps every other decision, and `Look.theme` is four `map`s on
+`Theme.of(...)`.*
 
 The October design puts a selected row, a scrollbar thumb, every line and every well somewhere other than the
 framework's roles do (`Look`). `Theme` has no seam for "these roles, mapped": the only way is an anonymous `Theme`
@@ -66,7 +69,12 @@ before `icons()` existed would quietly drop an application's icon effects. What 
 `Theme.map(UnaryOperator<Role>)` (or `Theme.with(Role from, Role to)`) that keeps every other decision, as
 `focusRing(FocusRing)` and `icons(IconEffects)` already do for theirs.
 
-## FN-4 · A fill fading to Role.NONE fades through black 🔬
+## FN-4 · A fill fading to Role.NONE fades through black 🔬 (fixed 2026-11-05)
+
+*Fixed in vexelray-gui, and the diagnosis below was wrong: the fade never went through black. A header born clear,
+lifted and cleared again before the fade clock moved was told to fade from the lift at no alpha to transparent black,
+two invisible colours, and `Cuts` compared them exactly. Two colours at no alpha now look the same
+(`PaintMotion.same`), and `TAB_REST` is gone: a header rests on `Role.NONE`.*
 
 A tab header lifted when selected and clear at rest faded its background from the lifted colour to `Role.NONE`, which
 is transparent *black*; `ViewTest` caught it as a change in one frame. Done here: the rest colour is the lifted one at

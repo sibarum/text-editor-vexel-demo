@@ -101,7 +101,7 @@ final class Workspace {
                 .textSize(Type.LABEL)
                 .align(TextLayout.HAlign.CENTER, TextLayout.VAlign.MIDDLE)
                 .corner(Length.dp(7), Length.ZERO)
-                .background(selected ? Look.TAB : state == InteractionState.NORMAL ? Look.TAB_REST : Look.RIM)
+                .background(selected ? Look.TAB : state == InteractionState.NORMAL ? Role.NONE : Look.RIM)
                 .textColor(selected ? Role.INK : Role.DIM);
     }
 
