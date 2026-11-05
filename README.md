@@ -7,6 +7,10 @@ navigator and Markdown in colour. It is the reference implementation of this sta
 offers is wired in the tree you are reading — and it is a working editor, so it is also something to change into
 whatever you are actually building.
 
+It knows Pontif natively: a `.ptf` file is coloured by the language's own token scan rather than a TextMate grammar
+(`Grammars.PONTIF`), through `pontif-tooling` from the sibling `pontif-framework` checkout (branch `v0.2`), which has
+to be `mvn install`ed first. Running, checking and navigating Pontif are next (`docs/TODO.md`).
+
 ## Run it
 
 From this folder, the parent of the two modules:

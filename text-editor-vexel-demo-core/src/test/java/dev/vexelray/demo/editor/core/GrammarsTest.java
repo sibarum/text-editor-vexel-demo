@@ -56,7 +56,7 @@ final class GrammarsTest {
     private static String scope(String fileName) {
         String scope = Grammars.scopeFor(fileName);
         assertNotNull(scope, fileName + " should map to a scope");
-        assertNotNull(GRAMMARS.grammar(scope), scope + " is mapped from " + fileName + " but no bundled grammar provides it");
+        assertTrue(GRAMMARS.colours(scope), scope + " is mapped from " + fileName + " but nothing colours it");
         return scope;
     }
 
@@ -161,6 +161,68 @@ final class GrammarsTest {
         assertFalse(GRAMMARS.spans(scope("config.yaml"), src).isEmpty(),
                 "the dispatcher-only grammar on main parses but colours nothing; this catches that swap");
         assertEquals(STRING, colourAt("config.yaml", src, "value"));
+    }
+
+    // ---- Pontif, by its own scan rather than a grammar ----
+
+    private static final Color COMMENT = Color.rgb(0x7f8994);
+    private static final Color CONSTANT = Color.rgb(0xe5a477);
+    private static final Color TYPE = Color.rgb(0x7dd3e6);
+    private static final Color NAME = Color.rgb(0xc8d3e2);
+
+    private static final String PONTIF = """
+            module ledger
+            # an account never goes negative
+            struct Account(balance:[Int:@>=0])
+            let greeting = "hello"
+            method Account.deposit(n:Int):Account -> match n { _ -> Account(balance + n) }
+            main ( if true then 42 else 'x' )
+            """;
+
+    @Test
+    void pontifIsNamedAndColoured() {
+        assertEquals(Grammars.PONTIF, scope("app.ptf"));
+        assertEquals(Grammars.PONTIF, Grammars.scopeFor("APP.PTF"), "matched case-insensitively, like the rest");
+        assertEquals("Pontif", Grammars.nameOf(Grammars.PONTIF));
+    }
+
+    @Test
+    void pontifColoursEachKindOfToken() {
+        assertEquals(KEYWORD, colourOf("app.ptf", PONTIF, "module"));
+        assertEquals(KEYWORD, colourOf("app.ptf", PONTIF, "struct"));
+        assertEquals(COMMENT, colourOf("app.ptf", PONTIF, "# an account never goes negative"));
+        assertEquals(STRING, colourOf("app.ptf", PONTIF, "\"hello\""));
+        assertEquals(STRING, colourOf("app.ptf", PONTIF, "'x'"));
+        assertEquals(CONSTANT, colourOf("app.ptf", PONTIF, "42"));
+        assertEquals(CONSTANT, colourOf("app.ptf", PONTIF, "true"), "true and false are values, not structure");
+        assertEquals(TYPE, colourOf("app.ptf", PONTIF, "Account"), "a capitalised name is a type");
+        assertEquals(TYPE, colourOf("app.ptf", PONTIF, "Int"));
+        assertEquals(NAME, colourOf("app.ptf", PONTIF, "greeting"));
+    }
+
+    /** The point of a native scan: the keywords are the parser's, so none is missed and none goes stale. */
+    @Test
+    void pontifKeywordsAreTheParsers() {
+        for (String keyword : sibarum.pontif.parser.PontifParser.KEYWORDS) {
+            Color expected = keyword.equals("true") || keyword.equals("false") ? CONSTANT : KEYWORD;
+            assertEquals(expected, colourOf("k.ptf", keyword + "\n", keyword), keyword);
+        }
+    }
+
+    @Test
+    void everyKindOfPontifTokenHasAScope() {
+        String text = "x";
+        for (sibarum.pontif.tooling.PontifTokens.Kind kind : sibarum.pontif.tooling.PontifTokens.Kind.values()) {
+            assertNotNull(Grammars.pontifScope(new sibarum.pontif.tooling.PontifTokens.Token(kind, 0, 1), text), kind.name());
+        }
+    }
+
+    @Test
+    void halfTypedPontifStillColoursAndNeverThrows() {
+        String src = "struct P(x:Int\nlet s = \"unterminated\nfunction (((";
+        List<Span> spans = GRAMMARS.spans(Grammars.PONTIF, src);
+        assertEquals(KEYWORD, colourOf("p.ptf", src, "struct"));
+        assertFalse(spans.isEmpty());
     }
 
     // ---- the languages, briefly ----

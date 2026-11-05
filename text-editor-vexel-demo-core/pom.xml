@@ -67,6 +67,15 @@
             <version>2.7</version>
         </dependency>
 
+        <!-- Pontif (.ptf) in colour, with the language's own token scan and keywords (Grammars), and later go to
+             definition: pontif-tooling, which carries no Truffle and no toolkit. Installed to the local .m2 by
+             `mvn install` in the sibling pontif-framework checkout (branch v0.2). -->
+        <dependency>
+            <groupId>sibarum.pontif</groupId>
+            <artifactId>pontif-tooling</artifactId>
+            <version>${pontif.version}</version>
+        </dependency>
+
         <!-- A folder's build, for Open's picture of it (Survey): Concordance's pom reader, which follows a reactor's
              modules without Maven. Plain JDK, no widget. Installed to the local .m2 by `mvn install` in the sibling
              concordance-indexer repo. -->

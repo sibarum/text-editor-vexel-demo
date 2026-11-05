@@ -8,10 +8,12 @@ import org.eclipse.tm4e.core.grammar.IToken;
 import org.eclipse.tm4e.core.grammar.ITokenizeLineResult;
 import org.eclipse.tm4e.core.registry.IGrammarSource;
 import org.eclipse.tm4e.core.registry.Registry;
+import sibarum.pontif.tooling.PontifTokens;
 import sibarum.probe.Log;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,8 +38,35 @@ import java.util.Set;
  * {@code ConcurrentModificationException} out of {@code Theme.match} in the 0.1 editor, which locked per grammar.
  * A document only re-tokenizes when its own text changes, and only one is being typed into, so the wait is felt
  * only while a session restores.
+ *
+ * <h2>Pontif, natively</h2>
+ *
+ * <p>Pontif has no TextMate grammar here: {@code .ptf} is {@link #PONTIF}, coloured by the language's own tolerant
+ * token scan ({@link PontifTokens}, pontif-tooling), whose keywords are the parser's, so a keyword the language gains
+ * is coloured with nothing here to change. Each token is given a TextMate-style scope ({@link #PONTIF_SCOPES}) and
+ * then coloured by the same table as every other language, so Pontif wears the editor's palette and not one of its
+ * own. The scan keeps no state, so it takes no lock and never waits behind a TextMate document.
  */
 public final class Grammars {
+
+    /** The scope of a Pontif source file. Not a TextMate grammar's: see the class comment. */
+    public static final String PONTIF = "source.pontif";
+
+    /**
+     * Each kind of Pontif token as the TextMate scope the colour table knows it by. A name is a type when it begins
+     * with a capital letter, the language's convention for sorts, structs and traits ({@code Int}, {@code Point}):
+     * a lexical guess, as a TextMate grammar's is, until a checked document can say.
+     */
+    private static final Map<PontifTokens.Kind, String> PONTIF_SCOPES = new EnumMap<>(Map.of(
+            PontifTokens.Kind.COMMENT, "comment.line.number-sign.pontif",
+            PontifTokens.Kind.STRING, "string.quoted.double.pontif",
+            PontifTokens.Kind.CHAR, "string.quoted.single.pontif",
+            PontifTokens.Kind.NUMBER, "constant.numeric.pontif",
+            PontifTokens.Kind.SUBJECT, "variable.language.subject.pontif",
+            PontifTokens.Kind.KEYWORD, "keyword.other.pontif",
+            PontifTokens.Kind.NAME, "variable.other.pontif"));
+    private static final String PONTIF_TYPE = "entity.name.type.pontif";
+    private static final String PONTIF_LITERAL = "constant.language.pontif";
 
     private static final Log LOG = Log.of("text-editor-vexel-demo.highlight");
 
@@ -80,7 +109,8 @@ public final class Grammars {
             Map.entry("psd1", "source.powershell"),
             Map.entry("bat", "source.batchfile"),
             Map.entry("cmd", "source.batchfile"),
-            Map.entry("dockerfile", "source.dockerfile"));
+            Map.entry("dockerfile", "source.dockerfile"),
+            Map.entry("ptf", PONTIF));
 
     /**
      * Whole file name -> TextMate scope, for the files an extension cannot describe: {@code Dockerfile} has none, and
@@ -121,7 +151,8 @@ public final class Grammars {
             Map.entry("source.shell", "Shell"),
             Map.entry("source.powershell", "PowerShell"),
             Map.entry("source.batchfile", "Batch"),
-            Map.entry("source.dockerfile", "Dockerfile"));
+            Map.entry("source.dockerfile", "Dockerfile"),
+            Map.entry(PONTIF, "Pontif"));
 
     private static final Duration LINE_TIME_LIMIT = Duration.ofMillis(200);
 
@@ -187,6 +218,9 @@ public final class Grammars {
         if (text.length() > MAX_CHARS) {
             return List.of();
         }
+        if (PONTIF.equals(scope)) {
+            return pontif(text);
+        }
         synchronized (tokenizing) {
             IGrammar grammar = grammar(scope);
             if (grammar == null) {
@@ -243,6 +277,41 @@ public final class Grammars {
             lineStart = lineEnd + 1;
         }
         return spans;
+    }
+
+    /** Whether {@code scope} is coloured at all: by Pontif's own scan, or by a bundled grammar. */
+    boolean colours(String scope) {
+        return PONTIF.equals(scope) || grammar(scope) != null;
+    }
+
+    /** A Pontif document's colours: its tokens, each through {@link #PONTIF_SCOPES} and the colour table. */
+    private List<Span> pontif(String text) {
+        List<Span> spans = new ArrayList<>();
+        try {
+            for (PontifTokens.Token token : PontifTokens.scan(text)) {
+                Color color = colourOf(List.of(pontifScope(token, text)));
+                if (color != null) {
+                    spans.add(Span.foreground(token.start(), token.end(), color));
+                }
+            }
+        } catch (RuntimeException e) {
+            // The scan promises never to throw; if it breaks that promise the file is plain text, not a broken editor.
+            LOG.warn("highlighting Pontif failed; showing plain text", e);
+            return List.of();
+        }
+        return spans;
+    }
+
+    /** The scope of one Pontif token: its kind's, but for a capitalised name (a type) and {@code true}/{@code false}. */
+    static String pontifScope(PontifTokens.Token token, String text) {
+        String word = text.substring(token.start(), token.end());
+        if (token.kind() == PontifTokens.Kind.NAME && Character.isUpperCase(word.charAt(0))) {
+            return PONTIF_TYPE;
+        }
+        if (token.kind() == PontifTokens.Kind.KEYWORD && (word.equals("true") || word.equals("false"))) {
+            return PONTIF_LITERAL;
+        }
+        return PONTIF_SCOPES.get(token.kind());
     }
 
     /** The most specific scope wins: scopes innermost first, the table's rules in order. */
