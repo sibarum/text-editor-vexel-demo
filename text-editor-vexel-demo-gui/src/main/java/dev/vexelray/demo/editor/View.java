@@ -17,6 +17,8 @@ import dev.vexelray.demo.editor.core.Messages.Go;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
+import dev.vexelray.demo.editor.core.Messages.Check;
+import dev.vexelray.demo.editor.core.Messages.Checked;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Moved;
@@ -119,6 +121,7 @@ final class View {
     private final Sender<Save> save;
     private final Sender<Listing> listing;
     private final Sender<Mark> mark;
+    private final Sender<Check> check;
     private final Sender<Format> format;
     private final Sender<TreeView.Children> children;
     private final Sender<Intent> intents;
@@ -142,7 +145,8 @@ final class View {
 
     View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
-         Sender<Listing> listing, Sender<Mark> mark, Sender<Format> format, Sender<TreeView.Children> children,
+         Sender<Listing> listing, Sender<Mark> mark, Sender<Check> check, Sender<Format> format,
+         Sender<TreeView.Children> children,
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
@@ -168,6 +172,7 @@ final class View {
         this.save = save;
         this.listing = listing;
         this.mark = mark;
+        this.check = check;
         this.format = format;
         this.children = children;
         this.intents = intents;
@@ -270,6 +275,8 @@ final class View {
     @Subscribe
     public void caption(Caption m) {
         ui.caption(m.file());
+        Buffer b = ws.front();
+        ui.problem(b == null ? "" : b.problem());
         wantRuns();
     }
 
@@ -399,6 +406,7 @@ final class View {
         if (wanted != null) {
             mark.send(wanted);
         }
+        check(b.check());
         if (b.id == front) {
             ui.language(b.language());
         }
@@ -424,6 +432,26 @@ final class View {
         }
     }
 
+    /** A document's problems: shown, the status line told if it is in front, and the next check sent if one is due. */
+    @Subscribe
+    public void checked(Checked m) {
+        Buffer b = ws.byField(m.field());
+        if (b == null) {
+            return;
+        }
+        check(b.checked(m));
+        if (b.id == front) {
+            ui.problem(b.problem());
+        }
+    }
+
+    /** Send {@code wanted}, the check a buffer asked for, if it asked for one. */
+    private void check(Check wanted) {
+        if (wanted != null) {
+            check.send(wanted);
+        }
+    }
+
     @Subscribe
     public void formatted(Formatted m) {
         Buffer b = ws.byField(m.field());
@@ -444,6 +472,7 @@ final class View {
         if (b != null && b.id != front) {
             front = b.id;
             ui.language(b.language());
+            ui.problem(b.problem());
             ui.position(b.position());
             fronted.send(new Fronted(b.id));
         }
@@ -489,6 +518,7 @@ final class View {
         if (wanted != null) {
             mark.send(wanted);
         }
+        check(b.check());
         Format again = b.reformat(m.text());
         if (again != null) {
             format.send(again);

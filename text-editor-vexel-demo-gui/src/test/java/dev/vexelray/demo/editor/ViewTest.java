@@ -842,4 +842,60 @@ class ViewTest {
         assertEquals("1a", Files.readString(a));
         assertEquals("2c", Files.readString(c));
     }
+
+    // ------------------------------------------------------------------ Pontif, checked as it is typed
+
+    /** The field's spans that are problems: underlined, on a ground. */
+    private static List<dev.vexelray.gui.core.text.Span> problemSpans(Buffer b) {
+        return b.field.spans().stream().filter(s -> s.underline() && s.bg() != null).toList();
+    }
+
+    /** A Pontif file that does not compile says so on the status line and underlines where; fixed, both go. */
+    @Test
+    void aPontifProblemIsShownWhereItIsAndGoesWhenItIsFixed() throws Exception {
+        String text = "function greet(n:Int):Int -> n + 1\n\ngree(41)\n";
+        Buffer b = opened(Files.writeString(dir.resolve("app.ptf"), text));
+        eventually("the problem", () -> !b.problem().isEmpty() && !problemSpans(b).isEmpty());
+        dev.vexelray.gui.core.text.Span under = problemSpans(b).getFirst();
+        assertEquals("gree", text.substring(under.start(), under.end()));
+        eventually("the colours too", () -> b.field.spans().size() > problemSpans(b).size());
+
+        b.field.caret(text.indexOf("(41)"));
+        b.field.insert("t");
+        eventually("the problem to go", () -> b.problem().isEmpty() && problemSpans(b).isEmpty());
+        assertFalse(b.field.spans().isEmpty(), "the colours stay");
+    }
+
+    /** One check in flight per document: a burst of typing costs the check already out and one for where it ended. */
+    @Test
+    void aBurstOfTypingIsCheckedOnceItHasEnded() throws Exception {
+        List<Messages.Check> checks = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.CHECK_TOPIC, checks::add);
+        String text = "function greet(n:Int):Int -> n + 1\n\ngreet(41)\n";
+        Buffer b = opened(Files.writeString(dir.resolve("app.ptf"), text));
+        eventually("the first check", () -> checks.size() == 1);
+        eventually("its answer", () -> b.problem().isEmpty() && !b.field.spans().isEmpty());
+        // Twenty keystrokes between two frames: the view hears them all in the next one.
+        for (int i = 0; i < 20; i++) {
+            b.field.caret(b.field.text().length());
+            b.field.insert("#" + i + "\n");
+        }
+        String typed = b.field.text();
+        eventually("the text as typed to be checked", () -> !checks.isEmpty() && checks.getLast().text().equals(typed));
+        assertTrue(checks.size() <= 3, "the first, then at most one out and one for the end: " + checks.size());
+        eventually("no problem in comments", () -> b.problem().isEmpty());
+    }
+
+    /** Only what CheckText checks is checked. */
+    @Test
+    void aTextFileIsNeverChecked() throws Exception {
+        List<Messages.Check> checks = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.CHECK_TOPIC, checks::add);
+        Buffer b = opened(Files.writeString(dir.resolve("notes.txt"), "main ( nonExistentFn(1) )"));
+        b.field.insert("x");
+        VexelApplication.frame(shell);
+        VexelApplication.frame(shell);
+        assertEquals(List.of(), checks);
+        assertEquals("", b.problem());
+    }
 }

@@ -67,12 +67,18 @@
             <version>2.7</version>
         </dependency>
 
-        <!-- Pontif (.ptf) in colour, with the language's own token scan and keywords (Grammars), and later go to
-             definition: pontif-tooling, which carries no Truffle and no toolkit. Installed to the local .m2 by
-             `mvn install` in the sibling pontif-framework checkout (branch v0.2). -->
+        <!-- Pontif (.ptf): coloured by the language's own token scan and keywords (Grammars), checked as it is typed
+             (CheckText, through pontif-compiler and pontif-tooling's PontifProblems), and later go to definition.
+             Neither carries Truffle or a toolkit. Installed to the local .m2 by `mvn install` in the sibling
+             pontif-framework checkout (branch v0.2). -->
         <dependency>
             <groupId>sibarum.pontif</groupId>
             <artifactId>pontif-tooling</artifactId>
+            <version>${pontif.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>sibarum.pontif</groupId>
+            <artifactId>pontif-compiler</artifactId>
             <version>${pontif.version}</version>
         </dependency>
 

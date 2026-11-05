@@ -64,11 +64,13 @@ final class Ui {
         status = new StatusBar(gui)
                 .slot(Landmarks.STATUS_FILE, StatusBar.Side.LEFT, "")
                 .slot(Landmarks.STATUS_MESSAGE, StatusBar.Side.LEFT, "")
+                .slot(Landmarks.STATUS_PROBLEM, StatusBar.Side.LEFT, "")
                 .slot(Landmarks.STATUS_LANGUAGE, StatusBar.Side.RIGHT, "")
                 .slot(Landmarks.STATUS_POSITION, StatusBar.Side.RIGHT, "")
                 .minWidth(Landmarks.STATUS_POSITION, Length.rem(7));
         gui.landmark(Landmarks.STATUS, status.node());
-        for (String slot : new String[] {Landmarks.STATUS_FILE, Landmarks.STATUS_MESSAGE, Landmarks.STATUS_LANGUAGE,
+        for (String slot : new String[] {Landmarks.STATUS_FILE, Landmarks.STATUS_MESSAGE, Landmarks.STATUS_PROBLEM,
+                Landmarks.STATUS_LANGUAGE,
                 Landmarks.STATUS_POSITION}) {
             gui.landmark(slot, status.slot(slot));
         }
@@ -99,6 +101,7 @@ final class Ui {
         titleBar.menu(RUN, "Run", Menu.NONE);
         status.node().background(gui.theme().color(Role.PAGE));
         status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
+        status.slot(Landmarks.STATUS_PROBLEM).textColor(danger);
         Node body = gui.box()
                 .width(Length.FILL).height(Length.grow(1f))
                 .padding(Length.ZERO, Type.GAP)
@@ -181,12 +184,18 @@ final class Ui {
         if (file.isEmpty()) {
             status.text(Landmarks.STATUS_LANGUAGE, "");
             status.text(Landmarks.STATUS_POSITION, "");
+            status.text(Landmarks.STATUS_PROBLEM, "");
         }
     }
 
     /** The front file's format, on the status line. */
     void language(String name) {
         status.text(Landmarks.STATUS_LANGUAGE, name);
+    }
+
+    /** What is wrong with the front file, on the status line in the danger colour; empty for nothing. */
+    void problem(String message) {
+        status.text(Landmarks.STATUS_PROBLEM, message);
     }
 
     /** Where the caret is in the front file, on the status line. */

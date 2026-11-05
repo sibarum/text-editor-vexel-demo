@@ -9,8 +9,8 @@ whatever you are actually building.
 
 It knows Pontif natively: a `.ptf` file is coloured by the language's own token scan rather than a TextMate grammar
 (`Grammars.PONTIF`), through `pontif-tooling` from the sibling `pontif-framework` checkout (branch `v0.2`), which has
-to be `mvn install`ed first. The Run menu runs a `.ptf` file or its project through `pontif run` (*Running things*).
-Checking and navigating Pontif are next (`docs/TODO.md`).
+to be `mvn install`ed first. The Run menu runs a `.ptf` file or its project through `pontif run` (*Running things*), and a `.ptf` is checked as it
+is typed (*Spans*), its first error underlined and on the status line. Go to definition is next (`docs/TODO.md`).
 
 ## Run it
 
@@ -157,7 +157,7 @@ and a reply out), and **recipes** (a part built once and handed to whoever takes
 | `Messages.java` | **every message the parts send each other**, grouped by who sends it to whom, each record beside its topic. A record crosses as itself, so it holds only immutable values; a list it holds is copied in its constructor. |
 | `Editor.java` | **the controller**: every decision (what a typed path names, whether a file is already open, when closing needs a question, what the status line says, what comes back next time) as a declared step on one immutable state, held by a ledger. Each message it hears runs one step; closing is a chain of them that waits on the person and the disk without anything waiting on a thread. It needs no lock, because only its steps change its state and they run one at a time. |
 | `Doc.java` | the shape of the session (which files, which in front, which unsaved, which folder) as one immutable value, part of the editor's state. |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java`, `CheckText.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
 | `TextFile.java`, `Markdown.java` | the policy between bytes and text, and Markdown as spans: pure functions. |
 | `Core.java` | the list of this module's component and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it. |
 
@@ -217,6 +217,13 @@ sends can block.
 `Markdown.spans` is a pure function from text to `Span`s (foreground, background, underline). After each edit
 the view asks `MarkText` for them on the offload lane, and applies the answer only if the field still says the text it
 was computed for. The text is never changed; the field draws the colours and moves each span with its text as you type. A `.txt` file gets none.
+
+A Pontif file is also checked as it is typed: `CheckText` compiles the text, saved or not, as the file would be (its
+folder is where what it `requires` is found), with `pontif-compiler`, and puts the error where the Pontif Editor puts it
+(`pontif-tooling`'s `PontifProblems`). The problem is underlined on a faint `DANGER` ground and said on the status
+line (`status.problem`). One check is in flight per document, and its answer sends the next, for the text as it is
+then, so a burst of typing costs two compiles, not one a keystroke (FN-12). The colours and the problems are two
+answers into the field's one list of spans, so each replaces only its own kind (`Buffer`).
 
 ### Motion
 

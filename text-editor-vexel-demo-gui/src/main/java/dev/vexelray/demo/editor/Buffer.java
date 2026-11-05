@@ -1,19 +1,27 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.canvas.Color;
+import dev.vexelray.demo.editor.core.CheckText;
 import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.demo.editor.core.Markdown;
+import dev.vexelray.demo.editor.core.Messages.Check;
+import dev.vexelray.demo.editor.core.Messages.Checked;
 import dev.vexelray.demo.editor.core.Messages.Format;
 import dev.vexelray.demo.editor.core.Messages.Formatted;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
+import dev.vexelray.demo.editor.core.Messages.Problem;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.core.text.Span;
 import dev.vexelray.gui.core.text.Whitespace;
 import dev.vexelray.gui.widget.TextField;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,6 +45,19 @@ import java.util.List;
  * if the field still says the text it was computed for, because colours worked out for one text and attached to
  * another are on the wrong characters. Such a file is code, and is shown in the mono face; anything else is plain text,
  * which reads better in the proportional one.
+ *
+ * <h2>Problems, one check at a time</h2>
+ *
+ * <p>A file {@link CheckText} checks (Pontif) is compiled as it is typed, also a job. A compile is the whole program,
+ * so this keeps one {@link Check} in flight: a change while one is out only notes that the text moved on, and the
+ * answer sends the next check, for the text as it is then. A burst of typing costs the check already running and one
+ * for where it ended. A problem is drawn as an underline on a faint {@code DANGER} ground, and its message is on the
+ * status line ({@link #problem}).
+ *
+ * <p>The colours and the problems are two answers to two jobs, and the field has one list of spans. Each answer
+ * replaces only its own kind, which the problem spans' ground tells apart, and keeps the other as the field has it
+ * now: spans follow the edits made since they were set, so whichever answer is the older is still on the right
+ * characters.
  */
 final class Buffer implements AutoCloseable {
 
@@ -67,11 +88,20 @@ final class Buffer implements AutoCloseable {
     /** Where the caret is, 1-based, for the status line when this comes to the front. */
     private int line = 1;
     private int column = 1;
+    /** The ground under a problem: the theme's {@code DANGER}, faint, which also tells a problem span from a colour. */
+    private final Color problemGround;
+    /** Whether a {@link Check} is out and not yet answered. */
+    private boolean checking;
+    /** The version of the text the last check was sent for. */
+    private long checkedVersion = -1;
+    /** What is wrong, as the last answer for the current text said; empty when nothing is. */
+    private String problem = "";
 
     Buffer(Gui gui, long id, Path path, String initial) {
         this.id = id;
         this.gui = gui;
         this.path = path;
+        this.problemGround = Color.withAlpha(gui.theme().color(Role.DANGER), PROBLEM_GROUND);
         this.scope = Grammars.scopeFor(String.valueOf(path.getFileName()));
         // A document: its past is its own, so Ctrl+Z in one file never reaches into another, and its save mark
         // says whether this file is saved rather than whether the window is. Named, so its messages say which.
@@ -150,6 +180,10 @@ final class Buffer implements AutoCloseable {
             page.append(formatted.node());
         }
         marked = null;
+        checkedVersion = -1;   // a new name may be checked, or checked differently (what it requires is beside it)
+        if (!CheckText.checks(to)) {
+            showProblems(List.of());
+        }
         if (scope == null) {
             field.setSpans(List.of());
             return null;
@@ -203,11 +237,88 @@ final class Buffer implements AutoCloseable {
         }
     }
 
-    /** {@code MarkText}'s answer: applied only if the field still says the text it was worked out for. */
+    /**
+     * {@code MarkText}'s answer: applied only if the field still says the text it was worked out for. The problems
+     * the field shows stay as they are.
+     */
     void marked(Marked m) {
-        if (m.version() == version && !m.spans().equals(field.spans())) {
-            field.setSpans(m.spans());
+        if (m.version() != version) {
+            return;
         }
+        List<Span> next = new ArrayList<>(m.spans());
+        next.addAll(spans(true));
+        if (!next.equals(field.spans())) {
+            field.setSpans(next);
+        }
+    }
+
+    /** How strongly a problem's ground shows. */
+    private static final float PROBLEM_GROUND = 0.22f;
+
+    /**
+     * The field changed, or this came to need checking: what to ask {@code CheckText}, or null when this is not a
+     * file it checks, the current text has been asked about, or a check is out already (its answer asks again).
+     */
+    Check check() {
+        if (!CheckText.checks(path) || checking || checkedVersion == version) {
+            return null;
+        }
+        checking = true;
+        checkedVersion = version;
+        return new Check(address(), field.text(), version, path);
+    }
+
+    /**
+     * {@code CheckText}'s answer: shown if the field still says the text it was about, else left for the next. Then
+     * the next check, if the text moved on while this one was out, or null.
+     */
+    Check checked(Checked m) {
+        checking = false;
+        if (m.version() == version) {
+            showProblems(m.problems());
+        }
+        return check();
+    }
+
+    /** Show {@code problems} in place of the ones shown, keeping the colours as the field has them. */
+    private void showProblems(List<Problem> problems) {
+        List<Span> next = new ArrayList<>(spans(false));
+        int length = field.text().length();
+        for (Problem p : problems) {
+            if (p.start() < p.end() && p.end() <= length) {
+                next.add(new Span(p.start(), p.end(), null, problemGround, true));
+            }
+        }
+        problem = problems.isEmpty() ? "" : firstLine(problems.getFirst().message());
+        if (!next.equals(field.spans())) {
+            field.setSpans(next);
+        }
+    }
+
+    /** The field's spans that are problems ({@code true}), or the ones that are not. */
+    private List<Span> spans(boolean problems) {
+        List<Span> out = new ArrayList<>();
+        for (Span s : field.spans()) {
+            if (isProblem(s) == problems) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    private boolean isProblem(Span s) {
+        return s.underline() && problemGround.equals(s.bg());
+    }
+
+    private static String firstLine(String message) {
+        String s = message.strip();
+        int nl = s.indexOf('\n');
+        return nl < 0 ? s : s.substring(0, nl).strip();
+    }
+
+    /** What is wrong with the text, for the status line; empty when nothing is, or this is not checked. */
+    String problem() {
+        return problem;
     }
 
     /** The caret moved. */

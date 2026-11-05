@@ -50,10 +50,12 @@ final class Landmarks {
     static final String PREVIEW = "preview";
     static final String CONTENTS = "preview.files";
 
-    /** The status line, and its four slots. */
+    /** The status line, and its five slots. */
     static final String STATUS = "status";
     static final String STATUS_FILE = "status.file";
     static final String STATUS_MESSAGE = "status.message";
+    /** What is wrong with the file in front, as checking it found (Pontif); empty when nothing is. */
+    static final String STATUS_PROBLEM = "status.problem";
     static final String STATUS_LANGUAGE = "status.language";
     static final String STATUS_POSITION = "status.position";
 

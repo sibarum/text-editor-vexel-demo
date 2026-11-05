@@ -134,3 +134,27 @@ keep its waiting state on its run rather than in the component's.
 Checking Run… with ottermate wrote `run.command` and its siblings into the person's own settings, since an automated run
 uses the real profile unless `text-editor-vexel-demo.home` says otherwise. A launch under `--automation` could default
 the home to a scratch one, the way a test's is.
+
+## FN-12 · A job's requests cannot coalesce, so work made stale by the next keystroke still runs 🔬
+
+Checking Pontif as it is typed is a compile of the whole program after an edit: well under a millisecond for a small
+file, 70 ms or so warm for a 22 KB module, and more in the native image. A `@Job` request is never dropped: the job
+lane runs every one, in any order, two at once if it likes. A mailbox can say `COALESCE_LATEST`, but a job's request
+topic cannot, and there is no debounce. So `Buffer` keeps one `Check` in flight per document and sends the next when
+the answer comes back, for the text as it is then (`Buffer.check`/`checked`): a burst of typing costs the compile
+already running and one for where it ended. `MarkText` has the same shape and has never needed it, being a scan.
+
+Every editor feature that compiles, lints or indexes as you type will write these same few lines. A job whose request
+coalesces per key (here the field), latest wins and at most one running, would be the component: `@Job(coalesce = ...)`
+or a request type that says so.
+
+## FN-13 · An underline is drawn in the text's colour, so a problem cannot be marked under coloured code 🔬
+
+A problem in code wants the usual mark: a red line under the token, the token keeping its own colour. `Span` has
+`underline`, and `TreeRenderer` draws it in the span's `fg` or, without one, the ink. A red `fg` recolours the text
+too, so the underline cannot be red without the token going red, and a span with the theme's ink is not the token's
+colour either. `Buffer` marks a problem with an ink underline on a faint `DANGER` ground instead, which reads, but is
+not what any editor's reader expects, and the ground is also how the buffer tells its problem spans from its colours.
+
+The fix is an underline colour of its own on `Span` (and, as most editors draw one, a wavy style), so that a problem
+is one span laid over the colours rather than a second kind of colour.

@@ -20,8 +20,9 @@ declaration. Its code is on `develop`, to copy from as each piece is rebuilt.
       document (seen 2026-11-04 with an `.svg` tab). Pontif is not affected: it never touches TM4E.
 - [ ] Pontif, milestone 1 (agreed 2026-11-04; one slice each, in order): highlighting (done, `Grammars.PONTIF`);
       Run a `.ptf` and Run Project (done, `Runs.pontifFile`/`pontifProject`; `pontif` on the `PATH`, else the
-      `pontif.command` setting, which the preferences window should show); diagnostics as you type (`pontif-compiler` in a job; propose the messages and the
-      `Doc` field first); go to definition / navigate-or-import on Ctrl+Enter (`pontif-tooling`'s
+      `pontif.command` setting, which the preferences window should show); diagnostics as you type (done, `CheckText`;
+      the compiler stops at the first error, and a project is not checked as a whole, `compileProjectDir`); go to
+      definition / navigate-or-import on Ctrl+Enter (`pontif-tooling`'s
       `DefinitionNavigator.builtinsOnly()`). Pontif comes from the sibling `pontif-framework` on branch `v0.2`,
       `mvn install`ed.
 - [ ] Replace the palette anchors in `Look.java` with the design's, measured in Oklab. See the note in that file

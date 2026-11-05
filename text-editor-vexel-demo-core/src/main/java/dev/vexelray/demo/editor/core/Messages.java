@@ -452,6 +452,32 @@ public final class Messages {
     }
 
     /**
+     * Check a document for problems ({@link CheckText}): its text as of {@code version}, as the file at {@code path}
+     * would be compiled, so that what it requires is found beside it. Sent for a language that can be checked
+     * ({@link CheckText#checks}), one at a time per document: the next goes when this one's answer is back.
+     */
+    public static final Topic<Check> CHECK_TOPIC = Topic.edge(Check.class);
+
+    public record Check(String field, String text, long version, Path path) {
+    }
+
+    /** What {@link Check} found in the text as of {@code version}: no problems when it compiles. */
+    public static final Topic<Checked> CHECKED_TOPIC = Topic.edge(Checked.class);
+
+    public record Checked(String field, long version, List<Problem> problems) {
+        public Checked {
+            problems = List.copyOf(problems);
+        }
+    }
+
+    /**
+     * One problem: {@code [start, end)} in the text that was checked, empty when there is nothing to point at, and
+     * what is wrong.
+     */
+    public record Problem(int start, int end, String message) {
+    }
+
+    /**
      * Read a Markdown document as blocks for its formatted view ({@link FormatText}): its text as of {@code version}.
      * Asked when the view is switched on, and again when the text changes under it.
      */
