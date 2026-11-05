@@ -42,6 +42,7 @@ import dev.vexelray.demo.editor.core.Messages.Written;
 import dev.vexelray.framework.api.Component;
 import dev.vexelray.framework.api.Hears;
 import dev.vexelray.framework.api.Publishes;
+import dev.vexelray.framework.api.Withers;
 import dev.vexelray.framework.core.Answer;
 import dev.vexelray.framework.core.Ask;
 import dev.vexelray.framework.core.CloseAnswer;
@@ -151,9 +152,10 @@ public final class Editor {
      * @param last      the session last sent to be remembered, so an unchanged one is not written again
      * @param fresh     scratches this run made and nothing has been written to since: closed like that, they go again
      */
+    @Withers
     record State(Doc doc, long ids, Set<Path> reading, Map<Long, Closing> closings, List<Restore> restoring,
                  Optional<Path> front, Optional<Path> started, boolean armed, boolean keeps,
-                 Optional<Remember> last, Set<Path> fresh) {
+                 Optional<Remember> last, Set<Path> fresh) implements EditorStateWithers {
 
         State {
             reading = Set.copyOf(reading);
@@ -167,55 +169,45 @@ public final class Editor {
                     false, true, Optional.empty(), Set.of());
         }
 
-        State withDoc(Doc value) {
-            return new State(value, ids, reading, closings, restoring, front, started, armed, keeps, last, fresh);
-        }
+        // One wither per component (withDoc, withIds, ... withFresh) is generated for @Withers. These are the ones
+        // that mean more than "replace this field".
 
         /** A new tab's id, taken. */
         State withNextId() {
-            return new State(doc, ids + 1, reading, closings, restoring, front, started, armed, keeps, last, fresh);
+            return withIds(ids + 1);
         }
 
         State reading(Path file, boolean asked) {
-            return new State(doc, ids, with(reading, file, asked), closings, restoring, front, started, armed, keeps,
-                    last, fresh);
+            return withReading(with(reading, file, asked));
         }
 
         State withClosing(long run, Closing value) {
             Map<Long, Closing> next = new HashMap<>(closings);
             next.put(run, value);
-            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last, fresh);
+            return withClosings(next);
         }
 
         State withoutClosing(long run) {
             Map<Long, Closing> next = new HashMap<>(closings);
             next.remove(run);
-            return new State(doc, ids, reading, next, restoring, front, started, armed, keeps, last, fresh);
+            return withClosings(next);
         }
 
         State withRestoring(List<Restore> steps, Optional<Path> inFront, Path startedIn, boolean keeping) {
-            return new State(doc, ids, reading, closings, steps, inFront, Optional.of(startedIn), armed, keeping, last,
-                    fresh);
-        }
-
-        State withRestoring(List<Restore> steps) {
-            return new State(doc, ids, reading, closings, steps, front, started, armed, keeps, last, fresh);
+            return withRestoring(steps).withFront(inFront).withStarted(Optional.of(startedIn)).withKeeps(keeping);
         }
 
         State withArmed() {
-            return new State(doc, ids, reading, closings, restoring, Optional.empty(), started, true, keeps, last,
-                    fresh);
+            return withFront(Optional.empty()).withArmed(true);
         }
 
         State withLast(Remember value) {
-            return new State(doc, ids, reading, closings, restoring, front, started, armed, keeps, Optional.of(value),
-                    fresh);
+            return withLast(Optional.of(value));
         }
 
         /** {@code scratch} counted as fresh, or no longer. */
         State fresh(Path scratch, boolean value) {
-            return new State(doc, ids, reading, closings, restoring, front, started, armed, keeps, last,
-                    with(fresh, scratch, value));
+            return withFresh(with(fresh, scratch, value));
         }
 
         private static Set<Path> with(Set<Path> paths, Path path, boolean in) {

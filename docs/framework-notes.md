@@ -108,7 +108,11 @@ by a key starting with its first line marked, as every desktop menu does.
 Maven's `[INFO]` reads `[ INFO ]` in the console, and every coloured run has the same gap either side: the cells are
 right (copy gives `[INFO]`), so it is the drawing of a styled span. In vex-suite-common-tty, not worked round here.
 
-## FN-10 · A record state grows a field in every constructor call 🔬
+## FN-10 · A record state grows a field in every constructor call 🔬 (fixed 2026-11-04)
+
+*Fixed in vexelray-framework: `@Withers` on `Editor.State`, which implements the generated `EditorStateWithers`, gives
+it one `with<Component>` per component, and its twelve withers are now one-liners on them or gone. The run chain still
+borrows `Closing`; it can have a component of its own now that one costs a line. Kept below as found.*
 
 The run chain waits on saves exactly as a close does, and wanted a map of its own in `Editor.State`. `State` has eleven
 fields and twelve `with…` methods, each a full constructor call; a twelfth field is a change to all of them. Done
