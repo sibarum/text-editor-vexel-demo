@@ -23,9 +23,14 @@ import java.util.stream.Stream;
  * into Run…. Carried from the 0.1 editor, where it was the view's; here it reads the disk, so {@link FindRuns} runs it
  * on the job lane.
  *
- * <p>In the menu's order, each group under a rule: the file in front (its {@code main}, or itself when it is a
- * program); the Maven project around them (Compile, Clean Install, Package, Execute, the most recent build); and the
- * programs in the folder, four folders deep at most and without the folders the navigator leaves out.
+ * <p>In the menu's order, each group under a rule: the file in front (its {@code main}, itself when it is a program,
+ * or a Pontif file); the Pontif project around them (the folder with a {@code module.toml}); the Maven project around
+ * them (Compile, Clean Install, Package, Execute, the most recent build); and the programs in the folder, four folders
+ * deep at most and without the folders the navigator leaves out.
+ *
+ * <p>Pontif runs through its own command line, {@code pontif run}, which takes a file or a project folder. How that
+ * command is reached is the caller's ({@link FindRuns} reads it from the settings): {@code pontif} on the
+ * {@code PATH} unless something else is set.
  *
  * <p>What is a program, and how to run one, is the platform's ({@link PtyPlatform#programLine}): an {@code .exe},
  * {@code .bat} or {@code .ps1} on Windows; an executable ELF binary or {@code #!} script on Linux.
@@ -53,8 +58,19 @@ public final class Runs {
     private Runs() {
     }
 
-    /** Everything to offer for {@code project} (the folder shown) and {@code file} (in front), either of them null. */
+    /** The command that runs Pontif when nothing else is set: the one on the {@code PATH}. */
+    public static final String PONTIF = "pontif";
+
+    /** Everything to offer, running Pontif with {@code pontif} from the {@code PATH}. */
     public static List<Offer> offered(Path project, Path file) {
+        return offered(project, file, PONTIF);
+    }
+
+    /**
+     * Everything to offer for {@code project} (the folder shown) and {@code file} (in front), either of them null;
+     * {@code pontif} is the command line that runs Pontif, put in front of {@code run}.
+     */
+    public static List<Offer> offered(Path project, Path file, String pontif) {
         List<Offer> runs = new ArrayList<>();
         int group = 0;
         if (file != null) {
@@ -66,6 +82,15 @@ public final class Runs {
             if (script != null) {
                 runs.add(script);
             }
+            Offer ptf = pontifFile(file, pontif, group);
+            if (ptf != null) {
+                runs.add(ptf);
+            }
+        }
+        Path module = pontifRoot(project, file);
+        if (module != null) {
+            group++;
+            runs.add(pontifProject(module, pontif, group));
         }
         Path pom = mavenRoot(project, file);
         if (pom != null) {
@@ -103,6 +128,44 @@ public final class Runs {
 
     private static String stripComments(String text) {
         return text.replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("//[^\\n]*", "");
+    }
+
+    // ------------------------------------------------------------------ Pontif
+
+    /** The marker that makes a folder a Pontif project. */
+    static final String MODULE_TOML = "module.toml";
+
+    private static final Pattern MODULE_NAME = Pattern.compile("(?m)^\\s*name\\s*=\\s*\"([^\"]*)\"");
+
+    /** A {@code .ptf} file, run by itself in its own folder; null for any other file. */
+    static Offer pontifFile(Path file, String pontif, int group) {
+        String name = String.valueOf(file.getFileName());
+        if (!name.endsWith(".ptf")) {
+            return null;
+        }
+        return new Offer("Run " + name, pontif + " run " + quote(file.toAbsolutePath().toString()), file.getParent(),
+                group);
+    }
+
+    /** The folder shown when it is a Pontif project, else the project the file is in; null for neither. */
+    static Path pontifRoot(Path project, Path file) {
+        if (project != null && Files.isRegularFile(project.resolve(MODULE_TOML))) {
+            return project;
+        }
+        for (Path at = file == null ? null : file.getParent(); at != null; at = at.getParent()) {
+            if (Files.isRegularFile(at.resolve(MODULE_TOML))) {
+                return at;
+            }
+        }
+        return null;
+    }
+
+    /** The project in {@code root}, run whole, named as its {@code module.toml} names it (else by its folder). */
+    static Offer pontifProject(Path root, String pontif, int group) {
+        Matcher name = MODULE_NAME.matcher(read(root.resolve(MODULE_TOML)));
+        String shown = name.find() && !name.group(1).isBlank() ? name.group(1) : String.valueOf(root.getFileName());
+        return new Offer("Run Project (" + shown + ")", pontif + " run " + quote(root.toAbsolutePath().toString()),
+                root, group);
     }
 
     // ------------------------------------------------------------------ Maven

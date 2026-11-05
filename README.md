@@ -9,7 +9,8 @@ whatever you are actually building.
 
 It knows Pontif natively: a `.ptf` file is coloured by the language's own token scan rather than a TextMate grammar
 (`Grammars.PONTIF`), through `pontif-tooling` from the sibling `pontif-framework` checkout (branch `v0.2`), which has
-to be `mvn install`ed first. Running, checking and navigating Pontif are next (`docs/TODO.md`).
+to be `mvn install`ed first. The Run menu runs a `.ptf` file or its project through `pontif run` (*Running things*).
+Checking and navigating Pontif are next (`docs/TODO.md`).
 
 ## Run it
 
@@ -109,7 +110,12 @@ framework brings native pickers (a `PickFile` message, answered by `Picked`) for
 the file in front, worked out from what is on disk by the `FindRuns` job (`Runs`), each group under a rule:
 
 - the file in front: **Run *Class*.main()** for a Java file with a `main` (through Maven, `mvn -q compile exec:java`,
-  when it is in a module; with the JDK's source launcher otherwise), or the file itself when it is a program;
+  when it is in a module; with the JDK's source launcher otherwise), the file itself when it is a program, or
+  **Run *name*.ptf** for a Pontif file (`pontif run <file>`, in its folder);
+- the Pontif project, the folder shown or the nearest one above the file with a `module.toml`: **Run Project
+  (*name*)**, `pontif run <folder>`, named as its `module.toml` names it. Pontif is run by `pontif` on the `PATH`, or
+  by the command line in the settings' `pontif.command` (say `java -jar …/pontif-cli/target/pontif-cli.jar`, where
+  there is only the jar), set by hand while the IDE is closed until there is a preferences window;
 - the Maven project: **Compile**, **Clean Install**, **Package** unless the packaging is `pom`, **Execute** when the
   pom configures exec-maven-plugin's `exec`, and **Run Recent Build** for the newest program or runnable jar in
   `target/`;

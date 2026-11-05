@@ -139,6 +139,59 @@ class RunsTest {
         assertEquals(List.of(), Runs.offered(null, null));
     }
 
+    // ------------------------------------------------------------------ Pontif
+
+    @Test
+    void aPontifFileRunsItselfThroughPontifInItsFolder() throws IOException {
+        Path file = write(dir.resolve("ledger.ptf"), "1 + 1\n");
+        List<Offer> runs = Runs.offered(null, file);
+        assertEquals(List.of("Run ledger.ptf"), labels(runs));
+        assertEquals("pontif run " + Runs.quote(file.toAbsolutePath().toString()), runs.getFirst().line());
+        assertEquals(dir, runs.getFirst().dir());
+    }
+
+    @Test
+    void theCommandThatRunsPontifIsTheCallers() throws IOException {
+        Path file = write(dir.resolve("app.ptf"), "42\n");
+        String jar = "java -jar C:/pontif/pontif-cli.jar";
+        assertTrue(Runs.offered(null, file, jar).getFirst().line().startsWith(jar + " run "));
+    }
+
+    @Test
+    void otherFilesAreNotRunAsPontif() throws IOException {
+        assertNull(Runs.pontifFile(write(dir.resolve("notes.txt"), "1 + 1"), Runs.PONTIF, 0));
+        assertNull(Runs.pontifFile(write(dir.resolve("app.ptfpkg"), ""), Runs.PONTIF, 0));
+    }
+
+    @Test
+    void aFolderWithAModuleTomlIsAProjectRunWholeUnderItsOwnName() throws IOException {
+        write(dir.resolve("module.toml"), "name = \"app\"\nnamespace = \"demo.app\"\nversion = \"0.1.0\"\n");
+        Path file = write(dir.resolve("src/app.ptf"), "42\n");
+        List<Offer> runs = Runs.offered(dir, file);
+        assertEquals(List.of("Run app.ptf", "Run Project (app)"), labels(runs));
+        Offer project = runs.get(1);
+        assertEquals("pontif run " + Runs.quote(dir.toAbsolutePath().toString()), project.line());
+        assertEquals(dir, project.dir());
+        assertTrue(project.group() > runs.getFirst().group(), "the project's group follows the file's");
+    }
+
+    @Test
+    void theProjectIsFoundAboveTheFileWhenTheFolderShownIsNotOne() throws IOException {
+        Path app = Files.createDirectories(dir.resolve("apps/ledger"));
+        write(app.resolve("module.toml"), "# no name here\n");
+        Path file = write(app.resolve("lib/books.ptf"), "1\n");
+        assertEquals(app, Runs.pontifRoot(dir, file));
+        assertEquals("Run Project (ledger)", Runs.pontifProject(app, Runs.PONTIF, 1).label(), "named by its folder");
+        assertNull(Runs.pontifRoot(dir, null));
+        assertNull(Runs.pontifRoot(dir, write(dir.resolve("loose.ptf"), "1\n")));
+    }
+
+    @Test
+    void aProjectIsOfferedWithNoFileInFront() throws IOException {
+        write(dir.resolve("module.toml"), "name = \"app\"\n");
+        assertEquals(List.of("Run Project (app)"), labels(Runs.offered(dir, null)));
+    }
+
     @Test
     @EnabledOnOs(OS.WINDOWS)
     void onWindowsTheProjectsProgramsAreOfferedAndAFakeExecutableIsNot() throws IOException {
