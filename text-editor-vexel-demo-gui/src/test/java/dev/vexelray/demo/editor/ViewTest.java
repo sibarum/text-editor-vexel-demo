@@ -898,4 +898,64 @@ class ViewTest {
         assertEquals(List.of(), checks);
         assertEquals("", b.problem());
     }
+
+    // ------------------------------------------------------------------ Pontif, go to definition
+
+    private static final String BOOKS = "module my.books\nexports @.{total}\n\nfunction total(n:Int):Int -> n + 1\n";
+
+    /** Ctrl+Enter with the caret at the {@code nth} occurrence of {@code word} in {@code b}. */
+    private void goTo(Buffer b, String word, int nth) {
+        int at = -1;
+        for (int i = 0; i <= nth; i++) {
+            at = b.field.text().indexOf(word, at + 1);
+        }
+        b.field.caret(at);
+        tell(Intent.Command.GO_TO_DEFINITION);
+    }
+
+    @Test
+    void ctrlEnterGoesToADeclarationInTheSameFile() throws Exception {
+        String text = "function greet(n:Int):Int -> n + 1\n\ngreet(41)\n";
+        Buffer b = opened(Files.writeString(dir.resolve("app.ptf"), text));
+        goTo(b, "greet", 1);
+        int end = text.indexOf("greet") + "greet".length();
+        eventually("the declaration selected", () -> b.field.caret() == end);
+    }
+
+    @Test
+    void ctrlEnterOpensTheFileBesideThatDeclaresAName() throws Exception {
+        Path books = Files.writeString(dir.resolve("books.ptf"), BOOKS);
+        Buffer app = opened(Files.writeString(dir.resolve("app.ptf"), "requires my.books.{total}\n\ntotal(41)\n"));
+        goTo(app, "total", 1);
+        int end = BOOKS.indexOf("function total") + "function total".length();
+        eventually("books in front, at total", () -> ws.front() != null
+                && ws.front().path.equals(books.toAbsolutePath().normalize()) && ws.front().field.caret() == end);
+    }
+
+    @Test
+    void ctrlEnterImportsANameAndCtrlZTakesItOut() throws Exception {
+        Files.writeString(dir.resolve("books.ptf"), BOOKS);
+        Buffer b = opened(Files.writeString(dir.resolve("app.ptf"), "total(41)\n"));
+        // The caret move just before Ctrl+Enter is itself a change with a version of its own (as is every colouring
+        // and check that lands meanwhile), so this also holds that an answer is matched by its text, not the version.
+        goTo(b, "total", 0);
+        eventually("the requires added", () -> b.field.text().equals("requires my.books.{total}\ntotal(41)\n"));
+        assertEquals("requires my.books.{total}\n".length(), b.field.caret(), "the caret stays on the name");
+        b.field.history().undo();
+        eventually("taken out again", () -> b.field.text().equals("total(41)\n"));
+    }
+
+    @Test
+    void ctrlEnterOnABuiltInOpensItsSourceToBeRead() throws Exception {
+        Buffer b = opened(Files.writeString(dir.resolve("app.ptf"), "requires pontif.core.{Stream}\n\n1\n"));
+        goTo(b, "Stream", 0);
+        Path builtins = dir.resolve("home").resolve("pontif-builtins").toAbsolutePath().normalize();
+        eventually("pontif.core in front", () -> ws.front() != null && ws.front().path.startsWith(builtins));
+        Buffer core = ws.front();
+        assertEquals("pontif.core.ptf", core.name());
+        assertTrue(core.readOnly(), "a built-in's source is read, not edited");
+        assertFalse(b.readOnly());
+        int caret = core.field.caret();
+        assertEquals("Stream", core.field.text().substring(caret - "Stream".length(), caret));
+    }
 }

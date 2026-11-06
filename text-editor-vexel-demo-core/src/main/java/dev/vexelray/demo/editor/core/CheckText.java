@@ -51,7 +51,7 @@ public final class CheckText {
             return PontifProblems.check(new PontifCompiler(), text, String.valueOf(file.getFileName()),
                             file.getParent())
                     .stream().map(p -> new Problem(p.start(), p.end(), p.message())).toList();
-        } catch (RuntimeException | StackOverflowError e) {
+        } catch (RuntimeException | LinkageError | StackOverflowError e) {
             LOG.warn("the Pontif compiler failed on {}: {}", file, e.toString());
             return List.of(new Problem(text.length(), text.length(), "The Pontif compiler failed: " + e));
         }

@@ -18,13 +18,10 @@ declaration. Its code is on `develop`, to copy from as each piece is rebuilt.
       Worse than no colour today: `Grammars.grammar` throws `TMException` outside `spans`' catch, so `MarkText`
       fails and the framework stops the whole application, at start-up when the session restores any TextMate
       document (seen 2026-11-04 with an `.svg` tab). Pontif is not affected: it never touches TM4E.
-- [ ] Pontif, milestone 1 (agreed 2026-11-04; one slice each, in order): highlighting (done, `Grammars.PONTIF`);
-      Run a `.ptf` and Run Project (done, `Runs.pontifFile`/`pontifProject`; `pontif` on the `PATH`, else the
-      `pontif.command` setting, which the preferences window should show); diagnostics as you type (done, `CheckText`;
-      the compiler stops at the first error, and a project is not checked as a whole, `compileProjectDir`); go to
-      definition / navigate-or-import on Ctrl+Enter (`pontif-tooling`'s
-      `DefinitionNavigator.builtinsOnly()`). Pontif comes from the sibling `pontif-framework` on branch `v0.2`,
-      `mvn install`ed.
+- [ ] Pontif, after milestone 1 (highlighting, Run, checking as you type and Ctrl+Enter, done 2026-11-05; see README):
+      a chooser when several modules export a name (FN-14); Ctrl+click; going back after a jump; errors past the
+      first (the compiler stops there) and checking a project whole (`compileProjectDir`); `pontif.gui`'s modules,
+      which the IDE does not carry; and the `pontif.command` setting in the preferences window, when there is one.
 - [ ] Replace the palette anchors in `Look.java` with the design's, measured in Oklab. See the note in that file
       about which authored colours the construction can reproduce and which have to be declared.
 

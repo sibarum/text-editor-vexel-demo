@@ -77,10 +77,17 @@ final class Buffer implements AutoCloseable {
     private String formattedText;
     /** The TextMate scope of the file's format, or null for plain text. */
     private String scope;
-    /** The version of the field's last change, which a colouring has to match. */
+    /**
+     * The version of the field's last change. Not the text's identity: a field announces a change, with a new version,
+     * for every commit, a caret move or a selection too. So an answer is matched to its question by the version it was
+     * asked at, and applied only while the field still says the text it was asked about.
+     */
     private long version = -1;
-    /** The text the colours were last asked for, so a change that only moved the colours asks nothing. */
+    /** The text the colours were last asked for, so a change that only moved the colours asks nothing; and when. */
     private String marked;
+    private long markedAt = -1;
+    /** The text the formatted view was last asked for, and when. */
+    private long formattedAt = -1;
     /** A save took the bytes and then failed, so the document is unsaved whatever the history's mark says. */
     private boolean unsavedWrite;
     /** Whether the editor was last told this is unsaved. */
@@ -92,12 +99,14 @@ final class Buffer implements AutoCloseable {
     private final Color problemGround;
     /** Whether a {@link Check} is out and not yet answered. */
     private boolean checking;
-    /** The version of the text the last check was sent for. */
-    private long checkedVersion = -1;
+    /** The text the last check was sent for, and when; null when this has not been checked as it is named now. */
+    private String checkedText;
+    private long checkedAt = -1;
     /** What is wrong, as the last answer for the current text said; empty when nothing is. */
     private String problem = "";
 
-    Buffer(Gui gui, long id, Path path, String initial) {
+    /** {@code readOnly}: a built-in module's source, to be read; see {@code NavigateText.builtins}. */
+    Buffer(Gui gui, long id, Path path, String initial, boolean readOnly) {
         this.id = id;
         this.gui = gui;
         this.path = path;
@@ -108,7 +117,8 @@ final class Buffer implements AutoCloseable {
         // Multiline is also what gives it Ctrl+F. Whitespace dotted where it means something or hides a mistake:
         // indentation, what trails a line, runs of blanks; and a ¬ at each line's end.
         this.field = new TextField(gui, "").name("buffer-" + id).history(new History()).multiline(true)
-                .lineNumbers(true).wordWrap(true).whitespace(Whitespace.BOUNDARY).lineEnds(true);
+                .lineNumbers(true).wordWrap(true).whitespace(Whitespace.BOUNDARY).lineEnds(true)
+                .readOnly(readOnly);
         field.node().width(Length.FILL).height(Length.FILL).font(scope != null ? Type.MONO : Type.UI)
                 .textSize(Type.CODE)
                 // The text sits on the card, not in a well of its own: the card is the document's edge. The border
@@ -144,6 +154,7 @@ final class Buffer implements AutoCloseable {
             return null;
         }
         marked = now;
+        markedAt = at;
         return new Mark(address(), now, at, scope);
     }
 
@@ -180,7 +191,7 @@ final class Buffer implements AutoCloseable {
             page.append(formatted.node());
         }
         marked = null;
-        checkedVersion = -1;   // a new name may be checked, or checked differently (what it requires is beside it)
+        checkedText = null;   // a new name may be checked, or checked differently (what it requires is beside it)
         if (!CheckText.checks(to)) {
             showProblems(List.of());
         }
@@ -189,6 +200,7 @@ final class Buffer implements AutoCloseable {
             return null;
         }
         marked = field.text();
+        markedAt = version;
         return new Mark(address(), marked, version, scope);
     }
 
@@ -214,6 +226,7 @@ final class Buffer implements AutoCloseable {
             return null;
         }
         formattedText = field.text();
+        formattedAt = version;
         return new Format(address(), formattedText, version);
     }
 
@@ -227,12 +240,13 @@ final class Buffer implements AutoCloseable {
             return null;
         }
         formattedText = now;
+        formattedAt = version;
         return new Format(address(), now, version);
     }
 
     /** {@code FormatText}'s answer: shown only if the field still says the text it was read from. */
     void formatted(Formatted m) {
-        if (formatted != null && m.version() == version) {
+        if (formatted != null && m.version() == formattedAt && field.text().equals(formattedText)) {
             formatted.show(m.blocks());
         }
     }
@@ -242,7 +256,7 @@ final class Buffer implements AutoCloseable {
      * the field shows stay as they are.
      */
     void marked(Marked m) {
-        if (m.version() != version) {
+        if (m.version() != markedAt || !field.text().equals(marked)) {
             return;
         }
         List<Span> next = new ArrayList<>(m.spans());
@@ -260,12 +274,14 @@ final class Buffer implements AutoCloseable {
      * file it checks, the current text has been asked about, or a check is out already (its answer asks again).
      */
     Check check() {
-        if (!CheckText.checks(path) || checking || checkedVersion == version) {
+        String now = field.text();
+        if (!CheckText.checks(path) || checking || now.equals(checkedText)) {
             return null;
         }
         checking = true;
-        checkedVersion = version;
-        return new Check(address(), field.text(), version, path);
+        checkedText = now;
+        checkedAt = version;
+        return new Check(address(), now, version, path);
     }
 
     /**
@@ -274,7 +290,7 @@ final class Buffer implements AutoCloseable {
      */
     Check checked(Checked m) {
         checking = false;
-        if (m.version() == version) {
+        if (m.version() == checkedAt && field.text().equals(checkedText)) {
             showProblems(m.problems());
         }
         return check();
@@ -319,6 +335,62 @@ final class Buffer implements AutoCloseable {
     /** What is wrong with the text, for the status line; empty when nothing is, or this is not checked. */
     String problem() {
         return problem;
+    }
+
+    /** The version of the field's last change, which an answer about its text has to match. */
+    long version() {
+        return version;
+    }
+
+    /** Whether this is a built-in module's source, shown to be read and never edited. */
+    boolean readOnly() {
+        return field.readOnly();
+    }
+
+    /**
+     * Put {@code insert} in place of {@code [start, end)}, as one edit Ctrl+Z takes back, the caret staying on the text
+     * it was on. False, and nothing done, if the field no longer says {@code asked}, the text the edit was worked out
+     * from, or this is read-only.
+     */
+    boolean edit(String asked, int start, int end, String insert) {
+        if (!field.text().equals(asked) || readOnly() || start < 0 || end < start || end > field.text().length()) {
+            return false;
+        }
+        int caret = field.caret();
+        field.select(start, end);
+        field.insert(insert);
+        int shift = insert.length() - (end - start);
+        field.caret(caret < start ? caret : caret >= end ? caret + shift : start + insert.length());
+        return true;
+    }
+
+    /**
+     * Select {@code [start, end)}, a declaration found on disk, and give it the keyboard. When this has unsaved changes
+     * the range may have moved, so the {@code name} nearest it is selected instead.
+     */
+    void reveal(int start, int end, String name) {
+        String text = field.text();
+        int at = start;
+        if (dirty() && !name.isEmpty() && !text.startsWith(name, start)) {
+            at = nearest(text, name, start);
+            end = at + name.length();
+        }
+        field.select(Math.min(at, text.length()), Math.min(end, text.length()));
+        gui.focus(keyboard());
+    }
+
+    /** The whole-word occurrence of {@code name} nearest {@code to}, or {@code to} if there is none. */
+    private static int nearest(String text, String name, int to) {
+        int best = -1;
+        for (int i = text.indexOf(name); i >= 0; i = text.indexOf(name, i + 1)) {
+            boolean whole = (i == 0 || !Character.isLetterOrDigit(text.charAt(i - 1)) && text.charAt(i - 1) != '_')
+                    && (i + name.length() == text.length() || !Character.isLetterOrDigit(text.charAt(i + name.length()))
+                    && text.charAt(i + name.length()) != '_');
+            if (whole && (best < 0 || Math.abs(i - to) < Math.abs(best - to))) {
+                best = i;
+            }
+        }
+        return best < 0 ? to : best;
     }
 
     /** The caret moved. */

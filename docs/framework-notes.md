@@ -158,3 +158,23 @@ not what any editor's reader expects, and the ground is also how the buffer tell
 
 The fix is an underline colour of its own on `Span` (and, as most editors draw one, a wavy style), so that a problem
 is one span laid over the colours rather than a second kind of colour.
+
+## FN-14 · A menu cannot be opened at the caret from a key 🔬
+
+Ctrl+Enter on a name that two modules export should offer a choice of the two, as the Pontif Editor's chooser does,
+at the name. `ContextMenu.present` takes a `ClickEvent` and floats the menu at the pointer, so a menu has to come from
+a click; a key press has no place to give it, and `TextField` does not say where its caret is on screen. So
+`NavigateText` names the modules on the status line and imports neither: the person adds the `requires` by hand.
+
+A key-driven menu anchored at a node and an offset in it (a field's caret, a tree's row), opened by a declared chord
+as the title bar's menus are by F5, is what completion, quick fixes and choosers in every editor on the stack need.
+
+## FN-15 · A field's change version counts caret moves, so it cannot say which text an answer is about 💡
+
+`TextField.Changed` carries the document's version, and a field announces a change, with a new version, for every
+commit: typing, but also a caret move, a selection and spans being set. The IDE's buffers matched a job's answer to
+the field by that version, so a caret moved while `MarkText`, `CheckText` or `FormatText` was working made the answer
+look stale and dropped it, and `CheckText` compiled the same text again for every arrow key. Found when Ctrl+Enter's
+own caret move refused the import it asked for. `Buffer` now remembers the text each question was about and applies an
+answer only while the field still says it. Not a gap so much as a name that invites the wrong use: a text version
+alongside the document's, bumped only when the text changes, would be the thing to key on.

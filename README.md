@@ -9,8 +9,9 @@ whatever you are actually building.
 
 It knows Pontif natively: a `.ptf` file is coloured by the language's own token scan rather than a TextMate grammar
 (`Grammars.PONTIF`), through `pontif-tooling` from the sibling `pontif-framework` checkout (branch `v0.2`), which has
-to be `mvn install`ed first. The Run menu runs a `.ptf` file or its project through `pontif run` (*Running things*), and a `.ptf` is checked as it
-is typed (*Spans*), its first error underlined and on the status line. Go to definition is next (`docs/TODO.md`).
+to be `mvn install`ed first. The Run menu runs a `.ptf` file or its project through `pontif run` (*Running things*), a `.ptf` is checked as it
+is typed (*Spans*), its first error underlined and on the status line, and Ctrl+Enter on a name goes to its definition
+or adds its `requires` (*Pontif: Ctrl+Enter*).
 
 ## Run it
 
@@ -94,6 +95,7 @@ groups the button with other Java programs, and pinning it pins Java. The native
 | Ctrl+Shift+E | put the keyboard in the navigator |
 | Ctrl+F | find in the file (Enter / Shift+Enter step, Escape closes) |
 | Ctrl+Z / Ctrl+Y | undo / redo |
+| Ctrl+Enter | in a Pontif file: go to the definition of the name at the caret, or add its `requires` |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
 | F5 | the Run menu (see *Running things*) |
 
@@ -157,7 +159,7 @@ and a reply out), and **recipes** (a part built once and handed to whoever takes
 | `Messages.java` | **every message the parts send each other**, grouped by who sends it to whom, each record beside its topic. A record crosses as itself, so it holds only immutable values; a list it holds is copied in its constructor. |
 | `Editor.java` | **the controller**: every decision (what a typed path names, whether a file is already open, when closing needs a question, what the status line says, what comes back next time) as a declared step on one immutable state, held by a ledger. Each message it hears runs one step; closing is a chain of them that waits on the person and the disk without anything waiting on a thread. It needs no lock, because only its steps change its state and they run one at a time. |
 | `Doc.java` | the shape of the session (which files, which in front, which unsaved, which folder) as one immutable value, part of the editor's state. |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java`, `CheckText.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java`, `CheckText.java`, `NavigateText.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
 | `TextFile.java`, `Markdown.java` | the policy between bytes and text, and Markdown as spans: pure functions. |
 | `Core.java` | the list of this module's component and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it. |
 
@@ -224,6 +226,17 @@ folder is where what it `requires` is found), with `pontif-compiler`, and puts t
 line (`status.problem`). One check is in flight per document, and its answer sends the next, for the text as it is
 then, so a burst of typing costs two compiles, not one a keystroke (FN-12). The colours and the problems are two
 answers into the field's one list of spans, so each replaces only its own kind (`Buffer`).
+
+### Pontif: Ctrl+Enter
+
+Ctrl+Enter on a name in a `.ptf` is the Pontif Editor's navigate-or-import, through the same `pontif-tooling`
+`DefinitionNavigator` (`NavigateText`). Declared in the file, the caret goes to it; in scope, its declaration opens, in
+the file beside this one that has it or, for a built-in module, in that module's source, written to `pontif-builtins`
+beside the scratches in the IDE's home and shown read-only; not in scope and exported by one module, the `requires`
+is added as one edit (Ctrl+Z takes it out) and Ctrl+Enter again goes to it. Exported by several, they are named on
+the status line and nothing is added (a chooser at the caret is FN-14). The answer is one `Navigated` with a `Kind`,
+which hands it to the view's `Navigated.Sink`, so nothing switches on it. An answer is applied only while the field
+still says the text it was about: a field's change version also counts caret moves (FN-15).
 
 ### Motion
 

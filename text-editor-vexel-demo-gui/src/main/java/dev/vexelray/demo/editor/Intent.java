@@ -81,6 +81,12 @@ record Intent(Command command) {
                 view.leaveRename();
             }
         },
+        GO_TO_DEFINITION {
+            @Override
+            void on(View view) {
+                view.goToDefinition();
+            }
+        },
         RUN_MENU {
             @Override
             void on(View view) {

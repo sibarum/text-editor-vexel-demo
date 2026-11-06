@@ -22,6 +22,8 @@ import dev.vexelray.demo.editor.core.Messages.Checked;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Moved;
+import dev.vexelray.demo.editor.core.Messages.Navigate;
+import dev.vexelray.demo.editor.core.Messages.Navigated;
 import dev.vexelray.demo.editor.core.Messages.NewScratch;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Picture;
@@ -44,6 +46,7 @@ import dev.vexelray.demo.editor.core.Messages.ScratchesFound;
 import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
+import dev.vexelray.demo.editor.core.NavigateText;
 import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.gui.core.Gui;
@@ -122,6 +125,7 @@ final class View {
     private final Sender<Listing> listing;
     private final Sender<Mark> mark;
     private final Sender<Check> check;
+    private final Sender<Navigate> navigate;
     private final Sender<Format> format;
     private final Sender<TreeView.Children> children;
     private final Sender<Intent> intents;
@@ -136,6 +140,14 @@ final class View {
     private final Sender<WindowCommand> windows;
     /** What the Run menu was last asked about, so an answer about anything else is left. */
     private RunsWanted runsAsked = new RunsWanted(Optional.empty(), Optional.empty());
+    /** A declaration to select once its file is in front (go to definition); null when none is wanted. */
+    private Reveal reveal;
+    /** The last Ctrl+Enter asked, whose text an import is worked out from; null before the first. */
+    private Navigate asked;
+
+    /** Where a declaration is: in {@code file}, {@code [start, end)} as the file on disk has it, named {@code name}. */
+    private record Reveal(Path file, int start, int end, String name) {
+    }
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
@@ -145,8 +157,8 @@ final class View {
 
     View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
-         Sender<Listing> listing, Sender<Mark> mark, Sender<Check> check, Sender<Format> format,
-         Sender<TreeView.Children> children,
+         Sender<Listing> listing, Sender<Mark> mark, Sender<Check> check, Sender<Navigate> navigate,
+         Sender<Format> format, Sender<TreeView.Children> children,
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
@@ -173,6 +185,7 @@ final class View {
         this.listing = listing;
         this.mark = mark;
         this.check = check;
+        this.navigate = navigate;
         this.format = format;
         this.children = children;
         this.intents = intents;
@@ -248,7 +261,11 @@ final class View {
 
     @Subscribe
     public void addTab(AddTab m) {
-        ws.add(m.id(), m.path(), m.text(), m.focus());
+        Buffer b = ws.add(m.id(), m.path(), m.text(), m.focus());
+        // Ctrl+Enter is go to definition in a document, before the field takes it as a newline.
+        gui.claim(b.field.node(), Shortcut.of(Key.ENTER, Modifier.CONTROL), ClaimScope.FOCUSED, intents,
+                new Intent(Command.GO_TO_DEFINITION));
+        revealIn(b);
     }
 
     @Subscribe
@@ -256,6 +273,7 @@ final class View {
         Buffer b = ws.byId(m.id());
         if (b != null) {
             ws.show(b, m.focus());
+            revealIn(b);
         }
     }
 
@@ -449,6 +467,89 @@ final class View {
     private void check(Check wanted) {
         if (wanted != null) {
             check.send(wanted);
+        }
+    }
+
+    // ------------------------------------------------------------------ go to definition
+
+    /** Ctrl+Enter in a document: ask {@code NavigateText} about the name at the caret. */
+    void goToDefinition() {
+        Buffer b = ws.front();
+        if (b != null) {
+            asked = new Navigate(b.address(), b.field.text(), b.version(), b.field.caret(), b.path);
+            navigate.send(asked);
+        }
+    }
+
+    /** What Ctrl+Enter found: said on the status line, and acted on by its kind. */
+    @Subscribe
+    public void navigated(Navigated m) {
+        Buffer b = ws.byField(m.field());
+        if (b != null) {
+            m.to(new Navigation(b));
+        }
+    }
+
+    /** Acting on one answer to Ctrl+Enter in {@code from}. */
+    private final class Navigation implements Navigated.Sink {
+
+        private final Buffer from;
+
+        Navigation(Buffer from) {
+            this.from = from;
+        }
+
+        @Override
+        public void here(Navigated m) {
+            from.reveal(m.start(), m.end(), "");
+            say(m);
+        }
+
+        /** The declaration's file: selected now if it is open, else once the editor has opened it. */
+        @Override
+        public void there(Navigated m) {
+            Path file = m.file().orElse(null);
+            if (file == null) {
+                say(m);
+                return;
+            }
+            int[] word = NavigateText.wordAt(from.field.text(), from.field.caret());
+            String name = word == null ? "" : from.field.text().substring(word[0], word[1]);
+            reveal = new Reveal(file.toAbsolutePath().normalize(), m.start(), m.end(), name);
+            Buffer open = ws.find(file);
+            if (open != null && open.id == front) {
+                revealIn(open);
+            } else {
+                View.this.open.send(new Open(file, true));
+            }
+            say(m);
+        }
+
+        @Override
+        public void imported(Navigated m) {
+            if (from.readOnly()) {
+                ui.status(from.name() + " is a built-in module's source, to be read; it is not changed", true);
+            } else if (asked != null && asked.field().equals(m.field()) && asked.version() == m.version()
+                    && from.edit(asked.text(), m.start(), m.end(), m.insert())) {
+                say(m);
+            } else {
+                ui.status("The text changed before the import was added: Ctrl+Enter again", true);
+            }
+        }
+
+        @Override
+        public void say(Navigated m) {
+            if (!m.message().isEmpty()) {
+                ui.status(m.message(), m.kind() == Navigated.Kind.SAY);
+            }
+        }
+    }
+
+    /** The declaration wanted, selected in {@code b} if {@code b} is its file. */
+    private void revealIn(Buffer b) {
+        if (reveal != null && b.path.toAbsolutePath().normalize().equals(reveal.file())) {
+            b.reveal(reveal.start(), reveal.end(), reveal.name());
+            reveal = null;
         }
     }
 

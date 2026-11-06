@@ -3,6 +3,7 @@ package dev.vexelray.demo.editor;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
+import dev.vexelray.demo.editor.core.NavigateText;
 import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
@@ -75,7 +76,7 @@ final class Ui {
             gui.landmark(slot, status.slot(slot));
         }
 
-        workspace = new Workspace(gui, motion);
+        workspace = new Workspace(gui, motion, NavigateText.builtins(scratches));
         navigator = new Navigator(gui, motion, scratches);
 
         // In Open the editor steps aside for a picture of the folder being considered: the two share the place

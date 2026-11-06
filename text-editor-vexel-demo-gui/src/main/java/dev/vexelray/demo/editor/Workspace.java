@@ -56,8 +56,12 @@ final class Workspace {
     private final Map<Long, Buffer> byId = new HashMap<>();
     private final Map<String, Buffer> byField = new HashMap<>();
 
-    Workspace(Gui gui, Motion motion) {
+    /** Where built-in modules' sources are opened from (NavigateText.builtins): a document there is read-only. */
+    private final Path builtins;
+
+    Workspace(Gui gui, Motion motion, Path builtins) {
         this.gui = gui;
+        this.builtins = builtins.toAbsolutePath().normalize();
         this.motion = motion;
         this.accent = gui.theme().color(Role.ACCENT);
 
@@ -116,7 +120,7 @@ final class Workspace {
 
     /** Open {@code text} as {@code path} in a new tab, in front. {@code focus}: whether it takes the keyboard. */
     Buffer add(long id, Path path, String text, boolean focus) {
-        Buffer buffer = new Buffer(gui, id, path, text);
+        Buffer buffer = new Buffer(gui, id, path, text, path.toAbsolutePath().normalize().startsWith(builtins));
         tabs.add(buffer.name(), buffer.node());
         buffers.add(buffer);
         byId.put(id, buffer);

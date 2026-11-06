@@ -478,6 +478,78 @@ public final class Messages {
     }
 
     /**
+     * Go to the definition of the name at {@code caret}, or import it ({@link NavigateText}): Ctrl+Enter in a document,
+     * with its text as of {@code version}, as the file at {@code path}.
+     */
+    public static final Topic<Navigate> NAVIGATE_TOPIC = Topic.edge(Navigate.class);
+
+    public record Navigate(String field, String text, long version, int caret, Path path) {
+    }
+
+    /**
+     * What {@link Navigate} found, for the text as of {@code version}: a place in this document ({@link Kind#HERE},
+     * {@code [start, end)}), a place in another file ({@link Kind#THERE}, {@code file} and {@code [start, end)} in it),
+     * an edit that adds the import ({@link Kind#IMPORT}: {@code [start, end)} of this text becomes {@code insert}), or
+     * only something to say ({@link Kind#SAY}). {@code message} is said on the status line in every case, and is
+     * empty when there is nothing to say.
+     */
+    public static final Topic<Navigated> NAVIGATED_TOPIC = Topic.edge(Navigated.class);
+
+    public record Navigated(String field, long version, Kind kind, Optional<Path> file, int start, int end,
+                            String insert, String message) {
+
+        /** What was found; each kind hands the answer to its own method of a {@link Sink}, so nothing switches on it. */
+        public enum Kind {
+            HERE {
+                @Override
+                void to(Navigated m, Sink sink) {
+                    sink.here(m);
+                }
+            },
+            THERE {
+                @Override
+                void to(Navigated m, Sink sink) {
+                    sink.there(m);
+                }
+            },
+            IMPORT {
+                @Override
+                void to(Navigated m, Sink sink) {
+                    sink.imported(m);
+                }
+            },
+            SAY {
+                @Override
+                void to(Navigated m, Sink sink) {
+                    sink.say(m);
+                }
+            };
+
+            abstract void to(Navigated m, Sink sink);
+        }
+
+        /** Whoever acts on an answer: one method a kind. */
+        public interface Sink {
+            void here(Navigated m);
+
+            void there(Navigated m);
+
+            void imported(Navigated m);
+
+            void say(Navigated m);
+        }
+
+        /** Hand this answer to {@code sink}, by its kind. */
+        public void to(Sink sink) {
+            kind.to(this, sink);
+        }
+
+        static Navigated say(Navigate n, String message) {
+            return new Navigated(n.field(), n.version(), Kind.SAY, Optional.empty(), 0, 0, "", message);
+        }
+    }
+
+    /**
      * Read a Markdown document as blocks for its formatted view ({@link FormatText}): its text as of {@code version}.
      * Asked when the view is switched on, and again when the text changes under it.
      */
