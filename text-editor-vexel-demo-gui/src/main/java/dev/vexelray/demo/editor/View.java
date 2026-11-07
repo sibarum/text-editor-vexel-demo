@@ -205,11 +205,11 @@ final class View {
      * is the application's to say; how far it goes is {@code Appearance.ZoomRange}, the framework's.
      */
     private void shortcuts() {
-        chord(Shortcut.of(Key.S, Modifier.CONTROL), Command.SAVE_FRONT);
-        chord(Shortcut.of(Key.W, Modifier.CONTROL), Command.CLOSE_FRONT);
+        chord(Chords.SAVE, Command.SAVE_FRONT);
+        chord(Chords.CLOSE, Command.CLOSE_FRONT);
         chord(Shortcut.of(Key.L, Modifier.CONTROL), Command.FOCUS_PATH);
         chord(Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT), Command.FOCUS_TREE);
-        chord(Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT), Command.TOGGLE_FORMATTED);
+        chord(Chords.FORMATTED, Command.TOGGLE_FORMATTED);
         chord(Shortcut.of(Key.B, Modifier.CONTROL), Command.TOGGLE_NAVIGATOR);
         chord(Shortcut.of(Key.O, Modifier.CONTROL), Command.TOGGLE_OPEN);
         chord(Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT), Command.NEW_SCRATCH);
