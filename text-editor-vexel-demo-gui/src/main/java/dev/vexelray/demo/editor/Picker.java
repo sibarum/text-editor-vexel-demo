@@ -81,7 +81,7 @@ final class Picker {
         Node recent = gui.column().alignItems(AlignItems.STRETCH).children(recentLabel);
         for (int i = 0; i < RECENT; i++) {
             Button b = new Button(gui, "").kind(Button.Kind.GHOST).name("recent." + i);
-            b.node().font(Type.UI).width(Length.FILL);
+            b.node().width(Length.FILL);
             recentButtons[i] = b;
             // A cell round each button, for the view to hear the pointer on: the button takes its own node's hover
             // for its wash, and a node is hovered while the pointer is on anything inside it.
@@ -89,12 +89,12 @@ final class Picker {
             recent.append(recentCells[i]);
         }
         scratchesButton = new Button(gui, Scratches.NAME).kind(Button.Kind.GHOST).name("scratches");
-        scratchesButton.node().font(Type.UI).width(Length.FILL).visible(false);
+        scratchesButton.node().width(Length.FILL).visible(false);
         recent.append(scratchesButton.node());
         gui.landmark(Landmarks.RECENT, recent);
         gui.landmark(Landmarks.OPEN_SCRATCHES, scratchesButton.node());
 
-        ancestry = new Breadcrumb<Path>(gui, Picker::label).name("ancestry").font(Type.UI).maxSegments(2);
+        ancestry = new Breadcrumb<Path>(gui, Picker::label).name("ancestry").maxSegments(2);
         // Two segments can still be wider than the navigator, when a folder's name is long: cut at its edge rather
         // than drawn over the editor.
         ancestry.node().width(Length.FILL).clip(true);

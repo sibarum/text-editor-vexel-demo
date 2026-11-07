@@ -168,7 +168,7 @@ final class Navigator {
         // A chip, outlined and so plainly pressable, saying the thing that Open changes: the thing to change is the
         // thing to press. A button rather than a clickable text, so Tab, Enter and Space reach it too.
         chip = new Button(gui, NO_FOLDER).name("folder").kind(Button.Kind.SECONDARY).toggle(true);
-        chip.node().font(Type.UI).width(Length.FILL);
+        chip.node().width(Length.FILL);
         gui.landmark(Landmarks.FOLDER, chip.node());
 
         picker = new Picker(gui, scratches);
@@ -186,7 +186,7 @@ final class Navigator {
         scratchTree.node().width(Length.FILL).height(Length.grow(1f));
         gui.landmark(Landmarks.SCRATCHES, scratchTree.node());
         newScratch = new Button(gui, "New scratch").kind(Button.Kind.GHOST).name("new-scratch");
-        newScratch.node().font(Type.UI).width(Length.FILL);
+        newScratch.node().width(Length.FILL);
         gui.landmark(Landmarks.NEW_SCRATCH, newScratch.node());
         renameField = new TextField(gui, "").name("rename");
         renameField.node().width(Length.FILL).font(Type.UI).textSize(Type.SMALL).visible(false);
