@@ -2,7 +2,10 @@
   "comment": [
     "This program's own native-image metadata: the entry point the launcher reaches by JNI, and the JDK's",
     "locale and time-zone data a native run of the calculator was seen to read. Everything else registers",
-    "itself: the libraries carry their own (Win32, tactroller, DXGI, the shaders, the font atlas), and the processor writes the icon's.",
+    "itself: the libraries carry their own (Win32, tactroller, DXGI, the shaders, the standard font atlas), and the processor writes the icon's.",
+    "This editor's own fonts (the <families> baked into dev/vexelray/demo/editor/fonts/) are not the library's, so they are listed below,",
+    "as are the grammars/ and every jcodings tables/*.bin -core brings (a trace lists only the tables one run loaded).",
+    "Still missing: TM4E's Raw* classes, whose registration fails the build (the signed jar's certificates).",
     "Add to it when a native run of this program fails on something the JVM run did not: run it on a JVM",
     "under -agentlib:native-image-agent and keep only the entries naming this program."
   ],
@@ -67,6 +70,21 @@
   "resources": [
     {
       "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
+      "glob": "dev/vexelray/demo/editor/fonts/fonts.json"
+    },
+    {
+      "glob": "dev/vexelray/demo/editor/fonts/*/*.json"
+    },
+    {
+      "glob": "dev/vexelray/demo/editor/fonts/*/*.rgba"
+    },
+    {
+      "glob": "grammars/*.tmLanguage.json"
+    },
+    {
+      "glob": "tables/*.bin"
     }
   ]
 }
