@@ -70,12 +70,12 @@ final class Workspace {
         tabs = new Tabs(gui).name("documents").closable(false).slide(motion.change)
                 .skin(Workspace::skin)
                 .indicator(motion.arrival)
-                .action(MenuAction.of(SAVE, "Save").shortcut(Chords.SAVE))
-                .action(MenuAction.of(CLOSE, "Close").shortcut(Chords.CLOSE))
+                .action(MenuAction.of(SAVE, "Save").command(CommandIds.SAVE))
+                .action(MenuAction.of(CLOSE, "Close").command(CommandIds.CLOSE))
                 .action(MenuAction.of(CLOSE_OTHERS, "Close others"))
                 .action(MenuAction.of(CLOSE_ALL, "Close all"))
                 .action(MenuAction.of(REVEAL, "Reveal in navigator"))
-                .action(MenuAction.of(FORMAT, "Formatted or source").shortcut(Chords.FORMATTED));
+                .action(MenuAction.of(FORMAT, "Formatted or source").command(CommandIds.FORMATTED));
         tabs.node().width(Length.FILL).height(Length.grow(1f)).visible(false);
         gui.landmark(Landmarks.TABS, tabs.node());
 

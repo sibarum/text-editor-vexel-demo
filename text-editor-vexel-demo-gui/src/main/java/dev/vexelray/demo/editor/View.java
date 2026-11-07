@@ -57,6 +57,7 @@ import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.input.ClaimScope;
 import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.input.Shortcut;
+import dev.vexelray.gui.keymap.Keymap;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Tabs;
@@ -155,7 +156,7 @@ final class View {
     private Path recentHover;
     private Path treeHover;
 
-    View(Gui gui, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
+    View(Gui gui, Keymap keys, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
          Sender<Edited> edited, Sender<Close> close, Sender<Save> save,
          Sender<Listing> listing, Sender<Mark> mark, Sender<Check> check, Sender<Navigate> navigate,
          Sender<Format> format, Sender<TreeView.Children> children,
@@ -189,7 +190,7 @@ final class View {
         this.format = format;
         this.children = children;
         this.intents = intents;
-        shortcuts();
+        commands(keys);
         ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
                 new Intent(Command.LEAVE_RENAME));
@@ -200,35 +201,44 @@ final class View {
     }
 
     /**
-     * Every chord, as a declaration: the chord and the {@link Intent} it sends. Chords a text field leaves alone, so a
-     * focused field never needs to outrank them. Zoom is here too: which chord zooms, or whether zooming exists at all,
-     * is the application's to say; how far it goes is {@code Appearance.ZoomRange}, the framework's.
+     * Every command the keyboard reaches across the window, as a declaration: a stable id, what the person calls it,
+     * the chords it starts with, and the {@link Intent} it sends. The chords are the person's to change from here: the
+     * framework's key bindings list these, and a rebind moves the claim without this view hearing of it, and moves
+     * what a menu line naming the id says beside it ({@link dev.vexelray.gui.core.input.Commands}). So a chord is written nowhere else, and the id
+     * is the part to keep stable, since it is what the person's changes are stored under. Chords a text field leaves
+     * alone, so a focused field never needs to outrank them. Zoom is here too: which chord zooms, or whether zooming
+     * exists at all, is the application's to say; how far it goes is {@code Appearance.ZoomRange}, the framework's.
      */
-    private void shortcuts() {
-        chord(Chords.SAVE, Command.SAVE_FRONT);
-        chord(Chords.CLOSE, Command.CLOSE_FRONT);
-        chord(Shortcut.of(Key.L, Modifier.CONTROL), Command.FOCUS_PATH);
-        chord(Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT), Command.FOCUS_TREE);
-        chord(Chords.FORMATTED, Command.TOGGLE_FORMATTED);
-        chord(Shortcut.of(Key.B, Modifier.CONTROL), Command.TOGGLE_NAVIGATOR);
-        chord(Shortcut.of(Key.O, Modifier.CONTROL), Command.TOGGLE_OPEN);
-        chord(Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT), Command.NEW_SCRATCH);
-        chord(Shortcut.of(Key.N, Modifier.ALT), Command.TOGGLE_SCRATCHES);
-        chord(Shortcut.of(Key.F5), Command.RUN_MENU);
-        chord(Shortcut.of(Key.TAB, Modifier.CONTROL), Command.NEXT_TAB);
-        chord(Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Command.PREVIOUS_TAB);
-        chord(Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL), Command.NEXT_TAB);
-        chord(Shortcut.of(Key.PAGE_UP, Modifier.CONTROL), Command.PREVIOUS_TAB);
-        chord(Shortcut.of(Key.EQUAL, Modifier.CONTROL), Command.ZOOM_IN);
-        chord(Shortcut.of(Key.MINUS, Modifier.CONTROL), Command.ZOOM_OUT);
-        chord(Shortcut.of(Key.DIGIT_0, Modifier.CONTROL), Command.ZOOM_RESET);
-        chord(Shortcut.of(Key.NUMPAD_ADD, Modifier.CONTROL), Command.ZOOM_IN);
-        chord(Shortcut.of(Key.NUMPAD_SUBTRACT, Modifier.CONTROL), Command.ZOOM_OUT);
-        chord(Shortcut.of(Key.NUMPAD_0, Modifier.CONTROL), Command.ZOOM_RESET);
+    private void commands(Keymap keys) {
+        command(keys, CommandIds.SAVE, "Save", Command.SAVE_FRONT, Shortcut.of(Key.S, Modifier.CONTROL));
+        command(keys, CommandIds.CLOSE, "Close tab", Command.CLOSE_FRONT, Shortcut.of(Key.W, Modifier.CONTROL));
+        command(keys, "tab.next", "Next tab", Command.NEXT_TAB,
+                Shortcut.of(Key.TAB, Modifier.CONTROL), Shortcut.of(Key.PAGE_DOWN, Modifier.CONTROL));
+        command(keys, "tab.previous", "Previous tab", Command.PREVIOUS_TAB,
+                Shortcut.of(Key.TAB, Modifier.CONTROL, Modifier.SHIFT), Shortcut.of(Key.PAGE_UP, Modifier.CONTROL));
+        command(keys, "go.path", "Go to path", Command.FOCUS_PATH, Shortcut.of(Key.L, Modifier.CONTROL));
+        command(keys, "go.files", "Go to files", Command.FOCUS_TREE,
+                Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT));
+        command(keys, CommandIds.FORMATTED, "Formatted or source", Command.TOGGLE_FORMATTED,
+                Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT));
+        command(keys, "view.navigator", "Show or hide the navigator", Command.TOGGLE_NAVIGATOR,
+                Shortcut.of(Key.B, Modifier.CONTROL));
+        command(keys, "folder.open", "Open a folder", Command.TOGGLE_OPEN, Shortcut.of(Key.O, Modifier.CONTROL));
+        command(keys, "scratch.new", "New scratch", Command.NEW_SCRATCH,
+                Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT));
+        command(keys, "scratch.list", "Show or hide the scratches", Command.TOGGLE_SCRATCHES,
+                Shortcut.of(Key.N, Modifier.ALT));
+        command(keys, "run.menu", "Run menu", Command.RUN_MENU, Shortcut.of(Key.F5));
+        command(keys, "view.zoom-in", "Zoom in", Command.ZOOM_IN,
+                Shortcut.of(Key.EQUAL, Modifier.CONTROL), Shortcut.of(Key.NUMPAD_ADD, Modifier.CONTROL));
+        command(keys, "view.zoom-out", "Zoom out", Command.ZOOM_OUT,
+                Shortcut.of(Key.MINUS, Modifier.CONTROL), Shortcut.of(Key.NUMPAD_SUBTRACT, Modifier.CONTROL));
+        command(keys, "view.zoom-reset", "Reset zoom", Command.ZOOM_RESET,
+                Shortcut.of(Key.DIGIT_0, Modifier.CONTROL), Shortcut.of(Key.NUMPAD_0, Modifier.CONTROL));
     }
 
-    private void chord(Shortcut shortcut, Command command) {
-        gui.shortcut(shortcut, intents, new Intent(command));
+    private void command(Keymap keys, String id, String label, Command command, Shortcut... chords) {
+        keys.action(id, label, chords).sends(intents, new Intent(command));
     }
 
     @Subscribe

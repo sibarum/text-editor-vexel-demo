@@ -95,10 +95,11 @@ document are, each instance has the frame taken off again by hand (`Navigator`'s
 ## FN-6 · A menu line cannot show its shortcut 🔬 (fixed 2026-11-07)
 
 *Fixed in vexelray-gui: `MenuItem.shortcut`, `MenuAction.shortcut` and `Menu.Builder.shortcut` say a chord, drawn dim
-at the line's right; it binds nothing. The tab menu says Ctrl+S, Ctrl+W and Ctrl+Shift+V from `Chords`, which the
-keyboard binds too, and "Formatted or source" no longer carries its chord in its label. Not filled in by itself: a
-tab's line sends a message about that tab, and the chord one about the front tab, so no two are the same message to
-match. The Run menu's F5 opens the menu and is no line's, so the README still says it.*
+at the line's right; it binds nothing. A line can name a command instead (`.command("file.save")`) and the menu says
+that command's chord as the keymap has it when the menu opens, so a rebind in Key bindings… is what the tab menu
+shows. The IDE now declares its commands on the keymap (it bound them with `gui.shortcut` before, so it offered no
+Key bindings… at all), and the tab menu's Save, Close and Formatted or source name theirs (`CommandIds`); "Formatted
+or source" no longer carries its chord in its label. The Run menu's F5 opens the menu and is no line's, so the README still says it.*
 
 The Run menu's F5 has nowhere to go: `MenuItem` has an icon, a label and an action, and no right-hand column for a
 chord. The README says F5 instead. What the framework could do: a `shortcut` on `MenuItem` and `Menu.Builder.item`,
