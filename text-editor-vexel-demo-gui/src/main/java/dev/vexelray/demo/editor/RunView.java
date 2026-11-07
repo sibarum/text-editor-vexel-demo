@@ -7,6 +7,7 @@ import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.framework.core.WindowOpened;
+import dev.vexelray.gui.core.input.ClaimScope;
 import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.TextField;
@@ -30,7 +31,9 @@ public final class RunView {
         this.typed = typed;
         this.run = run;
         this.windows = windows;
-        dialog.gui().shortcut(Shortcut.of(Key.ESCAPE), windows, WindowCommand.close(RunDialog.KEY));
+        // Escape closes it while it is up: a claim of the dialog's own, not a command the person rebinds.
+        dialog.gui().claim(dialog.gui().root(), Shortcut.of(Key.ESCAPE), ClaimScope.VISIBLE, windows,
+                WindowCommand.close(RunDialog.KEY));
     }
 
     /** The window came up: the keyboard to the command. */
