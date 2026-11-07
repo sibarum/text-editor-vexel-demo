@@ -18,6 +18,7 @@ import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.text.Span;
 import dev.vexelray.gui.core.text.Whitespace;
+import dev.vexelray.gui.widget.Framing;
 import dev.vexelray.gui.widget.TextField;
 
 import java.nio.file.Path;
@@ -120,11 +121,10 @@ final class Buffer implements AutoCloseable {
                 .lineNumbers(true).wordWrap(true).whitespace(Whitespace.BOUNDARY).lineEnds(true)
                 .readOnly(readOnly);
         field.node().width(Length.FILL).height(Length.FILL).font(scope != null ? Type.MONO : Type.UI)
-                .textSize(Type.CODE)
-                // The text sits on the card, not in a well of its own: the card is the document's edge. The border
-                // keeps its width in the card's colour, as FormattedView's does, so switching views moves nothing.
-                .background(gui.theme().color(Look.CARD))
-                .border(Length.rem(0.1f), gui.theme().color(Look.CARD));
+                .textSize(Type.CODE);
+        // The text sits on the card, not in a well of its own: the card is the document's edge. Flush keeps the well's
+        // room, as FormattedView's border does, so switching views moves nothing.
+        field.frame(Framing.FLUSH);
         this.formatted = Markdown.handles(name()) ? new FormattedView(gui) : null;
         this.page = gui.column().width(Length.FILL).height(Length.FILL).children(field.node());
         if (formatted != null) {

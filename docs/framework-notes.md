@@ -81,7 +81,11 @@ is transparent *black*; `ViewTest` caught it as a change in one frame. Done here
 alpha 0 (`Look.TAB_REST`). Every widget that clears a fill on a state change has the same trap. What the framework
 could do: fade an alpha-0 end in the other end's colour, so `NONE` means "none of this", whatever this is.
 
-## FN-5 · TextField and TreeView always bring their own well 🔬
+## FN-5 · TextField and TreeView always bring their own well 🔬 (fixed 2026-11-07)
+
+*Fixed in vexelray-gui: `frame(Framing.FLUSH)` on either paints neither the well nor its hairline and keeps their
+room. `Navigator`'s trees and `Buffer`'s field use it, and no longer write resolved colours to undo the well; the
+trees sit 0.1 rem further in than when their border was taken to zero.*
 
 Both paint a well, a 0.5rem corner and a `LINE` border on their own node. Set into a card, as the design's navigator and
 document are, each instance has the frame taken off again by hand (`Navigator`'s trees, `Buffer`'s field,

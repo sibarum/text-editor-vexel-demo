@@ -15,6 +15,7 @@ import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.core.drop.DropEffect;
+import dev.vexelray.gui.widget.Framing;
 import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.Placement;
 import dev.vexelray.gui.widget.TextField;
@@ -200,9 +201,8 @@ final class Navigator {
         // The edge is there in every place, in the panel's own colour while the files are shown, so it costs no
         // layout when it turns to the accent.
         // The trees sit in the card rather than in wells of their own.
-        for (TreeView<Path> t : List.of(tree, scratchTree)) {
-            t.node().background(gui.theme().color(Role.NONE)).border(Length.ZERO, gui.theme().color(Role.NONE));
-        }
+        tree.frame(Framing.FLUSH);
+        scratchTree.frame(Framing.FLUSH);
         root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .gap(Type.TIGHT)
