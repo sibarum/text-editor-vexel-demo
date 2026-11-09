@@ -5,7 +5,10 @@
     "itself: the libraries carry their own (Win32, tactroller, DXGI, the shaders, the standard font atlas), and the processor writes the icon's.",
     "This editor's own fonts (the <families> baked into dev/vexelray/demo/editor/fonts/) are not the library's, so they are listed below,",
     "as are the grammars/ and every jcodings tables/*.bin -core brings (a trace lists only the tables one run loaded).",
-    "Still missing: TM4E's Raw* classes, whose registration fails the build (the signed jar's certificates).",
+    "TM4E deep-copies a grammar through ObjectCloner, which finds each Raw* map's and list's clone() by Class.getMethod",
+    "and, when that finds nothing, copies into a plain HashMap or ArrayList, so the grammar is no longer an IRawGrammar.",
+    "Raw* inherit that public clone() from java.util.HashMap and ArrayList, so registering those two methods is enough.",
+    "Never register the Raw* classes themselves: TM4E's jar is signed, and that drags its X509 certificates into the image heap, which fails the build.",
     "Add to it when a native run of this program fails on something the JVM run did not: run it on a JVM",
     "under -agentlib:native-image-agent and keep only the entries naming this program."
   ],
@@ -32,6 +35,14 @@
     },
     {
       "type": "java.lang.String[]"
+    },
+    {
+      "type": "java.util.ArrayList",
+      "methods": [{"name": "clone", "parameterTypes": []}]
+    },
+    {
+      "type": "java.util.HashMap",
+      "methods": [{"name": "clone", "parameterTypes": []}]
     },
     {
       "type": "sun.launcher.LauncherHelper",
