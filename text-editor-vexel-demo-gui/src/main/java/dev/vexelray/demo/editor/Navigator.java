@@ -20,6 +20,7 @@ import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.Placement;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
+import dev.vexelray.gui.widget.Unclip;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -167,7 +168,10 @@ final class Navigator {
 
         // A chip, outlined and so plainly pressable, saying the thing that Open changes: the thing to change is the
         // thing to press. A button rather than a clickable text, so Tab, Enter and Space reach it too.
-        chip = new Button(gui, NO_FOLDER).name("folder").kind(Button.Kind.SECONDARY).toggle(true);
+        // A long folder name is cut off at the chip's edge rather than painted over the card's, and shown whole while
+        // the pointer is on it.
+        chip = new Button(gui, NO_FOLDER).name("folder").kind(Button.Kind.SECONDARY).toggle(true)
+                .unclip(Unclip.of(gui));
         chip.node().width(Length.FILL);
         gui.landmark(Landmarks.FOLDER, chip.node());
 
