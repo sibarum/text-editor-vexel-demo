@@ -54,7 +54,7 @@ Built into the program as signed-distance-field atlases, like Noto Sans above.
 7. Apache Xerces and the W3C DOM, in the Java class library (java.xml)
 https://openjdk.org/
 
-VexelRay IDE reads and checks XML with the Java class library's XML parser, which is based on Apache Xerces. Oracle's notices for it follow.
+VexelRay IDE reads XML with the Java class library's XML parser, which is based on Apache Xerces. Oracle's notices for it follow.
 
 ===============================================================================
 8. Eclipse TM4E core 0.14.0 (as packaged by Apache NetBeans, RELEASE260)
@@ -96,22 +96,6 @@ https://bitbucket.org/snakeyaml/snakeyaml-engine
 Licence: Apache License 2.0
 Copyright (c) 2018, SnakeYAML
 Copyright (c) 2008 Google Inc.
-
-===============================================================================
-14. JavaParser (javaparser-core) 3.28.2
-https://github.com/javaparser/javaparser
-Licence: Apache License 2.0
-Copyright (C) 2007-2010 Júlio Vilmar Gesser.
-Copyright (C) 2011, 2013-2026 The JavaParser Team.
-
-JavaParser is dual-licensed under the GNU Lesser General Public License 3.0 or later and the Apache License 2.0. It is used here under the Apache License 2.0.
-
-===============================================================================
-15. Vineflower (Java decompiler, based on JetBrains Fernflower) 1.12.0
-https://github.com/Vineflower/vineflower
-Licence: Apache License 2.0
-Copyright 2000-2023 JetBrains s.r.o.
-Copyright the Vineflower contributors.
 
 ===============================================================================
 Licence texts
