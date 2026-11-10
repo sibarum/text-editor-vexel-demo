@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.demo.editor.core.Messages.Made;
 import sibarum.atchung.Topic;
 
 /**
@@ -67,6 +68,24 @@ record Intent(Command command) {
             @Override
             void on(View view) {
                 view.open(false);
+            }
+        },
+        NEW_FILE {
+            @Override
+            void on(View view) {
+                view.newHere(Made.FILE);
+            }
+        },
+        NEW_PROJECT {
+            @Override
+            void on(View view) {
+                view.newHere(Made.PROJECT);
+            }
+        },
+        NEW_MODULE {
+            @Override
+            void on(View view) {
+                view.newHere(Made.MODULE);
             }
         },
         NEW_SCRATCH {

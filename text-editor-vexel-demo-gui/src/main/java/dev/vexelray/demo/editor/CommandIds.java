@@ -7,6 +7,11 @@ package dev.vexelray.demo.editor;
  */
 final class CommandIds {
 
+    /** Something new in the folder shown: a file, a Maven project, or a module of the project around it. */
+    static final String NEW_FILE = "new.file";
+    static final String NEW_PROJECT = "new.project";
+    static final String NEW_MODULE = "new.module";
+
     /** Save the front document. */
     static final String SAVE = "file.save";
 

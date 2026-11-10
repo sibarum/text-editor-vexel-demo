@@ -35,17 +35,22 @@ public final class ListFolder {
             .thenComparing(i -> i.name().toLowerCase(Locale.ROOT));
 
     public Listed run(Listing l) {
-        List<Item> items = list(l.dir());
+        // One walk up for the level, then one look per folder for a pom of its own.
+        boolean inProject = Poms.projectOf(l.dir()) != null;
+        List<Item> items = list(l.dir(), inProject);
         if (l.foldersOnly()) {
             items = items.stream().filter(Item::folder).toList();
         }
-        return new Listed(l.tree(), l.dir(), l.roots(), items);
+        return new Listed(l.tree(), l.dir(), l.roots(), inProject, items);
     }
 
     static List<Item> list(Path dir) {
+        return list(dir, Poms.projectOf(dir) != null);
+    }
+
+    /** {@code inProject}: whether a Maven project is at or above {@code dir}, which every entry in it shares. */
+    private static List<Item> list(Path dir, boolean inProject) {
         List<Item> items = new ArrayList<>();
-        // One walk up for the level, then one look per folder for a pom of its own.
-        boolean inProject = Poms.projectOf(dir) != null;
         try (Stream<Path> s = Files.list(dir)) {
             s.filter(p -> !HIDDEN.contains(String.valueOf(p.getFileName())))
                     .forEach(p -> {

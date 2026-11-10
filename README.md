@@ -100,8 +100,12 @@ groups the button with other Java programs, and pinning it pins Java. The native
 | Alt+Z | word wrap on or off, in every document (on at start; not kept yet) |
 | F5 | the Run menu (see *Running things*) |
 
-**View**, the first menu in the title bar, has word wrap, the navigator, the formatted view and zoom, each with its
-chord beside it.
+**New**, the first menu in the title bar, makes something in the folder shown, as a navigator row's menu does for its
+row: **File…**, then **Project…** (a Maven project), or **Submodule…** (a module of the project) where a `pom.xml` is
+at or above the folder. Each puts its name in the path bar, and Enter makes it. To a script it is
+`titlebar-menu.new`, with `menu.file`, `menu.project` and `menu.submodule`.
+
+**View**, after New, has word wrap, the navigator, the formatted view and zoom, each with its chord beside it.
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and Reveal in navigator. A bullet in

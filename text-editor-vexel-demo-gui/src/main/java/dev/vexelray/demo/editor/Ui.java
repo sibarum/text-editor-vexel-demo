@@ -99,6 +99,7 @@ final class Ui {
         // what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
         // The menus are there from the first frame, in this order; the view declares what is on them.
+        titleBar.menu(NEW, "New", Menu.NONE);
         titleBar.menu(VIEW, "View", Menu.NONE);
         titleBar.menu(RUN, "Run", Menu.NONE);
         status.node().background(gui.theme().color(Role.PAGE));
@@ -152,6 +153,32 @@ final class Ui {
     /** Whether the navigator is on screen: the split's own answer, which it does not give, kept here beside it. */
     boolean navigatorShown() {
         return navigatorShown;
+    }
+
+    /** The New menu's name in the title bar: its landmark is {@link Landmarks#NEW_MENU}. */
+    static final String NEW = "new";
+
+    /** The New menu, declared again when the folder shown changes: {@link #newMenuOf}. */
+    void newMenu(boolean folder, boolean inProject, Sender<Intent> intents) {
+        titleBar.menu(NEW, "New", newMenuOf(folder, inProject, intents));
+    }
+
+    /**
+     * What the New menu holds for the folder shown: a file, then a project, or where a project is around the folder a
+     * module of it instead, never both, as a row's menu does. Each names its thing in the path bar, so with no folder
+     * shown each is there but off. Each line sends the same {@link Intent} its command does.
+     */
+    static Menu newMenuOf(boolean folder, boolean inProject, Sender<Intent> intents) {
+        Menu.Builder menu = Menu.builder()
+                .item("File…", folder, intents, new Intent(Intent.Command.NEW_FILE)).command(CommandIds.NEW_FILE);
+        if (inProject) {
+            menu.item("Submodule…", folder, intents, new Intent(Intent.Command.NEW_MODULE))
+                    .command(CommandIds.NEW_MODULE);
+        } else {
+            menu.item("Project…", folder, intents, new Intent(Intent.Command.NEW_PROJECT))
+                    .command(CommandIds.NEW_PROJECT);
+        }
+        return menu.build();
     }
 
     /** The View menu's name in the title bar: its landmark is {@link Landmarks#VIEW_MENU}. */

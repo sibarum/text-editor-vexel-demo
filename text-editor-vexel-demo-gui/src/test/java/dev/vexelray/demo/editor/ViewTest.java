@@ -22,6 +22,8 @@ import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
 import dev.vexelray.gui.core.Cuts;
+import dev.vexelray.gui.core.input.Menu;
+import dev.vexelray.gui.core.input.MenuItem;
 import dev.vexelray.gui.core.drop.DropEffect;
 import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.widget.Button;
@@ -39,6 +41,7 @@ import sibarum.atchung.Sender;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -664,6 +667,44 @@ class ViewTest {
         assertTrue(ws.all().isEmpty(), "a folder opens no tab");
     }
 
+    /** The New menu: a file, and a project or a module, never both; all off while no folder is shown. */
+    @Test
+    void theNewMenuOffersAProjectOrAModuleForTheFolderShown() {
+        Sender<Intent> intents = Sender.collecting(Intent.INTENTS, new ArrayList<>());
+        assertEquals(List.of("File…", "Project…"), labels(Ui.newMenuOf(true, false, intents)));
+        assertEquals(List.of("File…", "Submodule…"), labels(Ui.newMenuOf(true, true, intents)));
+        assertTrue(Ui.newMenuOf(false, false, intents).items().stream().noneMatch(MenuItem::enabled),
+                "nothing to name a thing in");
+        assertTrue(Ui.newMenuOf(true, true, intents).items().stream().allMatch(MenuItem::enabled));
+    }
+
+    private static List<String> labels(Menu menu) {
+        return menu.items().stream().map(MenuItem::label).toList();
+    }
+
+    /** New → File… and Project… name their thing in the folder shown, from wherever the navigator was. */
+    @Test
+    void theNewMenuNamesThingsInTheFolderShown() throws Exception {
+        Path shown = dir.toAbsolutePath().normalize();
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        Navigator nav = wiring.ui().navigator();
+        eventually("the folder", () -> shown.equals(nav.folder()));
+
+        tell(Intent.Command.TOGGLE_OPEN);
+        eventually("Open", nav::opened);
+        tell(Intent.Command.NEW_FILE);
+        String prefix = shown + java.io.File.separator;
+        eventually("the folder in the path bar", () -> nav.pathText().equals(prefix) && !nav.opened());
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), prefix + "notes.md"));
+        eventually("the file to be made", () -> Files.isRegularFile(shown.resolve("notes.md")));
+
+        tell(Intent.Command.NEW_PROJECT);
+        eventually("the project's name in the path bar", () -> nav.pathText().equals(prefix + "new-project"));
+        assertEquals(Made.PROJECT, nav.naming());
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), prefix + "new-project"));
+        eventually("the project to be made", () -> Files.isRegularFile(shown.resolve("new-project/pom.xml")));
+    }
+
     /** "New project here…" names one in the bar, selected, and Enter takes the name as it is. */
     @Test
     void newProjectHereMakesAProjectOfTheNameInTheBar() throws Exception {
@@ -699,7 +740,7 @@ class ViewTest {
         Navigator nav = wiring.ui().navigator();
         eventually("a row for the folder", () -> nav.hasRow(lib));
 
-        TreeView.Entry row = nav.children(new Listed(nav.treeAddress(), dir, false,
+        TreeView.Entry row = nav.children(new Listed(nav.treeAddress(), dir, false, true,
                 List.of(new Item(lib, "lib", true, true)))).entries().getFirst();
         assertTrue(row.hidden().contains(Navigator.NEW_PROJECT) && !row.hidden().contains(Navigator.NEW_MODULE));
 

@@ -403,9 +403,13 @@ public final class Messages {
     public record Item(Path path, String name, boolean folder, boolean inProject) {
     }
 
+    /**
+     * {@code inProject}: a Maven project is at or above {@code dir} itself, so what is added in it is a module of that
+     * project. For the folder shown, it is what the title bar's New menu offers.
+     */
     public static final Topic<Listed> LISTED_TOPIC = Topic.edge(Listed.class);
 
-    public record Listed(String tree, Path dir, boolean roots, List<Item> items) {
+    public record Listed(String tree, Path dir, boolean roots, boolean inProject, List<Item> items) {
         public Listed {
             items = List.copyOf(items);
         }

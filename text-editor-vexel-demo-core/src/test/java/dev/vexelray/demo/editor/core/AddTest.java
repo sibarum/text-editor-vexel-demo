@@ -3,6 +3,8 @@ package dev.vexelray.demo.editor.core;
 import dev.vexelray.demo.editor.core.Messages.Create;
 import dev.vexelray.demo.editor.core.Messages.Created;
 import dev.vexelray.demo.editor.core.Messages.Item;
+import dev.vexelray.demo.editor.core.Messages.Listed;
+import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -159,6 +161,23 @@ class AddTest {
         assertFalse(item(top, "plain").inProject());
         assertTrue(item(top, "built").inProject());
         assertTrue(item(ListFolder.list(built), "inner").inProject());
+    }
+
+    /**
+     * The listing says whether a project is around the folder listed, too, for the New menu: not one of projects, as
+     * a checkout folder is, though every row in it is in one.
+     */
+    @Test
+    void aListingSaysWhetherItsFolderIsInAProject() throws Exception {
+        Path built = Files.createDirectory(dir.resolve("built"));
+        Files.writeString(built.resolve("pom.xml"), PARENT.formatted(""));
+        Path inner = Files.createDirectory(built.resolve("inner"));
+
+        Listed projects = new ListFolder().run(new Listing("tree", dir, true, false));
+        assertTrue(item(projects.items(), "built").inProject());
+        assertFalse(projects.inProject(), "a folder of projects is no project's");
+        assertTrue(new ListFolder().run(new Listing("tree", built, true, false)).inProject());
+        assertTrue(new ListFolder().run(new Listing("tree", inner, true, false)).inProject());
     }
 
     private static Item item(List<Item> items, String name) {

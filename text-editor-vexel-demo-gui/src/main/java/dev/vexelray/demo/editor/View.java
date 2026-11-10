@@ -197,6 +197,7 @@ final class View {
         this.children = children;
         this.intents = intents;
         commands(keys);
+        ui.newMenu(false, false, intents);   // off until a folder is shown, and what it offers comes with its listing
         ui.viewMenu(wrap, intents);
         ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
@@ -217,6 +218,10 @@ final class View {
      * exists at all, is the application's to say; how far it goes is {@code Appearance.ZoomRange}, the framework's.
      */
     private void commands(Keymap keys) {
+        // Unbound until somebody binds them: the New menu is how they are reached.
+        command(keys, CommandIds.NEW_FILE, "New file", Command.NEW_FILE);
+        command(keys, CommandIds.NEW_PROJECT, "New project", Command.NEW_PROJECT);
+        command(keys, CommandIds.NEW_MODULE, "New submodule", Command.NEW_MODULE);
         command(keys, CommandIds.SAVE, "Save", Command.SAVE_FRONT, Shortcut.of(Key.S, Modifier.CONTROL));
         command(keys, CommandIds.CLOSE, "Close tab", Command.CLOSE_FRONT, Shortcut.of(Key.W, Modifier.CONTROL));
         command(keys, "tab.next", "Next tab", Command.NEXT_TAB,
@@ -379,6 +384,9 @@ final class View {
     public void listed(Listed m) {
         if (m.tree().equals(nav.treeAddress())) {
             children.send(nav.children(m));
+            if (m.roots() && m.dir().equals(nav.folder())) {
+                ui.newMenu(true, m.inProject(), intents);
+            }
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             children.send(nav.picker().children(m));
         } else if (m.tree().equals(nav.scratchAddress())) {
@@ -1062,7 +1070,32 @@ final class View {
         nav.focusTree();
     }
 
-    /** In ({@code 1}), out ({@code -1}), or back to where it started ({@code 0}). */
+    /**
+     * The New menu: name {@code what} in the folder shown, in the path bar, as a row's menu does for its row. The files
+     * come back from Open or the scratches first, since the bar is theirs.
+     */
+    void newHere(Made what) {
+        Path in = nav.folder();
+        if (in == null) {
+            ui.status("Open a folder first", true);
+            return;
+        }
+        open(false);
+        nav.scratches(false);
+        ui.showNavigator(true);
+        picture();
+        if (what == Made.PROJECT) {
+            nav.startNew(in, Made.PROJECT, "new-project", null);
+            ui.status("Name the new project, then Enter", false);
+        } else if (what == Made.MODULE) {
+            nav.startNew(in, Made.MODULE, "new-module", null);
+            ui.status("Name the new module, then Enter", false);
+        } else {
+            nav.startNew(in, false);
+            ui.status("Name the new file, then Enter", false);
+        }
+    }
+
     /** Alt+Z, or the View menu: word wrap on or off in every open document, and in every one opened after. */
     void toggleWrap() {
         wrap = !wrap;
@@ -1073,6 +1106,7 @@ final class View {
         ui.status(wrap ? "Word wrap on" : "Word wrap off", false);
     }
 
+    /** In ({@code 1}), out ({@code -1}), or back to where it started ({@code 0}). */
     void zoom(int direction) {
         if (direction > 0) {
             gui.zoomIn();
