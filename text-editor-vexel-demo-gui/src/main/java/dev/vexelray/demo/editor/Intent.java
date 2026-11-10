@@ -49,7 +49,19 @@ record Intent(Command command) {
         TOGGLE_WRAP {
             @Override
             void on(View view) {
-                view.toggleWrap();
+                view.wrap(!view.wrapping());
+            }
+        },
+        WRAP_ON {
+            @Override
+            void on(View view) {
+                view.wrap(true);
+            }
+        },
+        WRAP_OFF {
+            @Override
+            void on(View view) {
+                view.wrap(false);
             }
         },
         TOGGLE_NAVIGATOR {

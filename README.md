@@ -97,7 +97,7 @@ groups the button with other Java programs, and pinning it pins Java. The native
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+Enter | in a Pontif file: go to the definition of the name at the caret, or add its `requires` |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
-| Alt+Z | word wrap on or off, in every document (on at start; not kept yet) |
+| Alt+Z | word wrap on or off, in every document (on at start; not kept yet); the View menu's line is ticked while it is on |
 | F5 | the Run menu (see *Running things*) |
 
 **New**, the first menu in the title bar, makes something in the folder shown, as a navigator row's menu does for its

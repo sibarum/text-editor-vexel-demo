@@ -1130,9 +1130,17 @@ final class View {
         }
     }
 
-    /** Alt+Z, or the View menu: word wrap on or off in every open document, and in every one opened after. */
-    void toggleWrap() {
-        wrap = !wrap;
+    /** Whether documents wrap their long lines now: Alt+Z flips this. */
+    boolean wrapping() {
+        return wrap;
+    }
+
+    /**
+     * Alt+Z, or the View menu's ticked line: word wrap {@code on} or off in every open document, and in every one
+     * opened after. The menu line says to set it, not to flip it, so choosing it sets what it said when it was drawn.
+     */
+    void wrap(boolean on) {
+        wrap = on;
         for (Buffer b : ws.all()) {
             b.wordWrap(wrap);
         }

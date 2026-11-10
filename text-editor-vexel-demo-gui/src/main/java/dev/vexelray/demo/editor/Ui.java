@@ -189,14 +189,16 @@ final class Ui {
     static final String VIEW = "view";
 
     /**
-     * The View menu, declared again when what it says changes: word wrap first, saying what choosing it does (a menu
-     * line has no tick), then the navigator and the formatted view, then zoom. Each line sends the same {@link Intent}
-     * as its chord, and names the command so it shows the chord as the person has it bound.
+     * The View menu, declared again when what it says changes: word wrap first, a line ticked while documents wrap,
+     * then the navigator and the formatted view, then zoom. Each line names its command, so it shows the chord as the
+     * person has it bound. Word wrap's line sets the setting to the other way from its tick rather than flipping it,
+     * so it does what it said when it was drawn; the rest send the same {@link Intent} as their chord.
      */
     void viewMenu(boolean wrapping, Sender<Intent> intents) {
         titleBar.menu(VIEW, "View", Menu.builder()
-                .item(wrapping ? "Turn word wrap off" : "Turn word wrap on", intents,
-                        new Intent(Intent.Command.TOGGLE_WRAP)).command(CommandIds.WRAP)
+                .item("Word wrap", intents,
+                        new Intent(wrapping ? Intent.Command.WRAP_OFF : Intent.Command.WRAP_ON))
+                .toggle(wrapping).command(CommandIds.WRAP)
                 .separator()
                 .item("Show or hide the navigator", intents, new Intent(Intent.Command.TOGGLE_NAVIGATOR))
                 .command(CommandIds.NAVIGATOR)

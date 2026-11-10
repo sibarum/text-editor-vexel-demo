@@ -613,6 +613,32 @@ class ViewTest {
         eventually("named", () -> Files.isDirectory(box.resolve("ideas")) && nav.renaming() == null);
     }
 
+    /** The View menu's word wrap line sets the setting rather than flipping it, so choosing it twice flips nothing. */
+    @Test
+    void settingWordWrapTheWayItAlreadyIsChangesNothing() throws Exception {
+        View view = wiring.view();
+        assertTrue(view.wrapping(), "on at start");
+        told(Intent.Command.WRAP_OFF, Intent.Command.WRAP_OFF);
+        assertFalse(view.wrapping(), "off, and the second off left it off");
+        told(Intent.Command.WRAP_ON, Intent.Command.WRAP_ON);
+        assertTrue(view.wrapping(), "on, and the second on left it on");
+        told(Intent.Command.TOGGLE_WRAP);
+        assertFalse(view.wrapping(), "Alt+Z still flips it");
+    }
+
+    /**
+     * Tell the view {@code commands}, and wait until it has heard them all: intents arrive in the order sent, so once
+     * the navigator toggle sent after them has shown, they have been heard.
+     */
+    private void told(Intent.Command... commands) throws InterruptedException {
+        boolean shown = wiring.ui().navigatorShown();
+        for (Intent.Command c : commands) {
+            tell(c);
+        }
+        tell(Intent.Command.TOGGLE_NAVIGATOR);
+        eventually("the view to hear them", () -> wiring.ui().navigatorShown() != shown);
+    }
+
     /** Plain puts the navigator out of the way; Ctrl+B brings it back, and so does a folder being shown. */
     @Test
     void aPlainWindowHidesTheNavigatorUntilAskedOrAFolderIsShown() throws Exception {
