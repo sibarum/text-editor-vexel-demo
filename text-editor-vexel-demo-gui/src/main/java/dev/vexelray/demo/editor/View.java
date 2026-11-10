@@ -53,15 +53,14 @@ import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
-import dev.vexelray.gui.core.NodeEvent;
 import dev.vexelray.gui.core.drop.DropEffect;
 import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.input.ClaimScope;
-import dev.vexelray.gui.core.input.InteractionState;
 import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.keymap.Keymap;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
+import dev.vexelray.gui.widget.Select;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
@@ -163,8 +162,9 @@ final class View {
 
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
-    /** The folder under the pointer in Open: a recent one, a row of its tree, or null for neither. */
-    private Path recentHover;
+    /** The recent folder Open's drop-down has reached, before it is picked; null when it has reached none. */
+    private Path recentCursor;
+    /** The row of Open's tree under the pointer, or null. */
     private Path treeHover;
 
     View(Gui gui, Keymap keys, Ui ui, Sender<Open> open, Sender<Go> go, Sender<Fronted> fronted,
@@ -208,10 +208,6 @@ final class View {
         ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
                 new Intent(Command.LEAVE_RENAME));
-        for (int i = 0; i < Picker.RECENT; i++) {
-            int slot = i;
-            gui.hear(nav.picker().recentCell(i), NodeEvent.STATE, state -> recentHovered(slot, state));
-        }
     }
 
     /**
@@ -796,17 +792,43 @@ final class View {
         }
     }
 
-    /** A recent folder pressed in Open, or the scratches: picked. New scratch over the scratches: one made. */
+    /** The scratches pressed in Open: picked. New scratch over the scratches: one made. */
     @Subscribe
     public void buttonPressed(Button.Pressed m) {
         if (m.button().equals(nav.newScratchAddress())) {
             newScratch();
+        } else if (m.button().equals(nav.picker().scratchesAddress())) {
+            pick(nav.picker().scratchesFolder());
+        }
+    }
+
+    /** The recent folder Open's drop-down has reached, or none: pictured before it is picked. */
+    @Subscribe
+    public void recentReached(Select.Changed m) {
+        if (!m.select().equals(nav.picker().recentAddress())) {
             return;
         }
-        Path p = m.button().equals(nav.picker().scratchesAddress()) ? nav.picker().scratchesFolder()
-                : nav.picker().recentAt(m.button());
-        if (p != null) {
-            pick(p);
+        recentCursor = null;
+        for (Object o : m.chosen()) {
+            if (o instanceof Path p) {
+                recentCursor = p;
+            }
+        }
+        picture();
+    }
+
+    /** A recent folder picked in Open's drop-down; shut on nothing, it picks nothing. */
+    @Subscribe
+    public void recentPicked(Select.Committed m) {
+        if (!m.select().equals(nav.picker().recentAddress())) {
+            return;
+        }
+        for (Object o : m.chosen()) {
+            if (o instanceof Path p) {
+                nav.picker().recentPicked();
+                pick(p);
+                return;
+            }
         }
     }
 
@@ -1013,7 +1035,7 @@ final class View {
         if (value) {
             if (!nav.opened()) {
                 ui.preview().forget();   // each visit looks at the disk again
-                recentHover = null;
+                recentCursor = null;
                 treeHover = null;
                 scratchesWanted.send(new ScratchesWanted());
             }
@@ -1027,20 +1049,9 @@ final class View {
         picture();
     }
 
-    /** The pointer on a recent folder in Open, or off it. */
-    private void recentHovered(int slot, InteractionState state) {
-        Path p = nav.picker().recentPath(slot);
-        if (state != InteractionState.NORMAL) {
-            recentHover = p;
-        } else if (recentHover != null && recentHover.equals(p)) {
-            recentHover = null;   // a late leave of one the pointer has since left clears nothing else
-        }
-        picture();
-    }
-
     /**
-     * While Open is up, its picture stands where the editor does: of the folder under the pointer, a recent one
-     * before a row, and with the pointer on neither, of the selected row. Before the tree's walk has selected the
+     * While Open is up, its picture stands where the editor does: of the recent folder the drop-down has reached, then
+     * of the row under the pointer, and with neither, of the selected row. Before the tree's walk has selected the
      * folder shown, that folder, which the walk will select; with none shown, the folder the tree starts at. Worked
      * out from all of them each time rather than from whichever message came last, since leaving one control and
      * entering the next arrive as two messages in no promised order.
@@ -1052,7 +1063,7 @@ final class View {
             return;
         }
         Path selected = nav.picker().selected();
-        Path folder = recentHover != null ? recentHover
+        Path folder = recentCursor != null ? recentCursor
                 : treeHover != null ? treeHover
                 : selected != null ? selected
                 : nav.folder() != null ? nav.folder()

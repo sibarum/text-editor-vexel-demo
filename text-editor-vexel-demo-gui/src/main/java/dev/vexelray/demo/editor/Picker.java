@@ -14,6 +14,7 @@ import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.MenuAction;
+import dev.vexelray.gui.widget.Select;
 import dev.vexelray.gui.widget.TreeView;
 
 import java.nio.file.Path;
@@ -26,8 +27,9 @@ import java.util.List;
  *
  * <h2>Recent first, then the folder above</h2>
  *
- * <p>The folders shown before, newest first, are the shortest way back, so they come first, one button each, and under
- * them, once there is a scratch, the way to the scratches as a folder of their own ({@link Scratches}). Under
+ * <p>The folders shown before, newest first, are the shortest way back, so they come first, in a drop-down that is one
+ * line high however many there are, and under it, once there is a scratch, the way to the scratches as a folder of
+ * their own ({@link Scratches}). Under
  * them is a tree of folders only, starting at the folder above the one shown, which is unfolded and selected among its
  * siblings. Above the tree is the way up: the start's own ancestors, each a button that starts the tree there instead.
  * Going up does not change the folder shown; it only widens what can be picked.
@@ -37,9 +39,9 @@ import java.util.List;
  * the tree, goes back to the files: the view claims it on each tree ({@link #treeNode}), since a claim sends an
  * intent, and the intents are the view's.
  *
- * <p>What a click would pick is in view before the click: the folder under the pointer, a recent one or a row, is
- * pictured where the editor stood ({@link Preview}), and off them, the selected row, wherever the arrow keys have
- * walked to.
+ * <p>What a click would pick is in view before the click: the row of the tree under the pointer, or the recent folder
+ * the drop-down's arrow keys have reached, is pictured where the editor stood ({@link Preview}), and off them, the
+ * selected row, wherever the arrow keys have walked to.
  *
  * <h2>A tree for each start</h2>
  *
@@ -54,12 +56,10 @@ final class Picker {
 
     private final Gui gui;
     private final Node root;
-    private final Node recentLabel;
     /** The line between Recent and the tree: there only when Recent is. */
     private final Node rule;
-    private final Button[] recentButtons = new Button[RECENT];
-    private final Node[] recentCells = new Node[RECENT];
-    private final Path[] recentPaths = new Path[RECENT];
+    /** The recent folders, one line high however many there are: a click shows them all. */
+    private final Select<Path> recent;
     private final Scratches scratches;
     /** The way to the scratches as a folder of their own: under the recent folders, once there is a scratch. */
     private final Button scratchesButton;
@@ -76,22 +76,14 @@ final class Picker {
         this.gui = gui;
         this.scratches = scratches;
 
-        recentLabel = gui.text("Recent").font(Type.UI).textSize(Type.SMALL).textColor(gui.theme().color(Role.DIM))
-                .visible(false);
-        Node recent = gui.column().alignItems(AlignItems.STRETCH).children(recentLabel);
-        for (int i = 0; i < RECENT; i++) {
-            Button b = new Button(gui, "").kind(Button.Kind.GHOST).name("recent." + i);
-            b.node().width(Length.FILL);
-            recentButtons[i] = b;
-            // A cell round each button, for the view to hear the pointer on: the button takes its own node's hover
-            // for its wash, and a node is hovered while the pointer is on anything inside it.
-            recentCells[i] = gui.row().alignItems(AlignItems.STRETCH).visible(false).children(b.node());
-            recent.append(recentCells[i]);
-        }
+        // A way to go, not a setting: it always reads Recent folders, and picking one is not an edit to undo.
+        recent = new Select<Path>(gui, Picker::label).name("recent").placeholder("Recent folders").undoable(false);
+        recent.node().width(Length.FILL).visible(false);
         scratchesButton = new Button(gui, Scratches.NAME).kind(Button.Kind.GHOST).name("scratches");
         scratchesButton.node().width(Length.FILL).visible(false);
-        recent.append(scratchesButton.node());
-        gui.landmark(Landmarks.RECENT, recent);
+        Node offered = gui.column().alignItems(AlignItems.STRETCH).gap(Type.TIGHT)
+                .children(recent.node(), scratchesButton.node());
+        gui.landmark(Landmarks.RECENT, recent.node());
         gui.landmark(Landmarks.OPEN_SCRATCHES, scratchesButton.node());
 
         ancestry = new Breadcrumb<Path>(gui, Picker::label).name("ancestry").maxSegments(2);
@@ -107,7 +99,7 @@ final class Picker {
                 .width(Length.FILL).height(Length.grow(1f))
                 .gap(Type.TIGHT)
                 .alignItems(AlignItems.STRETCH)
-                .children(recent, rule,
+                .children(offered, rule,
                         ancestry.node(), treeSlot);
     }
 
@@ -124,14 +116,9 @@ final class Picker {
         return ancestry.address();
     }
 
-    /** The folder a recent button stands for, or null when {@code button} is not one of them. */
-    Path recentAt(String button) {
-        for (int i = 0; i < RECENT; i++) {
-            if (recentButtons[i].address().equals(button)) {
-                return recentPaths[i];
-            }
-        }
-        return null;
+    /** The recent folders' address, which its {@code Changed} and {@code Committed} carry. */
+    String recentAddress() {
+        return recent.address();
     }
 
     /**
@@ -139,15 +126,16 @@ final class Picker {
      * not one of the folders a person was working in.
      */
     void recent(List<Path> folders) {
-        List<Path> shown = folders.stream().filter(p -> !scratches.is(p)).toList();
-        for (int i = 0; i < RECENT; i++) {
-            Path p = i < shown.size() ? shown.get(i) : null;
-            recentPaths[i] = p;
-            recentButtons[i].label(p == null ? "" : label(p));
-            recentCells[i].visible(p != null);
-        }
+        List<Path> shown = folders.stream().filter(p -> !scratches.is(p)).limit(RECENT).toList();
+        recent.options(shown);
         recentShown = !shown.isEmpty();
+        recent.node().visible(recentShown);
         heading();
+    }
+
+    /** The drop-down back to saying Recent folders, once one of them has been picked. */
+    void recentPicked() {
+        recent.show(null);
     }
 
     /** Whether there is a scratch to offer, as {@code FindScratches} last said. */
@@ -157,9 +145,8 @@ final class Picker {
         heading();
     }
 
-    /** Recent's heading and the line under it, there while anything is offered above the tree. */
+    /** The line under what is offered above the tree, there while anything is. */
     private void heading() {
-        recentLabel.visible(recentShown || scratchesShown);
         rule.visible(recentShown || scratchesShown);
     }
 
@@ -178,30 +165,19 @@ final class Picker {
         return scratches.dir();
     }
 
-    /** The cell round the recent button at {@code index}: hovered while the pointer is on the button. */
-    Node recentCell(int index) {
-        return recentCells[index];
-    }
-
-    /** The folder the recent button at {@code index} stands for, or null when it stands for none. */
-    Path recentPath(int index) {
-        return recentPaths[index];
-    }
-
-    /** The address of the recent button at {@code index}, which its {@code Pressed} carries: for a test. */
-    String recentAddress(int index) {
-        return recentButtons[index].address();
-    }
-
-    /** What the recent buttons say, top to bottom: for a test. */
+    /** What the recent folders offer, top to bottom: for a test. */
     List<String> recentLabels() {
         List<String> out = new ArrayList<>();
-        for (int i = 0; i < RECENT; i++) {
-            if (recentPaths[i] != null) {
-                out.add(label(recentPaths[i]));
-            }
+        var order = recent.list().order();
+        for (int i = 0; i < order.size(); i++) {
+            out.add(label(order.at(i)));
         }
         return out;
+    }
+
+    /** The recent folders' drop-down: for a test. */
+    Select<Path> recentSelect() {
+        return recent;
     }
 
     /** Start from the folder above {@code shown}, with {@code shown} unfolded and selected among its siblings. */

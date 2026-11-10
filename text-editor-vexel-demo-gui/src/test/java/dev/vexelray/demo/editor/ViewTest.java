@@ -30,6 +30,7 @@ import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Modal;
 import dev.vexelray.gui.widget.Placement;
+import dev.vexelray.gui.widget.Select;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TextField;
 import dev.vexelray.gui.widget.TreeView;
@@ -44,6 +45,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
@@ -368,7 +370,7 @@ class ViewTest {
         assertEquals(a, p.drawn(), "c is kept, but the pointer is on a");
     }
 
-    /** The folder left is offered under Recent, and pressing it goes back there. */
+    /** The folder left is offered in Recent folders, and picking it there goes back. */
     @Test
     void aFolderLeftIsRecentAndPressingItGoesBack() throws Exception {
         Path a = Files.createDirectory(dir.resolve("a")).toAbsolutePath().normalize();
@@ -381,9 +383,10 @@ class ViewTest {
 
         tell(Intent.Command.TOGGLE_OPEN);
         eventually("Open", nav::opened);
-        shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.picker().recentAddress(0)));
+        shell.bus().publish(Select.COMMITTED, new Select.Committed(nav.picker().recentAddress(), Set.of(a)));
         eventually("back in a", () -> a.equals(nav.folder()) && !nav.opened());
         eventually("b recent now", () -> nav.picker().recentLabels().equals(List.of("b")));
+        eventually("the drop-down says Recent folders again", () -> nav.picker().recentSelect().value() == null);
     }
 
     /** The scratches' folder, beside this test's settings. */
