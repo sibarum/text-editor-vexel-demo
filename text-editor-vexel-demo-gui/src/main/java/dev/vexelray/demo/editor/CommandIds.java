@@ -12,6 +12,9 @@ final class CommandIds {
     static final String NEW_PROJECT = "new.project";
     static final String NEW_MODULE = "new.module";
 
+    /** Concordance's index of the project the folder shown is in. */
+    static final String NEW_INDEX = "new.index";
+
     /** Save the front document. */
     static final String SAVE = "file.save";
 

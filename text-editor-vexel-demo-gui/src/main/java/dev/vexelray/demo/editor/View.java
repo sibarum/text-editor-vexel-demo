@@ -4,6 +4,8 @@ import dev.vexelray.demo.editor.Intent.Command;
 import dev.vexelray.demo.editor.core.Messages;
 import dev.vexelray.demo.editor.core.Messages.Add;
 import dev.vexelray.demo.editor.core.Messages.AddTab;
+import dev.vexelray.demo.editor.core.Messages.IndexWanted;
+import dev.vexelray.demo.editor.core.Messages.Indexed;
 import dev.vexelray.demo.editor.core.Messages.Caption;
 import dev.vexelray.demo.editor.core.Messages.Close;
 import dev.vexelray.demo.editor.core.Messages.CloseTabs;
@@ -139,6 +141,9 @@ final class View {
     private final Sender<RunsWanted> runsWanted;
     private final Sender<RunThis> runThis;
     private final Sender<WindowCommand> windows;
+    private final Sender<IndexWanted> indexWanted;
+    /** The folder an index was asked for and has not been answered yet, or null: one at a time. */
+    private Path indexing;
     /** What the Run menu was last asked about, so an answer about anything else is left. */
     private RunsWanted runsAsked = new RunsWanted(Optional.empty(), Optional.empty());
     /** A declaration to select once its file is in front (go to definition); null when none is wanted. */
@@ -169,8 +174,9 @@ final class View {
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
-         Sender<WindowCommand> windows) {
+         Sender<WindowCommand> windows, Sender<IndexWanted> indexWanted) {
         this.windows = windows;
+        this.indexWanted = indexWanted;
         this.runsWanted = runsWanted;
         this.runThis = runThis;
         this.gui = gui;
@@ -222,6 +228,7 @@ final class View {
         command(keys, CommandIds.NEW_FILE, "New file", Command.NEW_FILE);
         command(keys, CommandIds.NEW_PROJECT, "New project", Command.NEW_PROJECT);
         command(keys, CommandIds.NEW_MODULE, "New submodule", Command.NEW_MODULE);
+        command(keys, CommandIds.NEW_INDEX, "Index this project", Command.NEW_INDEX);
         command(keys, CommandIds.SAVE, "Save", Command.SAVE_FRONT, Shortcut.of(Key.S, Modifier.CONTROL));
         command(keys, CommandIds.CLOSE, "Close tab", Command.CLOSE_FRONT, Shortcut.of(Key.W, Modifier.CONTROL));
         command(keys, "tab.next", "Next tab", Command.NEXT_TAB,
@@ -392,6 +399,19 @@ final class View {
         } else if (m.tree().equals(nav.scratchAddress())) {
             children.send(nav.scratchChildren(m));
             nav.scratchListed();
+        }
+    }
+
+    /** An index built, or why not: said on the status line, which is all that hears of it until something reads it. */
+    @Subscribe
+    public void indexed(Indexed m) {
+        indexing = null;
+        String name = Picker.label(m.project());
+        if (!m.problem().isEmpty()) {
+            ui.status("Not indexed: " + m.problem(), true);
+        } else {
+            ui.status("Indexed " + name + ": " + m.summary()
+                    + (m.unreadable() == 0 ? "" : ", " + m.unreadable() + " not readable"), false);
         }
     }
 
@@ -1093,6 +1113,20 @@ final class View {
         } else {
             nav.startNew(in, false);
             ui.status("Name the new file, then Enter", false);
+        }
+    }
+
+    /** New → Index this project: index the project the folder shown is in, one index at a time. */
+    void indexHere() {
+        Path in = nav.folder();
+        if (in == null) {
+            ui.status("Open a folder first", true);
+        } else if (indexing != null) {
+            ui.status("Already indexing " + Picker.label(indexing), true);
+        } else {
+            indexing = in;
+            indexWanted.send(new IndexWanted(in));
+            ui.status("Indexing " + Picker.label(in) + "…", false);
         }
     }
 

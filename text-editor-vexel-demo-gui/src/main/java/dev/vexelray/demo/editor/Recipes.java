@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Grammars;
+import dev.vexelray.demo.editor.core.IndexStore;
 import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.framework.api.Configuration;
 import dev.vexelray.framework.api.Provides;
@@ -11,6 +12,7 @@ import dev.vexelray.gui.core.app.Settings;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.text.FontSet;
+import sibarum.concordance.index.JarCache;
 
 /**
  * What this module builds — one recipe per part — and nothing about when.
@@ -85,6 +87,16 @@ final class Recipes {
     @Provides
     Scratches scratches(Settings settings) {
         return new Scratches(settings.path().resolveSibling("scratches"));
+    }
+
+    /**
+     * Where {@code BuildIndex} keeps each project's index, beside the settings
+     * ({@code ~/.text-editor-vexel-demo/index}), so it moves with the home as the scratches do; and Concordance's
+     * machine-wide cache of library indexes, shared with its shell.
+     */
+    @Provides
+    IndexStore indexStore(Settings settings) {
+        return new IndexStore(settings.path().resolveSibling("index"), JarCache.defaultLocation());
     }
 
     /**

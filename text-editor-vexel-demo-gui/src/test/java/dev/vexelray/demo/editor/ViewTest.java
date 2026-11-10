@@ -5,6 +5,7 @@ import dev.vexelray.demo.editor.core.Messages;
 import dev.vexelray.demo.editor.core.Messages.Caption;
 import dev.vexelray.demo.editor.core.CreateFile;
 import dev.vexelray.demo.editor.core.Messages.Go;
+import dev.vexelray.demo.editor.core.Messages.Indexed;
 import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Made;
@@ -671,15 +672,61 @@ class ViewTest {
     @Test
     void theNewMenuOffersAProjectOrAModuleForTheFolderShown() {
         Sender<Intent> intents = Sender.collecting(Intent.INTENTS, new ArrayList<>());
-        assertEquals(List.of("File…", "Project…"), labels(Ui.newMenuOf(true, false, intents)));
-        assertEquals(List.of("File…", "Submodule…"), labels(Ui.newMenuOf(true, true, intents)));
-        assertTrue(Ui.newMenuOf(false, false, intents).items().stream().noneMatch(MenuItem::enabled),
+        assertEquals(List.of("File…", "Project…", "Index this project"), labels(Ui.newMenuOf(true, false, intents)));
+        assertEquals(List.of("File…", "Submodule…", "Index this project"), labels(Ui.newMenuOf(true, true, intents)));
+        assertTrue(lines(Ui.newMenuOf(false, true, intents)).noneMatch(MenuItem::enabled),
                 "nothing to name a thing in");
-        assertTrue(Ui.newMenuOf(true, true, intents).items().stream().allMatch(MenuItem::enabled));
+        assertTrue(lines(Ui.newMenuOf(true, true, intents)).allMatch(MenuItem::enabled));
+        assertEquals(List.of(true, true, false), lines(Ui.newMenuOf(true, false, intents)).map(MenuItem::enabled)
+                .toList(), "no project to index");
+    }
+
+    /** A menu's lines, its rules left out. */
+    private static java.util.stream.Stream<MenuItem> lines(Menu menu) {
+        return menu.items().stream().filter(i -> i.label() != null);
     }
 
     private static List<String> labels(Menu menu) {
-        return menu.items().stream().map(MenuItem::label).toList();
+        return lines(menu).map(MenuItem::label).toList();
+    }
+
+    /** New → Index this project: the reactor around the folder shown, indexed and kept beside the settings. */
+    @Test
+    void theNewMenuIndexesTheProjectAroundTheFolderShown() throws Exception {
+        Path root = dir.resolve("whole").toAbsolutePath().normalize();
+        Path source = Files.createDirectories(root.resolve("lib/src/main/java/demo"));
+        Files.writeString(root.resolve("pom.xml"), """
+                <project>
+                    <groupId>com.example</groupId>
+                    <artifactId>whole</artifactId>
+                    <version>1</version>
+                    <packaging>pom</packaging>
+                    <modules><module>lib</module></modules>
+                </project>
+                """);
+        Files.writeString(root.resolve("lib/pom.xml"), """
+                <project>
+                    <parent><groupId>com.example</groupId><artifactId>whole</artifactId><version>1</version></parent>
+                    <artifactId>lib</artifactId>
+                </project>
+                """);
+        Files.writeString(source.resolve("Greeter.java"), "package demo;\n\npublic class Greeter {\n"
+                + "    public String greet() {\n        return \"hello\";\n    }\n}\n");
+        List<Indexed> indexed = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.INDEXED_TOPIC, indexed::add);
+        shell.bus().publish(Messages.GO_TOPIC, new Go(root.resolve("lib").toString()));
+        Navigator nav = wiring.ui().navigator();
+        eventually("the module", () -> root.resolve("lib").equals(nav.folder()));
+
+        tell(Intent.Command.NEW_INDEX);
+        eventually("the index", () -> !indexed.isEmpty());
+        Indexed m = indexed.getFirst();
+        assertEquals("", m.problem());
+        assertEquals(root, m.project(), "the reactor, not the module shown");
+        assertTrue(m.summary().startsWith("1 types, 1 methods"), m.summary());
+        try (var kept = Files.list(dir.resolve("home").resolve("index"))) {
+            assertEquals(1, kept.count(), "kept beside the settings");
+        }
     }
 
     /** New → File… and Project… name their thing in the folder shown, from wherever the navigator was. */

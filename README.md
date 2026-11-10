@@ -102,8 +102,13 @@ groups the button with other Java programs, and pinning it pins Java. The native
 
 **New**, the first menu in the title bar, makes something in the folder shown, as a navigator row's menu does for its
 row: **File…**, then **Project…** (a Maven project), or **Submodule…** (a module of the project) where a `pom.xml` is
-at or above the folder. Each puts its name in the path bar, and Enter makes it. To a script it is
-`titlebar-menu.new`, with `menu.file`, `menu.project` and `menu.submodule`.
+at or above the folder. Each puts its name in the path bar, and Enter makes it. Under a rule, inside a project,
+**Index this project** builds [Concordance](../concordance-indexer)'s index of it (`BuildIndex`): every declaration
+and use of a name in the whole reactor around the folder, and what its libraries export, from their sources jars or
+decompiled. It is kept in `~/.text-editor-vexel-demo/index`, one file per project, so indexing again rereads only
+what changed, and libraries go through Concordance's shared cache (`~/.concordance/jars`). The status line says what
+it holds. Nothing reads it yet: going to a declaration will. To a script the menu is `titlebar-menu.new`, with
+`menu.file`, `menu.project`, `menu.submodule` and `menu.index-this-project`.
 
 **View**, after New, has word wrap, the navigator, the formatted view and zoom, each with its chord beside it.
 

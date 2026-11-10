@@ -90,6 +90,14 @@
             <artifactId>concordance-project</artifactId>
             <version>${concordance.version}</version>
         </dependency>
+        <!-- A project's index (BuildIndex): every declaration and use of a name, and what its libraries export.
+             Brings JavaParser, which parses without reflection at the RAW level Concordance uses, and Vineflower,
+             which decompiles a library that has no sources jar. -->
+        <dependency>
+            <groupId>sibarum.concordance</groupId>
+            <artifactId>concordance-index</artifactId>
+            <version>${concordance.version}</version>
+        </dependency>
         <!-- The pseudo-terminal a run is started on (Runner), and what is a program here and how to run it (Runs).
              The platform's own implementation is a runtime dependency of -gui's. -->
         <dependency>

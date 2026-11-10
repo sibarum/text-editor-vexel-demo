@@ -320,6 +320,25 @@ public final class Messages {
     }
 
     /**
+     * Index the Maven project {@code folder} is in ({@link BuildIndex}): its sources and its libraries, with
+     * Concordance, kept between runs so the next one rereads only what changed.
+     */
+    public static final Topic<IndexWanted> INDEX_WANTED_TOPIC = Topic.edge(IndexWanted.class);
+
+    public record IndexWanted(Path folder) {
+    }
+
+    /**
+     * What {@link IndexWanted} did: the project indexed (or the folder asked about, when there was none), what the
+     * index holds ({@code summary}, as "12 types, 80 methods, ..."), how many sources could not be read, and why
+     * nothing was indexed ({@code problem}, empty when it was).
+     */
+    public static final Topic<Indexed> INDEXED_TOPIC = Topic.edge(Indexed.class);
+
+    public record Indexed(Path project, String summary, int unreadable, String problem) {
+    }
+
+    /**
      * What {@link NewScratch} made: the new, empty scratch, with the line endings a save gives it, or why not
      * ({@code problem}, and {@code path} the scratches' folder).
      */

@@ -88,6 +88,12 @@ record Intent(Command command) {
                 view.newHere(Made.MODULE);
             }
         },
+        NEW_INDEX {
+            @Override
+            void on(View view) {
+                view.indexHere();
+            }
+        },
         NEW_SCRATCH {
             @Override
             void on(View view) {
