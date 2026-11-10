@@ -3,7 +3,7 @@
   "name": "VexelRay IDE",
   "publisher": "sibarum",
   "description": "A tabbed text editor with a file navigator, on the VexelRay stack.",
-  "version": "0.1.2-SNAPSHOT",
+  "version": "0.2.0-SNAPSHOT",
 
   "repo": "sibarum/vexelray-dist",
   "branch": "main",
