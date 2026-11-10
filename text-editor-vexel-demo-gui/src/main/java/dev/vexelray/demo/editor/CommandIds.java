@@ -16,6 +16,17 @@ final class CommandIds {
     /** A Markdown document as formatted, or as its source. */
     static final String FORMATTED = "view.formatted";
 
+    /** Word wrap on or off, in every document. */
+    static final String WRAP = "view.wrap";
+
+    /** The navigator shown or hidden. */
+    static final String NAVIGATOR = "view.navigator";
+
+    /** Zoom in, out, or back to where it started. */
+    static final String ZOOM_IN = "view.zoom-in";
+    static final String ZOOM_OUT = "view.zoom-out";
+    static final String ZOOM_RESET = "view.zoom-reset";
+
     private CommandIds() {
     }
 }

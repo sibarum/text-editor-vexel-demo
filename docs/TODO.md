@@ -9,7 +9,7 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 ## Next
 
 The 0.1 editor is being rebuilt on the v0.2 template, one milestone at a time: highlighting (done); editing details
-(done, but for word wrap, which comes with preferences); the navigator's Add
+(done; word wrap is toggled, and is kept once there are preferences); the navigator's Add
 menu, Open mode and folder pictures; scratches; preferences; running things and the console; Git mode; go to
 declaration. Its code is on `develop`, to copy from as each piece is rebuilt.
 

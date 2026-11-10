@@ -98,7 +98,8 @@ final class Ui {
         // Two cards on the page. The title bar and the status line are the page too, not chrome: the cards are
         // what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
-        // The Run menu is there from the first frame; the view declares what is on it.
+        // The menus are there from the first frame, in this order; the view declares what is on them.
+        titleBar.menu(VIEW, "View", Menu.NONE);
         titleBar.menu(RUN, "Run", Menu.NONE);
         status.node().background(gui.theme().color(Role.PAGE));
         status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
@@ -151,6 +152,30 @@ final class Ui {
     /** Whether the navigator is on screen: the split's own answer, which it does not give, kept here beside it. */
     boolean navigatorShown() {
         return navigatorShown;
+    }
+
+    /** The View menu's name in the title bar: its landmark is {@link Landmarks#VIEW_MENU}. */
+    static final String VIEW = "view";
+
+    /**
+     * The View menu, declared again when what it says changes: word wrap first, saying what choosing it does (a menu
+     * line has no tick), then the navigator and the formatted view, then zoom. Each line sends the same {@link Intent}
+     * as its chord, and names the command so it shows the chord as the person has it bound.
+     */
+    void viewMenu(boolean wrapping, Sender<Intent> intents) {
+        titleBar.menu(VIEW, "View", Menu.builder()
+                .item(wrapping ? "Turn word wrap off" : "Turn word wrap on", intents,
+                        new Intent(Intent.Command.TOGGLE_WRAP)).command(CommandIds.WRAP)
+                .separator()
+                .item("Show or hide the navigator", intents, new Intent(Intent.Command.TOGGLE_NAVIGATOR))
+                .command(CommandIds.NAVIGATOR)
+                .item("Formatted or source", intents, new Intent(Intent.Command.TOGGLE_FORMATTED))
+                .command(CommandIds.FORMATTED)
+                .separator()
+                .item("Zoom in", intents, new Intent(Intent.Command.ZOOM_IN)).command(CommandIds.ZOOM_IN)
+                .item("Zoom out", intents, new Intent(Intent.Command.ZOOM_OUT)).command(CommandIds.ZOOM_OUT)
+                .item("Reset zoom", intents, new Intent(Intent.Command.ZOOM_RESET)).command(CommandIds.ZOOM_RESET)
+                .build());
     }
 
     /** The Run menu's name in the title bar: its landmark is {@link Landmarks#RUN_MENU}. */

@@ -150,6 +150,12 @@ final class View {
     private record Reveal(Path file, int start, int end, String name) {
     }
 
+    /**
+     * Whether documents wrap their long lines: every one alike, on until the person says otherwise. Not kept past this
+     * run yet; that comes with the preferences.
+     */
+    private boolean wrap = true;
+
     /** The tab in front, as the editor was last told. */
     private long front = Messages.NO_TAB;
     /** The folder under the pointer in Open: a recent one, a row of its tree, or null for neither. */
@@ -191,6 +197,7 @@ final class View {
         this.children = children;
         this.intents = intents;
         commands(keys);
+        ui.viewMenu(wrap, intents);
         ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
                 new Intent(Command.LEAVE_RENAME));
@@ -221,7 +228,8 @@ final class View {
                 Shortcut.of(Key.E, Modifier.CONTROL, Modifier.SHIFT));
         command(keys, CommandIds.FORMATTED, "Formatted or source", Command.TOGGLE_FORMATTED,
                 Shortcut.of(Key.V, Modifier.CONTROL, Modifier.SHIFT));
-        command(keys, "view.navigator", "Show or hide the navigator", Command.TOGGLE_NAVIGATOR,
+        command(keys, CommandIds.WRAP, "Word wrap", Command.TOGGLE_WRAP, Shortcut.of(Key.Z, Modifier.ALT));
+        command(keys, CommandIds.NAVIGATOR, "Show or hide the navigator", Command.TOGGLE_NAVIGATOR,
                 Shortcut.of(Key.B, Modifier.CONTROL));
         command(keys, "folder.open", "Open a folder", Command.TOGGLE_OPEN, Shortcut.of(Key.O, Modifier.CONTROL));
         command(keys, "scratch.new", "New scratch", Command.NEW_SCRATCH,
@@ -229,11 +237,11 @@ final class View {
         command(keys, "scratch.list", "Show or hide the scratches", Command.TOGGLE_SCRATCHES,
                 Shortcut.of(Key.N, Modifier.ALT));
         command(keys, "run.menu", "Run menu", Command.RUN_MENU, Shortcut.of(Key.F5));
-        command(keys, "view.zoom-in", "Zoom in", Command.ZOOM_IN,
+        command(keys, CommandIds.ZOOM_IN, "Zoom in", Command.ZOOM_IN,
                 Shortcut.of(Key.EQUAL, Modifier.CONTROL), Shortcut.of(Key.NUMPAD_ADD, Modifier.CONTROL));
-        command(keys, "view.zoom-out", "Zoom out", Command.ZOOM_OUT,
+        command(keys, CommandIds.ZOOM_OUT, "Zoom out", Command.ZOOM_OUT,
                 Shortcut.of(Key.MINUS, Modifier.CONTROL), Shortcut.of(Key.NUMPAD_SUBTRACT, Modifier.CONTROL));
-        command(keys, "view.zoom-reset", "Reset zoom", Command.ZOOM_RESET,
+        command(keys, CommandIds.ZOOM_RESET, "Reset zoom", Command.ZOOM_RESET,
                 Shortcut.of(Key.DIGIT_0, Modifier.CONTROL), Shortcut.of(Key.NUMPAD_0, Modifier.CONTROL));
     }
 
@@ -272,6 +280,7 @@ final class View {
     @Subscribe
     public void addTab(AddTab m) {
         Buffer b = ws.add(m.id(), m.path(), m.text(), m.focus());
+        b.wordWrap(wrap);
         // Ctrl+Enter is go to definition in a document, before the field takes it as a newline.
         gui.claim(b.field.node(), Shortcut.of(Key.ENTER, Modifier.CONTROL), ClaimScope.FOCUSED, intents,
                 new Intent(Command.GO_TO_DEFINITION));
@@ -1054,6 +1063,16 @@ final class View {
     }
 
     /** In ({@code 1}), out ({@code -1}), or back to where it started ({@code 0}). */
+    /** Alt+Z, or the View menu: word wrap on or off in every open document, and in every one opened after. */
+    void toggleWrap() {
+        wrap = !wrap;
+        for (Buffer b : ws.all()) {
+            b.wordWrap(wrap);
+        }
+        ui.viewMenu(wrap, intents);
+        ui.status(wrap ? "Word wrap on" : "Word wrap off", false);
+    }
+
     void zoom(int direction) {
         if (direction > 0) {
             gui.zoomIn();

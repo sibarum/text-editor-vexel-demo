@@ -45,6 +45,12 @@ record Intent(Command command) {
                 view.toggleFormatted();
             }
         },
+        TOGGLE_WRAP {
+            @Override
+            void on(View view) {
+                view.toggleWrap();
+            }
+        },
         TOGGLE_NAVIGATOR {
             @Override
             void on(View view) {

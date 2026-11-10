@@ -97,7 +97,11 @@ groups the button with other Java programs, and pinning it pins Java. The native
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+Enter | in a Pontif file: go to the definition of the name at the caret, or add its `requires` |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
+| Alt+Z | word wrap on or off, in every document (on at start; not kept yet) |
 | F5 | the Run menu (see *Running things*) |
+
+**View**, the first menu in the title bar, has word wrap, the navigator, the formatted view and zoom, each with its
+chord beside it.
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and Reveal in navigator. A bullet in
@@ -108,7 +112,7 @@ framework brings native pickers (a `PickFile` message, answered by `Picked`) for
 
 ### Running things
 
-**Run**, in the title bar after the application's name (or F5), is a menu of what can be run for the folder shown and
+**Run**, in the title bar after View (or F5), is a menu of what can be run for the folder shown and
 the file in front, worked out from what is on disk by the `FindRuns` job (`Runs`), each group under a rule:
 
 - the file in front: **Run *Class*.main()** for a Java file with a `main` (through Maven, `mvn -q compile exec:java`,

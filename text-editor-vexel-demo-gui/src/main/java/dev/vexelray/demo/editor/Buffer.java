@@ -244,6 +244,11 @@ final class Buffer implements AutoCloseable {
         return new Format(address(), now, version);
     }
 
+    /** Wrap long lines at the field's width, or let them run on under a horizontal scroll. */
+    void wordWrap(boolean wrap) {
+        field.wordWrap(wrap);
+    }
+
     /** {@code FormatText}'s answer: shown only if the field still says the text it was read from. */
     void formatted(Formatted m) {
         if (formatted != null && m.version() == formattedAt && field.text().equals(formattedText)) {
