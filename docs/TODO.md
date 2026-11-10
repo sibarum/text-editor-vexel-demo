@@ -14,8 +14,6 @@ menu, Open mode and folder pictures; scratches; preferences; running things and 
 declaration (the index is built, by New → Index this project; nothing reads it yet). Its code is on `develop`, to
 copy from as each piece is rebuilt.
 
-- [ ] A native build with the index. `BuildIndex` brings JavaParser and Vineflower back into the exe, which 0.1
-      shipped, but the v0.2 exe has not been built with them yet: run New → Index this project in one.
 - [ ] Index without being asked: 0.1 indexed a Maven project when it was opened, and again on save. Today only New →
       Index this project does, which is enough until something reads the index.
 
