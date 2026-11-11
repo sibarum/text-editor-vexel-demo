@@ -54,7 +54,11 @@ public final class Runner {
             return new Connection(Pty.start(Runs.shellLine(launch.offer().line()), launch.cols(), launch.rows(), dir,
                     true),
                     "");
-        } catch (RuntimeException e) {
+        } catch (VirtualMachineError e) {
+            throw e;
+        } catch (RuntimeException | Error e) {
+            // An Error too: a pseudo-terminal that cannot be bound (a native call the image never registered, a
+            // kernel32 symbol that is not there) fails as one, and that is this run's failure, not the application's.
             return new Connection(null, e.getMessage() == null ? e.toString() : e.getMessage());
         }
     }
