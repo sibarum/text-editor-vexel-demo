@@ -12,7 +12,9 @@
 
     <artifactId>text-editor-vexel-demo-gui</artifactId>
 
-    <name>text-editor-vexel-demo-gui</name>
+    <!-- The application's proper name, as its About menu item and window say it: vexelray-build's bill takes it from
+         here, since installer.json is at the repository's root and not beside this pom. -->
+    <name>VexelRay IDE</name>
     <description>
         The view, and the framework integration: the window, the widgets, the entry point and its generated wiring.
     </description>

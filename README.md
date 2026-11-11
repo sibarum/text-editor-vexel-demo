@@ -67,7 +67,8 @@ only the entries that name this program.
 `text-editor-vexel-demo-gui/src/main/rc/editor.ico` is the application's mark, and it is one file read three ways: the window and its
 taskbar button wear it (`@VexelApp(icon = TextEditor.ICON)`; the pom puts it on the class path), and so does the
 title bar the framework draws; the `.exe` links it (`src/main/rc/text-editor-vexel-demo.rc`), and so Explorer, a shortcut and a
-pinned button show it too. It starts as the framework's "new app" mark, whose source is `editor.svg` beside it.
+pinned button show it too. It is Jacquard 24's V on a deep teal tile, on the same pixel grid as the title bar's
+wordmark, and its source is `editor.svg` beside it.
 
 A second window — a viewer, a settings window — wears the window mark, on the taskbar and in its title bar, with
 nothing to write: declare it in a recipe with `windows.named(...)`, and the framework builds its tree and claims it
