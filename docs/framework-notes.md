@@ -189,3 +189,16 @@ look stale and dropped it, and `CheckText` compiled the same text again for ever
 own caret move refused the import it asked for. `Buffer` now remembers the text each question was about and applies an
 answer only while the field still says it. Not a gap so much as a name that invites the wrong use: a text version
 alongside the document's, bumped only when the text changes, would be the thing to key on.
+
+## FN-16 · A drawing baked fine and shown small wears a faint box behind each shape 🔬
+
+The title bar's wordmark (`Wordmark`) is IDE traced from Jacquard 24 into `src/main/rc/wordmark.svg` (170 by 58 units)
+and baked by the icon plugin's `pair` goal, as Inspector's is. Baked at Inspector's `<texels>640</texels>` and shown
+about 37 by 13 dp, each letter sat on a faint box in its own colour, I in teal and D and E in grey: the outside of each
+shape read as a little coverage, out to its tile's edge. The paths have no such box (checked contour by contour). At
+`<texels>256</texels>` the boxes are gone and the letters are still sharp. Measured, not explained: the guess is that
+the field is clamped a few texels out, and at 640 texels across a drawing a quarter of Inspector's width that clamp
+is less than a screen pixel away, so the renderer's antialiasing reaches it. Cost: two bakes and a zoomed screenshot.
+What the framework could do: bake or draw so that an SDG's clamped outside is never coverage at any size it is shown
+(a clamp in screen pixels, not texels), or have the `pair` goal warn when `texels` over the drawing's width outruns
+what the field's clamp can cover.

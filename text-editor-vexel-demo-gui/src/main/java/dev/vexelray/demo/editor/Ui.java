@@ -98,6 +98,11 @@ final class Ui {
         // Two cards on the page. The title bar and the status line are the page too, not chrome: the cards are
         // what stand off it.
         titleBar.node().background(gui.theme().color(Role.PAGE));
+        // The name as the bar's wordmark, after the mark in its lockup, given here so the framework does not put the
+        // build's name there: the bar inks D and E as the pointer comes and goes, and the I keeps its teal.
+        TitleBar.Wordmark wordmark = Wordmark.bar(gui);
+        titleBar.wordmark(wordmark);
+        gui.landmark(Landmarks.WORDMARK, wordmark.node());
         // The menus are there from the first frame, in this order; the view declares what is on them.
         titleBar.menu(NEW, "New", Menu.NONE);
         titleBar.menu(VIEW, "View", Menu.NONE);

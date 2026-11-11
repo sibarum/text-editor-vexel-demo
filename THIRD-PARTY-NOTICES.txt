@@ -114,6 +114,14 @@ Copyright 2000-2023 JetBrains s.r.o.
 Copyright the Vineflower contributors.
 
 ===============================================================================
+16. Jacquard 24 font
+https://github.com/scfried/soft-type-jacquard
+Licence: SIL Open Font License 1.1
+Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jacquard)
+
+The title bar's wordmark is the letters I, D and E traced from this font and drawn as a signed-distance field. The font itself is not included.
+
+===============================================================================
 Licence texts
 ===============================================================================
 

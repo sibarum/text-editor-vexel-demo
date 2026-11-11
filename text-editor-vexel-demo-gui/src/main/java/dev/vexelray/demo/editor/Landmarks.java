@@ -59,6 +59,9 @@ final class Landmarks {
     static final String STATUS_LANGUAGE = "status.language";
     static final String STATUS_POSITION = "status.position";
 
+    /** The title bar's wordmark: IDE in Jacquard 24's pixel blackletter ({@link Wordmark}). */
+    static final String WORDMARK = "wordmark";
+
     /** The application's New menu in the title bar ({@code TitleBar.menuLandmark}); its items are {@code menu.<label>}. */
     static final String NEW_MENU = "titlebar-menu.new";
 
