@@ -589,6 +589,61 @@ public final class Messages {
         }
     }
 
+    // ------------------------------------------------------------------ git
+
+    /**
+     * What git says of the working tree under {@code folder} ({@link ReadGitStatus}), for the navigator's colours. Asked
+     * by the view when a folder is shown and after a save; {@code asked} counts the questions, so an answer to an
+     * older one, slower than a newer, is left.
+     */
+    public static final Topic<GitStatusWanted> GIT_STATUS_WANTED_TOPIC = Topic.edge(GitStatusWanted.class);
+
+    public record GitStatusWanted(Path folder, long asked) {
+    }
+
+    /**
+     * The answer: the repository's top directory, and git's own status text, which {@code Status.parse} reads back.
+     * A status is a list, and a list crosses as its text. {@code root} is empty when {@code folder} is in no
+     * repository, git is not installed, or it failed: then nothing is coloured.
+     */
+    public static final Topic<GitStatusRead> GIT_STATUS_READ_TOPIC = Topic.edge(GitStatusRead.class);
+
+    public record GitStatusRead(Path folder, long asked, Optional<Path> root, String text) {
+    }
+
+    // ------------------------------------------------------------------ handing things to other programs
+
+    /** A program a row's Open in hands its file or folder to: one of the suite's, or the system's file manager. */
+    public enum App {
+        VEXPLORE("Vexplore"), MAINFRAME("MainFrame"), RASTERWARE("Rasterware"), HOST("the file manager");
+
+        private final String title;
+
+        App(String title) {
+            this.title = title;
+        }
+
+        /** What the person calls it, as the status line says it. */
+        public String title() {
+            return title;
+        }
+    }
+
+    /**
+     * Hand {@code path} to {@code app} ({@code -gui}'s {@code HandOff}), from a row's Open in. Sent by the view: there is
+     * nothing for the editor to decide, and what came of it is said in the status line.
+     */
+    public static final Topic<HandTo> HAND_TO_TOPIC = Topic.edge(HandTo.class);
+
+    public record HandTo(Path path, boolean folder, App app) {
+    }
+
+    /** What a {@link HandTo} came to: {@code problem} is why nothing opened, or null when {@code app} was started. */
+    public static final Topic<HandedTo> HANDED_TO_TOPIC = Topic.edge(HandedTo.class);
+
+    public record HandedTo(Path path, App app, String problem) {
+    }
+
     // ------------------------------------------------------------------ running things
 
     /**

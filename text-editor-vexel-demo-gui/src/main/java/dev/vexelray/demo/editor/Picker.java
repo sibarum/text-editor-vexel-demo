@@ -200,7 +200,7 @@ final class Picker {
         tree = new TreeView<Path>(gui, "picker")
                 .hoverStyle(Look.PICK_HOVER, Role.ACCENT)
                 .rowCursor(CursorShape.POINTER)
-                .action(MenuAction.of(Navigator.SHOW, "»", "Show this folder"))
+                .action(MenuAction.of(Navigator.SHOW, "»", "Set project root"))
                 .action(MenuAction.of(Navigator.COPY_PATH, "Copy path"));
         tree.node().width(Length.FILL).height(Length.grow(1f));
         gui.landmark(Landmarks.PICKER, tree.node());

@@ -105,6 +105,12 @@
             <artifactId>vex-suite-common-pty</artifactId>
             <version>${vex-suite-common.version}</version>
         </dependency>
+        <!-- git status for the navigator's colours (ReadGitStatus): the suite's, which Vexplore reads it with too. -->
+        <dependency>
+            <groupId>dev.sibarum</groupId>
+            <artifactId>vex-suite-common-git</artifactId>
+            <version>${vex-suite-common.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

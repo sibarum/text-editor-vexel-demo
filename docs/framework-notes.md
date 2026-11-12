@@ -202,3 +202,13 @@ is less than a screen pixel away, so the renderer's antialiasing reaches it. Cos
 What the framework could do: bake or draw so that an SDG's clamped outside is never coverage at any size it is shown
 (a clamp in screen pixels, not texels), or have the `pair` goal warn when `texels` over the drawing's width outruns
 what the field's clamp can cover.
+
+## FN-17 · The platform opens a folder but cannot show a file selected in the file manager 🔬
+
+A row's Open in ▸ Host OS (`HandOff`) wants what every file manager's "show in folder" does: the folder opened with
+the file selected. `NativePlatform.open` hands a target to the desktop's opener, so a folder opens in the file manager
+and a file opens in whatever program its kind has; there is no reveal. A file's row opens its folder instead, with
+nothing selected. Running `explorer /select,` from the application would be platform code in an application, and
+Linux's file managers each have their own way (`org.freedesktop.FileManager1.ShowItems` over D-Bus is the common one).
+What the framework could do: a `NativePlatform.reveal(Path)`, `SHOpenFolderAndSelectItems` on Windows and the
+FileManager1 call on Linux, falling back to opening the folder.

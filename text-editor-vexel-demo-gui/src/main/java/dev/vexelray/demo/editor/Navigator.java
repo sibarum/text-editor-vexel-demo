@@ -2,6 +2,9 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.CreateFile;
 import dev.vexelray.demo.editor.core.ListFolder;
+import dev.sibarum.suite.git.Status;
+import dev.vexelray.demo.editor.core.Messages.App;
+import dev.vexelray.demo.editor.core.Messages.GitStatusRead;
 import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
@@ -12,6 +15,7 @@ import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.fileicons.FileFamily;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.core.drop.DropEffect;
@@ -27,6 +31,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -39,9 +44,9 @@ import java.util.Set;
  * is not there yet and it is created. Ctrl+L puts the keyboard in it; Enter goes. It is an ordinary single-line
  * {@link TextField}, named {@code path}, and its {@code SUBMITTED} message is the whole of its wiring.
  *
- * <p>So it is where new things are named, too. A row's "New file here…" puts the folder into the bar with the caret
+ * <p>So it is where new things are named, too. A row's New ▸ File… puts the folder into the bar with the caret
  * after it, and Enter makes the name typed there, from the template its extension asks for. A name ending in a
- * separator is a folder, and "New folder here…" adds that separator itself, so the person types only the name.
+ * separator is a folder, and New ▸ Folder… adds that separator itself, so the person types only the name.
  *
  * <p>What an extension cannot say is said by the row's menu, and the bar keeps it in mind until Enter: a Maven project,
  * or where a project is around the row a module of it instead; an archive of a folder, named beside it; and a link to
@@ -75,7 +80,7 @@ import java.util.Set;
  * <p>Alt+N puts a tree of the scratches where the files were, without showing their folder: the folder shown stays
  * the one shown, and Alt+N again, or the chip, puts its files back. It is the third place the card can be, beside the
  * files and Open, and it is edged in the accent as Open is, but not steeped in it, since the editor is still beside
- * it and still the thing being worked in. Above the tree is New scratch, and each row's menu has New scratch here.
+ * it and still the thing being worked in. Above the tree is New scratch, and each row's menu has New ▸ Scratch.
  * A scratch made while it is up is listed and selected once its listing lands ({@link #scratchMade}).
  *
  * <p>The scratches are organised in their tree: a row dragged onto a folder, or between the rows of one, or cut and
@@ -100,6 +105,24 @@ final class Navigator {
     static final String LINK = "link";
     static final String NEW_SCRATCH = "new-scratch";
     static final String RENAME = "rename";
+    static final String RUN = "run";
+
+    /**
+     * The extensions whose files a row offers to Run, as the Run menu would run them ({@code Runs}): a Java file with a
+     * {@code main}, a Pontif file, a jar, and what the platform runs as a program. Said by the name alone, so the
+     * listing reads nothing more; a Java file with no {@code main} is said when Run finds nothing in it.
+     */
+    static final Set<String> RUNNABLE = File.separatorChar == '\\'
+            ? Set.of("java", "ptf", "jar", "exe", "bat", "cmd", "ps1")
+            : Set.of("java", "ptf", "jar", "sh");
+
+    /** The submenu the rows' New lines are in: File…, Folder…, Project…, Module…; Scratch and Folder over scratches. */
+    static final String NEW_MENU = "New";
+
+    /** The submenu that hands a row to another program ({@code HandOff}), each line's id with the program it names. */
+    static final String OPEN_IN_MENU = "Open in";
+    static final Map<String, App> OPEN_IN = Map.of("open-in-vexplore", App.VEXPLORE,
+            "open-in-mainframe", App.MAINFRAME, "open-in-rasterware", App.RASTERWARE, "open-in-host", App.HOST);
 
     /** How many times a new scratch's row is looked for before it is left unselected. */
     private static final int REVEAL_TRIES = 10;
@@ -130,6 +153,10 @@ final class Navigator {
     private String chipText = NO_FOLDER;
     /** Every folder a listing has shown, so a row's kind is known without the disk. */
     private final Set<Path> folders = new HashSet<>();
+    /** Every path the files tree has been told of since the folder was shown, so new colours reach every row. */
+    private final Set<Path> listed = new HashSet<>();
+    /** What git last said of the folder shown, or null: outside a repository, or before it answers. */
+    private Status git;
     /** The folder shown, or null for none yet. */
     private Path folder;
     /** The file a reveal is walking to, to ring when the walk lands. */
@@ -155,12 +182,17 @@ final class Navigator {
 
         tree = new TreeView<Path>(gui, "files").motion(motion.arrival)
                 .action(MenuAction.of(OPEN, "›", "Open"))
-                .action(MenuAction.of(SHOW, "»", "Show this folder"))
+                .action(MenuAction.of(RUN, "▶", "Run"))
+                .action(MenuAction.of(SHOW, "»", "Set project root"))
+                .action(MenuAction.of("open-in-vexplore", "Vexplore").under(OPEN_IN_MENU))
+                .action(MenuAction.of("open-in-mainframe", "MainFrame").under(OPEN_IN_MENU))
+                .action(MenuAction.of("open-in-rasterware", "Rasterware").under(OPEN_IN_MENU))
+                .action(MenuAction.of("open-in-host", "Host OS").under(OPEN_IN_MENU))
                 .action(MenuAction.of(COPY_PATH, "Copy path"))
-                .action(MenuAction.of(NEW_FILE, "+", "New file here…"))
-                .action(MenuAction.of(NEW_FOLDER, "New folder here…"))
-                .action(MenuAction.of(NEW_PROJECT, "New project here…"))
-                .action(MenuAction.of(NEW_MODULE, "New module here…"))
+                .action(MenuAction.of(NEW_FILE, "+", "File…").under(NEW_MENU))
+                .action(MenuAction.of(NEW_FOLDER, "Folder…").under(NEW_MENU))
+                .action(MenuAction.of(NEW_PROJECT, "Project…").under(NEW_MENU))
+                .action(MenuAction.of(NEW_MODULE, "Module…").under(NEW_MENU))
                 .action(MenuAction.of(ARCHIVE, "Archive this folder…"))
                 .action(MenuAction.of(LINK, "Link to this…"));
         tree.node().width(Length.FILL).height(Length.grow(1f));
@@ -182,8 +214,8 @@ final class Navigator {
         // pasted there, is moved there. The tree refuses in the frame what it can see (onto a file, into itself); what
         // only the disk knows, a name taken there, the job refuses when the move is asked for.
         scratchTree = new TreeView<Path>(gui, "scratches").motion(motion.arrival)
-                .action(MenuAction.of(NEW_SCRATCH, "+", "New scratch here"))
-                .action(MenuAction.of(NEW_FOLDER, "New folder here"))
+                .action(MenuAction.of(NEW_SCRATCH, "+", "Scratch").under(NEW_MENU))
+                .action(MenuAction.of(NEW_FOLDER, "Folder").under(NEW_MENU))
                 .action(MenuAction.of(RENAME, "Rename…"))
                 .action(MenuAction.of(COPY_PATH, "Copy path"))
                 .reorderable(DropEffect.MOVE);
@@ -517,6 +549,10 @@ final class Navigator {
     void show(Path shown) {
         boolean another = !shown.equals(folder);
         folder = shown;
+        if (another) {
+            git = null;   // another folder's colours are not this one's; its own status is asked for
+            listed.clear();
+        }
         naming = Made.FILE;
         namingFrom = null;
         path.text(String.valueOf(shown));
@@ -543,19 +579,101 @@ final class Navigator {
     TreeView.Children children(Listed listed) {
         List<TreeView.Entry> entries = new ArrayList<>(listed.items().size());
         for (Item item : listed.items()) {
+            this.listed.add(item.path());
             TreeView.Entry entry;
             if (item.folder()) {
                 folders.add(item.path());
                 // A module where a project is around, a project where none is: one or the other, never both.
                 entry = TreeView.Entry.branch(item.path(), item.name())
-                        .hides(OPEN, item.inProject() ? NEW_PROJECT : NEW_MODULE);
+                        .hides(OPEN, RUN, item.inProject() ? NEW_PROJECT : NEW_MODULE);
             } else {
                 entry = TreeView.Entry.leaf(item.path(), item.name()).hides(SHOW, NEW_PROJECT, NEW_MODULE, ARCHIVE);
+                // Rasterware opens pictures, videos and folders of them, so another file is not offered to it.
+                FileFamily family = ContentsView.family(item.name());
+                if (family != FileFamily.IMAGES && family != FileFamily.VIDEO) {
+                    entry = entry.hides("open-in-rasterware");
+                }
+                if (!RUNNABLE.contains(extension(item.name()))) {
+                    entry = entry.hides(RUN);
+                }
             }
             // Where a link takes privilege to make, it is not offered: a line that fails for most people teaches nothing.
             entries.add(links ? entry : entry.hides(LINK));
         }
         return new TreeView.Children(treeAddress(), listed.roots() ? null : listed.dir(), entries);
+    }
+
+    // ------------------------------------------------------------------ git's colours
+
+    /**
+     * What git last said of the folder shown ({@code ReadGitStatus}), for the rows' inks: none (null) outside a
+     * repository, and until it answers.
+     */
+    void git(GitStatusRead read) {
+        git = read.root().isPresent() && read.folder().equals(folder)
+                ? Status.parse(read.root().get(), read.text()) : null;
+    }
+
+    /** The ink of every row listed so far, from what git last said: sent when it says something new. */
+    TreeView.Inks inks() {
+        return inks(listed);
+    }
+
+    /** The ink of each row {@code ListFolder} just listed: sent beside the level, which keeps them for its rows. */
+    TreeView.Inks inks(Listed level) {
+        List<Path> paths = new ArrayList<>(level.items().size());
+        for (Item item : level.items()) {
+            paths.add(item.path());
+        }
+        return inks(paths);
+    }
+
+    private TreeView.Inks inks(java.util.Collection<Path> paths) {
+        Map<Object, Role> inks = new java.util.HashMap<>();
+        for (Path p : paths) {
+            inks.put(p, ink(git, p, folders.contains(p)));
+        }
+        return new TreeView.Inks(treeAddress(), inks);
+    }
+
+    /** The ink each state of a path is drawn in. Ignored is only ever an untracked path's: git says so. */
+    private static final Map<Status.State, Role> INKS = Map.of(
+            Status.State.CONFLICTED, Role.DANGER,
+            Status.State.STAGED_AND_MODIFIED, Role.CAUTION,
+            Status.State.MODIFIED, Role.CAUTION,
+            Status.State.STAGED, Role.CAUTION,
+            Status.State.ADDED, Role.SUCCESS,
+            Status.State.UNTRACKED, Role.SUCCESS,
+            Status.State.IGNORED, Role.FAINT);
+
+    /**
+     * What {@code p}'s label is drawn in, from {@code git}: its own state, or that of an untracked or ignored folder it
+     * is in; for a folder git says nothing of itself, the most pressing of what is changed inside it, a conflict, then
+     * a change, then something new. Git's state wins over a {@code .gitignore}, because git reports a path as ignored
+     * only when nothing else is true of it. The ink when git says nothing, or there is no repository.
+     */
+    static Role ink(Status git, Path p, boolean folder) {
+        if (git == null) {
+            return Role.INK;
+        }
+        Status.State own = git.at(p);
+        if (own != null) {
+            return INKS.getOrDefault(own, Role.CAUTION);
+        }
+        if (!folder) {
+            return Role.INK;
+        }
+        Status.Inside inside = git.inside(p);
+        return inside.conflicted() > 0 ? Role.DANGER
+                : inside.changed() > 0 ? Role.CAUTION
+                : inside.untracked() > 0 ? Role.SUCCESS
+                : Role.INK;
+    }
+
+    /** A file name's extension, lower case, or empty for none (a dot file has none). */
+    static String extension(String name) {
+        int dot = name.lastIndexOf('.');
+        return dot <= 0 ? "" : name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
     }
 
     /** An empty top level, for a tree that asks before a folder is shown. */
@@ -653,7 +771,7 @@ final class Navigator {
     }
 
     /**
-     * What the bar's submitted text asks for: a folder when "New folder here…" put it there and it has no separator.
+     * What the bar's submitted text asks for: a folder when New ▸ Folder… put it there and it has no separator.
      * The bar's mind goes back to its own.
      */
     String submitted(String text) {

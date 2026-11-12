@@ -488,7 +488,7 @@ class ViewTest {
     }
 
     /**
-     * Over the scratches, New scratch makes one, which the tree lists and selects; a row's New scratch here makes one
+     * Over the scratches, New scratch makes one, which the tree lists and selects; a row's New ▸ Scratch makes one
      * in its folder. The scratches' own folder being the one shown, its files listed again keep the scratches up.
      */
     @Test
@@ -679,7 +679,7 @@ class ViewTest {
         assertFalse(ws.find(created).dirty(), "what it was made with is what is on disk");
     }
 
-    /** A row's "New folder here…" puts its folder in the path bar, and Enter on a name makes a folder of it. */
+    /** A row's New ▸ Folder… puts its folder in the path bar, and Enter on a name makes a folder of it. */
     @Test
     void newFolderHereMakesAFolderOfTheNameTyped() throws Exception {
         Path sub = Files.createDirectory(dir.resolve("sub")).toAbsolutePath().normalize();
@@ -781,7 +781,7 @@ class ViewTest {
         eventually("the project to be made", () -> Files.isRegularFile(shown.resolve("new-project/pom.xml")));
     }
 
-    /** "New project here…" names one in the bar, selected, and Enter takes the name as it is. */
+    /** New ▸ Project… names one in the bar, selected, and Enter takes the name as it is. */
     @Test
     void newProjectHereMakesAProjectOfTheNameInTheBar() throws Exception {
         Path sub = Files.createDirectory(dir.resolve("sub")).toAbsolutePath().normalize();

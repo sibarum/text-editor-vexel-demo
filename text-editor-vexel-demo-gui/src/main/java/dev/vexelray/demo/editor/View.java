@@ -15,7 +15,11 @@ import dev.vexelray.demo.editor.core.Messages.FrontTab;
 import dev.vexelray.demo.editor.core.Messages.Fronted;
 import dev.vexelray.demo.editor.core.Messages.Format;
 import dev.vexelray.demo.editor.core.Messages.Formatted;
+import dev.vexelray.demo.editor.core.Messages.GitStatusRead;
+import dev.vexelray.demo.editor.core.Messages.GitStatusWanted;
 import dev.vexelray.demo.editor.core.Messages.Go;
+import dev.vexelray.demo.editor.core.Messages.HandTo;
+import dev.vexelray.demo.editor.core.Messages.HandedTo;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
@@ -141,10 +145,17 @@ final class View {
     private final Sender<RunThis> runThis;
     private final Sender<WindowCommand> windows;
     private final Sender<IndexWanted> indexWanted;
+    private final Sender<HandTo> handTo;
+    private final Sender<GitStatusWanted> gitStatusWanted;
+    private final Sender<TreeView.Inks> inks;
+    /** How many times git's status has been asked for: an answer to any but the last is stale, and left. */
+    private long gitAsked;
     /** The folder an index was asked for and has not been answered yet, or null: one at a time. */
     private Path indexing;
     /** What the Run menu was last asked about, so an answer about anything else is left. */
     private RunsWanted runsAsked = new RunsWanted(Optional.empty(), Optional.empty());
+    /** The file a row's Run asked about, to run what is found in it; null when none is waiting. */
+    private Path rowRun;
     /** A declaration to select once its file is in front (go to definition); null when none is wanted. */
     private Reveal reveal;
     /** The last Ctrl+Enter asked, whose text an import is worked out from; null before the first. */
@@ -174,7 +185,11 @@ final class View {
          Sender<Intent> intents, Sender<Picture> picture, Sender<Add> add, Sender<NewScratch> newScratch,
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
-         Sender<WindowCommand> windows, Sender<IndexWanted> indexWanted) {
+         Sender<WindowCommand> windows, Sender<IndexWanted> indexWanted, Sender<HandTo> handTo,
+         Sender<GitStatusWanted> gitStatusWanted, Sender<TreeView.Inks> inks) {
+        this.handTo = handTo;
+        this.gitStatusWanted = gitStatusWanted;
+        this.inks = inks;
         this.windows = windows;
         this.indexWanted = indexWanted;
         this.runsWanted = runsWanted;
@@ -323,6 +338,7 @@ final class View {
         Buffer b = ws.front();
         ui.problem(b == null ? "" : b.problem());
         wantRuns();
+        wantGit();
     }
 
     // ------------------------------------------------------------------ the Run menu
@@ -344,10 +360,29 @@ final class View {
      */
     @Subscribe
     public void runsOffered(RunsOffered m) {
+        if (rowRun != null && m.folder().isEmpty() && m.file().equals(Optional.of(rowRun))) {
+            rowRun(m);
+        }
         if (!m.folder().equals(runsAsked.folder()) || !m.file().equals(runsAsked.file())) {
             return;
         }
         ui.runMenu(m.offers(), runThis, windows);
+    }
+
+    /**
+     * What a row's Run found in its file: the first thing the file itself offers (its {@code main}, itself as a
+     * program, or a Pontif run), run as the Run menu's line would be, saving first; or why nothing was.
+     */
+    private void rowRun(RunsOffered m) {
+        Path file = rowRun;
+        rowRun = null;
+        for (Offer offer : m.offers()) {
+            if (offer.group() == 0) {
+                runThis.send(new RunThis(offer));
+                return;
+            }
+        }
+        ui.status("Nothing to run in " + Picker.label(file), true);
     }
 
     /** F5: the Run menu, dropped from the title bar as a click on it would. */
@@ -387,8 +422,10 @@ final class View {
     public void listed(Listed m) {
         if (m.tree().equals(nav.treeAddress())) {
             children.send(nav.children(m));
+            inks.send(nav.inks(m));
             if (m.roots() && m.dir().equals(nav.folder())) {
                 ui.newMenu(true, m.inProject(), intents);
+                wantGit();   // the folder shown, listed again: what git says of it may have changed too
             }
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             children.send(nav.picker().children(m));
@@ -873,6 +910,12 @@ final class View {
         }
         if (m.action().equals(Navigator.OPEN)) {
             open.send(new Open(p, true));
+        } else if (m.action().equals(Navigator.RUN)) {
+            // Asked about the file alone, so what comes back is what the file itself offers (rowRun).
+            rowRun = p;
+            runsWanted.send(new RunsWanted(Optional.empty(), Optional.of(p)));
+        } else if (Navigator.OPEN_IN.containsKey(m.action())) {
+            handTo.send(new HandTo(p, nav.isFolder(p), Navigator.OPEN_IN.get(m.action())));
         } else if (m.action().equals(Navigator.SHOW)) {
             go.send(new Go(p.toString()));
         } else if (m.action().equals(Navigator.COPY_PATH)) {
@@ -899,6 +942,35 @@ final class View {
             nav.startNew(beside, Made.LINK, Picker.label(p) + "-link", p);
             ui.status("Name the link to " + Picker.label(p) + ", then Enter", false);
         }
+    }
+
+    // ------------------------------------------------------------------ git's colours
+
+    /**
+     * Ask git what it says of the folder shown ({@code ReadGitStatus}): when its top level is listed, which is when it
+     * is shown and whenever the editor says its files changed, and after every caption, which follows a save.
+     */
+    private void wantGit() {
+        if (nav.folder() != null) {
+            gitStatusWanted.send(new GitStatusWanted(nav.folder(), ++gitAsked));
+        }
+    }
+
+    /** What git says: every row listed so far takes its ink from it. An answer to an older question is left. */
+    @Subscribe
+    public void gitStatusRead(GitStatusRead m) {
+        if (m.asked() != gitAsked) {
+            return;
+        }
+        nav.git(m);
+        inks.send(nav.inks());
+    }
+
+    /** What a row's Open in came to ({@code HandOff}): said in the status line either way. */
+    @Subscribe
+    public void handedTo(HandedTo m) {
+        String name = Picker.label(m.path());
+        ui.status(m.problem() == null ? "Opened " + name + " in " + m.app().title() : m.problem(), m.problem() != null);
     }
 
     /**
