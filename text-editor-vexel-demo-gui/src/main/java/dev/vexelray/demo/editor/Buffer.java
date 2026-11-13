@@ -328,7 +328,8 @@ final class Buffer implements AutoCloseable {
     }
 
     private boolean isProblem(Span s) {
-        return s.underline() && problemGround.equals(s.bg());
+        // A span's colours are paints now; this one was written as a colour, so it is the fixed paint of it.
+        return s.underline() && dev.vexelray.gui.core.style.Paint.of(problemGround).equals(s.bg());
     }
 
     private static String firstLine(String message) {

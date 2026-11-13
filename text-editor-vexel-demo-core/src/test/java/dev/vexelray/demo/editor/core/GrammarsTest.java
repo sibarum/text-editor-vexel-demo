@@ -68,7 +68,7 @@ final class GrammarsTest {
         }
         for (Span span : GRAMMARS.spans(scope(fileName), source)) {
             if (span.start() == start && span.end() == start + needle.length()) {
-                return span.fg();
+                return dev.vexelray.gui.draw.Ink.fixedOf(span.fg());
             }
         }
         return null;
@@ -85,7 +85,7 @@ final class GrammarsTest {
         }
         for (Span span : GRAMMARS.spans(scope(fileName), source)) {
             if (span.covers(at)) {
-                return span.fg();
+                return dev.vexelray.gui.draw.Ink.fixedOf(span.fg());
             }
         }
         return null;
