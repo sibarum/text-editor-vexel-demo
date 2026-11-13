@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.sibarum.suite.tty.TerminalColors;
 import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.gui.core.layout.Length;
@@ -347,6 +348,15 @@ final class Look {
         Role role = p -> light(p) ? l : d;
         return new Grammars.Colour(scope, role);
     }
+
+    /**
+     * What the console's terminals are drawn in: the card and the ink as their ground and default text, and the sixteen
+     * ANSI colours a program names, Campbell's on the dark page as before and the stack's light set on the light one
+     * (each held to 4.5:1 on the light card, LookTest). Paints, so a run's output already on screen follows a change of
+     * look and fades with the window.
+     */
+    static final TerminalColors TERMINAL = TerminalColors.following(TerminalColors.CAMPBELL, TerminalColors.LIGHT)
+            .ground(CARD, Role.INK);
 
     private Look() {
     }

@@ -108,6 +108,34 @@ class LookTest {
         }
     }
 
+    /**
+     * The sixteen ANSI colours a build or a test run writes in, on the console's card in the light look: each read as
+     * text, since programs write in every one. Not held in the dark look, which is Campbell's as it always was
+     * ({@link #theDarkConsoleIsAsItWas}).
+     */
+    @Test
+    void everyAnsiColourReadsInTheLightConsole() {
+        Color card = Look.LIGHT.color(Look.CARD);
+        assertEquals(card, Look.TERMINAL.background().in(Look.LIGHT), "the console's ground is the card");
+        for (int n = 0; n < 16; n++) {
+            double ratio = contrast(Look.TERMINAL.ansi(n).in(Look.LIGHT), card);
+            assertTrue(ratio >= 4.5, "ANSI colour " + n + " is " + String.format("%.2f", ratio)
+                    + ":1 on the light console's card; it needs 4.5:1");
+        }
+        assertTrue(contrast(Look.TERMINAL.foreground().in(Look.LIGHT), card) >= 7.0, "the console's default text");
+    }
+
+    /** The dark console is the one it always was: the card, the ink, and Campbell's sixteen. */
+    @Test
+    void theDarkConsoleIsAsItWas() {
+        assertEquals(Look.DARK.color(Look.CARD), Look.TERMINAL.background().in(Look.DARK));
+        assertEquals(Look.DARK.color(Role.INK), Look.TERMINAL.foreground().in(Look.DARK));
+        for (int n = 0; n < 16; n++) {
+            assertEquals(Color.rgb(dev.sibarum.suite.tty.Terminal.Palette.xterm(n)), Look.TERMINAL.ansi(n).in(Look.DARK),
+                    "ANSI colour " + n + " in the dark look");
+        }
+    }
+
     /** The dark look is the design's, measured: switching looks must never have moved it. */
     @Test
     void theDarkLookIsTheDesigns() {

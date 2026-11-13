@@ -70,8 +70,6 @@ final class Console {
     private final Gui gui;
     private final GlyphLayout glyphs;
     private final Tabs tabs;
-    private int background;
-    private int foreground;
     private int faint;
     private int accent;
     private int danger;
@@ -86,8 +84,9 @@ final class Console {
         this.gui = window.gui();
         this.glyphs = fonts.layout(fonts.face(Type.MONO));
         colours();
-        // A terminal takes its colours as numbers, not roles, so it is told again when the look changes.
-        Seams.of(gui).onTheme(this::retheme);
+        // The console's own lines are written as 24-bit escapes, so the next ones are worked out again when the look
+        // changes. The terminals themselves take paints (Look.TERMINAL) and follow it with nothing run.
+        Seams.of(gui).onTheme(this::colours);
 
         tabs = new Tabs(gui).name("runs").closable(false)
                 .action(MenuAction.of(STOP, "Stop"))
@@ -115,28 +114,15 @@ final class Console {
     }
 
     /**
-     * The terminal's colours in the tree's look, as the numbers {@link TerminalScreen#colors} and the console's own
-     * escapes take. Worked out from the theme, so redone on every change of look ({@link #retheme}).
+     * The colours of the console's own lines (what ran, and how it ended) in the tree's look, as the numbers their
+     * 24-bit escapes take. Worked out from the theme, so redone on every change of look; lines already written keep the
+     * look they were written in (framework-notes FN-18).
      */
     private void colours() {
         Theme theme = gui.theme();
-        background = rgb(theme.color(Look.CARD));
-        foreground = rgb(theme.color(Role.INK));
         faint = rgb(theme.color(Role.FAINT));
         accent = rgb(theme.color(Role.ACCENT));
         danger = rgb(theme.color(Role.DANGER));
-    }
-
-    /**
-     * The look changed: every run's terminal takes the new default colours, so what a program wrote without colours of
-     * its own follows. What it wrote in colours of its own keeps them, as do the console's own lines already written
-     * (framework-notes FN-18): a terminal's cells hold numbers.
-     */
-    private void retheme() {
-        colours();
-        for (Entry e : entries) {
-            e.screen.colors(background, foreground);
-        }
     }
 
     Window window() {
@@ -160,7 +146,7 @@ final class Console {
         // Always as if a Windows pseudoconsole were behind it: whether one is, is the pty platform's to know and it does
         // not say (framework-notes FN-7). Elsewhere the cost is a fit that stops a row short now and then.
         TerminalScreen screen = new TerminalScreen(gui, glyphs, Type.MONO, FONT_PX).name("run-" + run)
-                .colors(background, foreground).pseudoconsole();
+                .colors(Look.TERMINAL).pseudoconsole();
         e = new Entry(run, screen);
         tabs.add("Run " + run, screen.node());
         entries.add(e);

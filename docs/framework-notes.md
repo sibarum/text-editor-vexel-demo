@@ -225,3 +225,12 @@ in; and the node's background is set with a fixed `Color`, so it jumps rather th
 framework could do: let `TerminalScreen.colors` take paints, keep the default colours as "default" in the cells rather
 than resolving them at write time, and offer a few named colours (faint, accent, danger) a feed can ask for by name, as
 a span takes a role.
+
+**Fixed upstream, in part** (vex-suite-common, adopted 2026-11-13): a cell keeps the colour a program named (the
+default, a palette number, or a 24-bit colour marked as one), and `TerminalScreen.colors(TerminalColors)` takes the
+sixteen ANSI colours, the ground, the default text and the selection as paints, resolved each frame and faded with the
+tree. The console hands every run's screen `Look.TERMINAL` once: the card and the ink, Campbell's sixteen on the dark
+page and the stack's light set on the light one, each held to 4.5:1 on the light card in `LookTest`. A run's output
+already on screen, coloured or not, now follows the look, and the background fades. Still open: the console's own
+lines are 24-bit escapes in the theme's faint, accent and danger, so a line already written keeps its look; the named
+colours a feed could ask for are not there yet.
