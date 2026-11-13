@@ -12,8 +12,11 @@ import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.SymbolsFound;
 import dev.vexelray.demo.editor.core.Scratches;
+import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
+import dev.vexelray.gui.icons.Icon;
+import dev.vexelray.gui.icons.IconView;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
@@ -158,6 +161,11 @@ final class Navigator {
     private final Node symbolNote;
     private final Button indexButton;
     private final Node symbolPane;
+    /**
+     * What stands in the chip's place while Symbols is up: its name and icon in violet, and how to leave. Not the chip,
+     * whose pressed look is the theme's teal, which is Open's: a mode is told by its colour, so Symbols wears its own.
+     */
+    private final Node symbolHeader;
     /** The declarations listed now. */
     private List<Declaration> symbols = List.of();
     /** The scratch or folder the name field is for, or null while it is put away. */
@@ -266,8 +274,21 @@ final class Navigator {
                 nodes.text(detail(d)).font(Type.UI).textSize(Type.SMALL)
                         .textColor(gui.theme().color(Role.DIM))
                         .wordWrap(false).width(Length.FILL).ellipsis(Ellipsis.END)))
-                .name("symbol-list");
+                .name("symbol-list")
+                .looks(Look.SEARCH_SELECTED, null);
         symbolList.node().width(Length.FILL).height(Length.grow(1f));
+        Color violet = gui.theme().color(Look.SEARCHING_RIM);
+        symbolHeader = gui.row()
+                .width(Length.FILL)
+                .gap(Type.TIGHT)
+                .alignItems(AlignItems.CENTER)
+                .children(IconView.of(gui, Icon.SEARCH).size(Length.rem(1.125f)).tint(violet).node(),
+                        gui.text(SYMBOLS).font(Type.UI).textColor(violet).width(Length.grow(1f))
+                                .wordWrap(false).ellipsis(Ellipsis.END),
+                        gui.text("Esc").font(Type.UI).textSize(Type.SMALL).wordWrap(false)
+                                .textColor(gui.theme().color(Role.DIM)));
+        symbolHeader.visible(false);
+        gui.landmark(Landmarks.SYMBOL_MODE, symbolHeader);
         gui.landmark(Landmarks.SYMBOL_LIST, symbolList.node());
         symbolNote = gui.text(TYPE_A_NAME).font(Type.UI).textSize(Type.SMALL)
                 .textColor(gui.theme().color(Role.DIM));
@@ -293,17 +314,21 @@ final class Navigator {
                 .padding(Type.GAP, Type.GAP)
                 .corner(Type.CORNER)
                 .alignItems(AlignItems.STRETCH)
-                .children(chip.node(), path.node(), tree.node(), picker.node(), scratchPane, symbolPane);
+                .children(chip.node(), symbolHeader, path.node(), tree.node(), picker.node(), scratchPane, symbolPane);
         paint();
     }
 
     /** What the chip says while no folder is shown. */
     static final String NO_FOLDER = "No folder";
 
-    /** The card's colours for where it is: the panel, steeped in the accent for Open, edged in it for the scratches. */
+    /**
+     * The card's colours for where it is: the panel for the files, steeped in the accent for Open, edged in it for the
+     * scratches, and steeped and edged in violet for Symbols, the one mode in a hue of its own.
+     */
     private void paint() {
-        root.background(gui.theme().color(place == Place.OPEN ? Look.PICKING : Look.CARD))
-                .border(Type.RULE, gui.theme().color(place == Place.FILES ? Look.RIM : Look.PICKING_RIM));
+        Role fill = place == Place.OPEN ? Look.PICKING : place == Place.SYMBOLS ? Look.SEARCHING : Look.CARD;
+        Role edge = place == Place.FILES ? Look.RIM : place == Place.SYMBOLS ? Look.SEARCHING_RIM : Look.PICKING_RIM;
+        root.background(gui.theme().color(fill)).border(Type.RULE, gui.theme().color(edge));
     }
 
     /**
@@ -315,8 +340,13 @@ final class Navigator {
             return;
         }
         place = to;
-        chip.show(to != Place.FILES);
-        chip.label(chipLabel());
+        // Symbols hides the chip as it is, so it fades out as drawn, and changes it only as it comes back.
+        chip.node().visible(to != Place.SYMBOLS);
+        if (to != Place.SYMBOLS) {
+            chip.show(to != Place.FILES);
+            chip.label(chipLabel());
+        }
+        symbolHeader.visible(to == Place.SYMBOLS);
         path.node().visible(to == Place.FILES || to == Place.OPEN);
         tree.node().visible(to == Place.FILES);
         picker.node().visible(to == Place.OPEN);
@@ -329,7 +359,7 @@ final class Navigator {
         }
         paint();
         if (to != Place.FILES) {
-            motion.cues.play(root, Cue.scanline(gui.theme().color(Role.ACCENT)));
+            motion.cues.play(root, Cue.scanline(gui.theme().color(to == Place.SYMBOLS ? Look.SEARCHING_RIM : Role.ACCENT)));
         }
     }
 
@@ -362,7 +392,7 @@ final class Navigator {
 
     // ------------------------------------------------------------------ symbols
 
-    /** What the chip says while Symbols is up. */
+    /** What Symbols' header says. */
     static final String SYMBOLS = "Symbols";
 
     /** What the note says before anything is typed. */
@@ -689,9 +719,9 @@ final class Navigator {
         return chip.address();
     }
 
-    /** What the chip says: the folder shown's name, Scratches while they are over its files, or Symbols. */
+    /** What the chip says: the folder shown's name, or Scratches while they are over its files. */
     String chipLabel() {
-        return scratching() ? Scratches.NAME : place == Place.SYMBOLS ? SYMBOLS : chipText;
+        return scratching() ? Scratches.NAME : chipText;
     }
 
     Node node() {

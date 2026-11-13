@@ -129,6 +129,28 @@ final class Look {
     /** The hairline round the navigator in Open: the accent itself. */
     static final Role PICKING_RIM = p -> p.accent().toColor();
 
+    /**
+     * Symbols' hue, a violet: the one mode that is not the accent's, so the navigator searching reads as neither editing
+     * (neutral) nor Open (teal) at a glance. Far round the wheel from the teal accent ({@code -153}) and the red of
+     * danger ({@code 22}), and clear of the code's blue keywords, which sit near {@code 265}.
+     */
+    private static final double SEARCH_HUE = 318.0;
+
+    /** The navigator in Symbols: the panel's level steeped in violet, as {@link #PICKING} is in teal for Open. */
+    static final Role SEARCHING = p -> {
+        Oklab level = Oklab.of(p.surface(2));
+        return Oklab.polar(level.l(), 0.050, SEARCH_HUE).toColor();
+    };
+
+    /** The hairline round the navigator in Symbols, its header and its icon: the violet at full voice. */
+    static final Role SEARCHING_RIM = p -> Oklab.polar(0.74, 0.13, SEARCH_HUE).toColor();
+
+    /** A selected declaration in Symbols: two steps above {@link #SEARCHING}, in its hue, where elsewhere it is teal. */
+    static final Role SEARCH_SELECTED = p -> {
+        Oklab level = Oklab.of(p.surface(4));
+        return Oklab.polar(level.l(), 0.060, SEARCH_HUE).toColor();
+    };
+
     /** A tile or a bar's track in Open's picture: a step above {@link #PICKING}, in the same hue. */
     static final Role TILE = p -> {
         Oklab level = Oklab.of(p.surface(3));

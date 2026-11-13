@@ -115,7 +115,8 @@ for meanwhile run after (the log says each). To a script the menu is `titlebar-m
 `menu.index-this-project`.
 
 **Symbols** (Ctrl+T, or View → Go to symbol…) reads that index. A name field and a list take the files' place in the
-navigator, and as you type, the list shows the project's declarations whose names fit (`FindSymbols`): an exact match
+navigator, which turns violet, rim, fill, header and selected row, so it reads at a glance as neither the files
+(neutral) nor Open (teal); the header, with its search icon, stands where the folder chip was. As you type, the list shows the project's declarations whose names fit (`FindSymbols`): an exact match
 first, then a prefix, a substring, camel humps (`GC` finds `GreetingCard`) and a subsequence, 200 at most. Each row is
 the name over what it is and where. Down moves into the list; Enter, or a click, opens the file with the name selected
 and puts the files back; Ctrl+T again comes back to what was typed. A project not indexed yet says it is being
@@ -123,7 +124,8 @@ indexed, and asks again when it is; one that could not be says so, with an **Ind
 showing an empty list. Only the project's own sources are listed: a library's declarations wait for read-only tabs.
 The index is held in memory once built or first read, so a keystroke costs a search, not a disk read; it is as fresh
 as the last save. To a script: `symbols` (the field),
-`symbols.list`, `symbols.note` (the line under the list, "12 declarations", worth an `await`) and `symbols.index`.
+`symbols.list`, `symbols.note` (the line under the list, "12 declarations", worth an `await`), `symbols.index`, and
+`symbols.mode`, the header, there only while Symbols is up.
 
 **View**, after New, has word wrap, the navigator, Go to symbol…, the formatted view and zoom, each with its chord beside it.
 

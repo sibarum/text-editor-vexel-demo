@@ -54,6 +54,8 @@ final class Landmarks {
     static final String SYMBOL_LIST = "symbols.list";
     static final String SYMBOL_NOTE = "symbols.note";
     static final String INDEX_PROJECT = "symbols.index";
+    /** Symbols' header, in the chip's place while it is up: there and shown only in Symbols. */
+    static final String SYMBOL_MODE = "symbols.mode";
 
     /** Open's picture of a folder, where the editor stands, and its list of the folder's files. */
     static final String PREVIEW = "preview";

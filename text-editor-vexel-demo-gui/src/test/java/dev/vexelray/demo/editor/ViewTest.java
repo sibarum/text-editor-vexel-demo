@@ -796,7 +796,7 @@ class ViewTest {
         tell(Intent.Command.TOGGLE_SYMBOLS);
         eventually("an answer", () -> !found.isEmpty());
         assertTrue(nav.symbolsUp());
-        assertEquals(Navigator.SYMBOLS, nav.chipLabel());
+        assertEquals("p", nav.chipLabel(), "the chip, hidden under Symbols' header, is left as it was");
         assertTrue(found.getLast().indexed());
         assertEquals("p has no index yet",
                 Navigator.note(new Messages.SymbolsFound(root, "", 1, false, List.of(), 0, "")));
