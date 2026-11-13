@@ -53,6 +53,7 @@ import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Declaration;
 import dev.vexelray.demo.editor.core.Messages.Status;
+import dev.vexelray.demo.editor.core.Messages.Written;
 import dev.vexelray.demo.editor.core.Messages.SymbolsFound;
 import dev.vexelray.demo.editor.core.Messages.SymbolsWanted;
 import dev.vexelray.demo.editor.core.FindSymbols;
@@ -79,8 +80,12 @@ import sibarum.tactroller.api.Modifier;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The view: what the editor decided, shown, and what the person did, told. A {@code @View}, so it runs on the GUI
@@ -158,8 +163,17 @@ final class View {
     private long gitAsked;
     /** How many times Symbols has asked: an answer to any but the last is stale, and left. */
     private long symbolsAsked;
-    /** The folder an index was asked for and has not been answered yet, or null: one at a time. */
+    /**
+     * What is being indexed and has not been answered yet: a project, or a folder in none known yet; null when nothing
+     * is. One at a time, since an index holds an offload thread for seconds.
+     */
     private Path indexing;
+    /** What to index once that is answered, in order; one that changed while it was being indexed is here again. */
+    private final Set<Path> indexQueue = new LinkedHashSet<>();
+    /** What the person asked to index: its answer is said on the status line. One indexed unasked is quiet. */
+    private final Set<Path> indexAsked = new HashSet<>();
+    /** The projects indexed in this run, so a folder or a file in one is indexed as that project. */
+    private final Set<Path> projects = new HashSet<>();
     /** What the Run menu was last asked about, so an answer about anything else is left. */
     private RunsWanted runsAsked = new RunsWanted(Optional.empty(), Optional.empty());
     /** The file a row's Run asked about, to run what is found in it; null when none is waiting. */
@@ -450,6 +464,9 @@ final class View {
             if (m.roots() && m.dir().equals(nav.folder())) {
                 ui.newMenu(true, m.inProject(), intents);
                 wantGit();   // the folder shown, listed again: what git says of it may have changed too
+                if (m.inProject()) {
+                    index(m.dir(), false);   // and its project's index, which Symbols reads, may have too
+                }
             }
         } else if (m.tree().equals(nav.picker().treeAddress())) {
             children.send(nav.picker().children(m));
@@ -459,19 +476,76 @@ final class View {
         }
     }
 
-    /** An index built, or why not: said on the status line, which is all that hears of it until something reads it. */
+    /**
+     * An index built, or why not: said on the status line if the person asked for it, and Symbols, if it is up, asks
+     * again of it. Then the next one waiting is begun.
+     */
     @Subscribe
     public void indexed(Indexed m) {
+        boolean asked = indexing != null && indexAsked.remove(indexing);
         indexing = null;
+        if (m.problem().isEmpty()) {
+            projects.add(m.project());
+        }
         if (nav.symbolsUp()) {
             askSymbols(nav.symbolText());   // what was typed, asked again of the index just built
         }
         String name = Picker.label(m.project());
-        if (!m.problem().isEmpty()) {
+        if (!asked) {
+            // Indexed unasked, on showing a folder or saving a source: quiet, as a save's colours are. The log has it.
+        } else if (!m.problem().isEmpty()) {
             ui.status("Not indexed: " + m.problem(), true);
         } else {
             ui.status("Indexed " + name + ": " + m.summary()
                     + (m.unreadable() == 0 ? "" : ", " + m.unreadable() + " not readable"), false);
+        }
+        Iterator<Path> next = indexQueue.iterator();
+        if (next.hasNext()) {
+            Path folder = next.next();
+            next.remove();
+            beginIndex(folder);
+        }
+    }
+
+    /**
+     * Index the project {@code folder} is in, now or after the one under way; {@code asked}: the person asked, so the
+     * answer is said. A folder in a project already indexed is asked as that project, so a burst of saves across its
+     * packages is one index after the one under way, not one each. One asked for while it is being indexed is asked
+     * again after, since what changed may have been read before it did.
+     */
+    private void index(Path folder, boolean asked) {
+        Path key = folder.toAbsolutePath().normalize();
+        for (Path project : projects) {
+            if (key.startsWith(project)) {
+                key = project;
+                break;
+            }
+        }
+        if (asked) {
+            indexAsked.add(key);
+        }
+        if (indexing == null) {
+            beginIndex(key);
+        } else {
+            indexQueue.add(key);
+        }
+    }
+
+    private void beginIndex(Path key) {
+        indexing = key;
+        indexWanted.send(new IndexWanted(key));
+    }
+
+    /**
+     * A file written: a Java source or a pom changes what the project declares, so its project is indexed again. Heard
+     * beside the editor, which says the save on the status line.
+     */
+    @Subscribe
+    public void written(Written m) {
+        String name = String.valueOf(m.path().getFileName());
+        if (m.problem().isEmpty() && m.path().getParent() != null
+                && (name.endsWith(".java") || name.equals("pom.xml"))) {
+            index(m.path().getParent(), false);
         }
     }
 
@@ -707,11 +781,18 @@ final class View {
         }
     }
 
-    /** What {@code FindSymbols} found, if it answers the last question: listed. */
+    /**
+     * What {@code FindSymbols} found, if it answers the last question: listed. No index yet while one is being built
+     * says that, rather than offering to build another; Symbols asks again when it lands.
+     */
     @Subscribe
     public void symbolsFound(SymbolsFound m) {
-        if (m.asked() == symbolsAsked) {
-            nav.symbolsFound(m);
+        if (m.asked() != symbolsAsked) {
+            return;
+        }
+        nav.symbolsFound(m);
+        if (!m.indexed() && m.problem().isEmpty() && indexing != null) {
+            nav.indexing(m.project());
         }
     }
 
@@ -1328,19 +1409,19 @@ final class View {
         }
     }
 
-    /** New → Index this project: index the project the folder shown is in, one index at a time. */
+    /**
+     * New → Index this project: index the project the folder shown is in, after the one under way if one is, and say
+     * so when it lands.
+     */
     void indexHere() {
         Path in = nav.folder();
         if (in == null) {
             ui.status("Open a folder first", true);
-        } else if (indexing != null) {
-            ui.status("Already indexing " + Picker.label(indexing), true);
-        } else {
-            indexing = in;
-            indexWanted.send(new IndexWanted(in));
-            nav.indexing(in);
-            ui.status("Indexing " + Picker.label(in) + "…", false);
+            return;
         }
+        index(in, true);
+        nav.indexing(in);
+        ui.status("Indexing " + Picker.label(in) + "…", false);
     }
 
     /** Whether documents wrap their long lines now: Alt+Z flips this. */

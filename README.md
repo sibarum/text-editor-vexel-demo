@@ -109,17 +109,20 @@ at or above the folder. Each puts its name in the path bar, and Enter makes it. 
 and use of a name in the whole reactor around the folder, and what its libraries export, from their sources jars or
 decompiled. It is kept in `~/.text-editor-vexel-demo/index`, one file per project, so indexing again rereads only
 what changed, and libraries go through Concordance's shared cache (`~/.concordance/jars`). The status line says what
-it holds. To a script the menu is `titlebar-menu.new`, with `menu.file`, `menu.project`, `menu.submodule` and
+it holds. Asking is seldom needed: a folder in a project is indexed when it is shown and whenever its files change,
+and its project again after each save of a `.java` file or a `pom.xml`, quietly, one index at a time, with any asked
+for meanwhile run after (the log says each). To a script the menu is `titlebar-menu.new`, with `menu.file`, `menu.project`, `menu.submodule` and
 `menu.index-this-project`.
 
 **Symbols** (Ctrl+T, or View → Go to symbol…) reads that index. A name field and a list take the files' place in the
 navigator, and as you type, the list shows the project's declarations whose names fit (`FindSymbols`): an exact match
 first, then a prefix, a substring, camel humps (`GC` finds `GreetingCard`) and a subsequence, 200 at most. Each row is
 the name over what it is and where. Down moves into the list; Enter, or a click, opens the file with the name selected
-and puts the files back; Ctrl+T again comes back to what was typed. A project never indexed says so, with an **Index
-this project** button, rather than showing an empty list. Only the project's own sources are listed: a library's
-declarations wait for read-only tabs. The index is held in memory once built or first read, so a keystroke costs a
-search, not a disk read; it is as fresh as the last time it was built. To a script: `symbols` (the field),
+and puts the files back; Ctrl+T again comes back to what was typed. A project not indexed yet says it is being
+indexed, and asks again when it is; one that could not be says so, with an **Index this project** button, rather than
+showing an empty list. Only the project's own sources are listed: a library's declarations wait for read-only tabs.
+The index is held in memory once built or first read, so a keystroke costs a search, not a disk read; it is as fresh
+as the last save. To a script: `symbols` (the field),
 `symbols.list`, `symbols.note` (the line under the list, "12 declarations", worth an `await`) and `symbols.index`.
 
 **View**, after New, has word wrap, the navigator, Go to symbol…, the formatted view and zoom, each with its chord beside it.

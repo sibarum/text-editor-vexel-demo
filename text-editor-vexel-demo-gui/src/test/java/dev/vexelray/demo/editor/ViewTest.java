@@ -758,33 +758,48 @@ class ViewTest {
         }
     }
 
-    /**
-     * Ctrl+T: Symbols says a project has no index, its button builds one, and then what is typed lists declarations, and
-     * Enter opens the best one's file with its name selected and puts the files back.
-     */
-    @Test
-    void symbolsFindsADeclarationAndEnterGoesToIt() throws Exception {
+    /** A Maven project with one source, {@code demo/Greeter.java}, at {@code dir/p}; answers the source. */
+    private Path greeterProject() throws Exception {
         Path root = dir.resolve("p").toAbsolutePath().normalize();
         Path source = Files.createDirectories(root.resolve("src/main/java/demo"));
         Files.writeString(root.resolve("pom.xml"),
                 "<project><groupId>x</groupId><artifactId>p</artifactId><version>1</version></project>\n");
-        Path greeter = Files.writeString(source.resolve("Greeter.java"), "package demo;\n\npublic class Greeter {\n"
+        return Files.writeString(source.resolve("Greeter.java"), "package demo;\n\npublic class Greeter {\n"
                 + "    @Deprecated\n    public String greet() {\n        return \"hello\";\n    }\n}\n");
-        List<Messages.SymbolsFound> found = new CopyOnWriteArrayList<>();
-        shell.bus().subscribe(Messages.SYMBOLS_FOUND_TOPIC, found::add);
+    }
+
+    /** Show {@code root} and wait for the index showing it begins, which says nothing on the status line. */
+    private Navigator shownAndIndexed(Path root, List<Indexed> indexed) throws InterruptedException {
+        shell.bus().subscribe(Messages.INDEXED_TOPIC, indexed::add);
         shell.bus().publish(Messages.GO_TOPIC, new Go(root.toString()));
         Navigator nav = wiring.ui().navigator();
         eventually("the project shown", () -> root.equals(nav.folder()));
+        eventually("indexed unasked", () -> !indexed.isEmpty());
+        assertEquals(root, indexed.getFirst().project());
+        assertTrue(said.stream().noneMatch(s -> s instanceof Status st && st.message().startsWith("Indexed")),
+                "an index nobody asked for is quiet");
+        return nav;
+    }
+
+    /**
+     * Ctrl+T: Symbols lists the declarations what is typed names, in the index showing the project built, and Enter
+     * opens the best one's file with its name selected and puts the files back.
+     */
+    @Test
+    void symbolsFindsADeclarationAndEnterGoesToIt() throws Exception {
+        Path greeter = greeterProject();
+        Path root = dir.resolve("p").toAbsolutePath().normalize();
+        List<Messages.SymbolsFound> found = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.SYMBOLS_FOUND_TOPIC, found::add);
+        Navigator nav = shownAndIndexed(root, new CopyOnWriteArrayList<>());
 
         tell(Intent.Command.TOGGLE_SYMBOLS);
         eventually("an answer", () -> !found.isEmpty());
         assertTrue(nav.symbolsUp());
         assertEquals(Navigator.SYMBOLS, nav.chipLabel());
-        assertFalse(found.getLast().indexed());
-        assertEquals("p has no index yet", Navigator.note(found.getLast()));
-
-        shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.indexButtonAddress()));
-        eventually("asked again once indexed", () -> found.size() >= 2 && found.getLast().indexed());
+        assertTrue(found.getLast().indexed());
+        assertEquals("p has no index yet",
+                Navigator.note(new Messages.SymbolsFound(root, "", 1, false, List.of(), 0, "")));
 
         shell.bus().publish(TextField.CHANGED, new TextField.Changed(nav.symbolFieldAddress(), "greet", 1));
         eventually("greet listed", () -> nav.symbolChosen() != null && nav.symbolChosen().name().equals("greet"));
@@ -795,6 +810,30 @@ class ViewTest {
         Buffer b = ws.find(greeter);
         eventually("the name selected", () -> b.field.caret() == b.field.text().indexOf("greet()") + "greet".length());
         assertFalse(nav.symbolsUp(), "going there puts the files back");
+    }
+
+    /** Saving a Java source indexes its project again, so what it now declares is found, and still quietly. */
+    @Test
+    void savingASourceIndexesItsProjectAgain() throws Exception {
+        Path greeter = greeterProject();
+        Path root = dir.resolve("p").toAbsolutePath().normalize();
+        List<Indexed> indexed = new CopyOnWriteArrayList<>();
+        Navigator nav = shownAndIndexed(root, indexed);
+        Buffer b = opened(greeter);
+        b.field.caret(b.field.text().lastIndexOf('}'));
+        b.field.insert("    void wave() {\n    }\n");
+        eventually("unsaved", b::dirty);
+        tell(Intent.Command.SAVE_FRONT);
+        eventually("indexed again", () -> indexed.size() >= 2);
+        assertTrue(said.stream().noneMatch(s -> s instanceof Status st && st.message().startsWith("Indexed")));
+
+        List<Messages.SymbolsFound> found = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.SYMBOLS_FOUND_TOPIC, found::add);
+        tell(Intent.Command.TOGGLE_SYMBOLS);
+        shell.bus().publish(TextField.CHANGED, new TextField.Changed(nav.symbolFieldAddress(), "wave", 1));
+        eventually("wave found", () -> !found.isEmpty() && "wave".equals(found.getLast().typed())
+                && !found.getLast().rows().isEmpty());
+        assertEquals("wave", found.getLast().rows().getFirst().name());
     }
 
     /** New → File… and Project… name their thing in the folder shown, from wherever the navigator was. */
