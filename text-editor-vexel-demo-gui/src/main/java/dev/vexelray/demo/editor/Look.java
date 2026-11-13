@@ -31,7 +31,8 @@ import java.util.List;
  * <p>Five things in the design are not where the framework's roles put them, and are overridden by name in
  * {@link #THEME} rather than absorbed: a selected row is tinted with the accent, a scrollbar thumb is quiet, every line
  * is one step above the card it bounds, a well (a field, a tree set into a card) is cut down to the page rather than
- * below it, and the focus ring is a quiet teal rather than the full accent.
+ * below it, and the focus ring is a quiet neutral grey rather than the accent, since colour here says which mode the
+ * navigator is in.
  */
 final class Look {
 
@@ -94,12 +95,15 @@ final class Look {
     static final Role THUMB = p -> p.surface(5);
 
     /**
-     * The ring round whatever has the keyboard: the accent's hue at under half its chroma, three tenths of the way
-     * from the page to the ink. The full accent round a whole card pulled the eye off the text (found in 0.1).
+     * The ring round whatever has the keyboard: a neutral grey, the page's hue at no chroma, four tenths of the way
+     * from the page to the ink. Not teal: the accent's hue steeps the navigator in Open, and violet is Symbols', so a
+     * coloured ring read as a mode the window was not in (found 2026-11-13). Not loud either: the full accent round a
+     * whole card pulled the eye off the text (found in 0.1). Symbols rings its own controls in its violet
+     * ({@link #SEARCH_FOCUS}), since there the mode's colour is the right thing to say.
      */
     static final Role FOCUS = p -> {
-        double l = p.page().l() + 0.30 * (p.ink().l() - p.page().l());
-        return Oklab.polar(l, 0.0400, p.accent().hueDegrees()).toColor();
+        double l = p.page().l() + 0.40 * (p.ink().l() - p.page().l());
+        return Oklab.polar(l, 0.0, p.page().hueDegrees()).toColor();
     };
 
     /**
