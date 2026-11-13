@@ -23,12 +23,16 @@ import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Messages.Open;
 import dev.vexelray.demo.editor.core.Messages.Plain;
+import dev.vexelray.demo.editor.core.Messages.ProjectFound;
+import dev.vexelray.demo.editor.core.Messages.ProjectWanted;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recall;
 import dev.vexelray.demo.editor.core.Messages.Recalled;
 import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
+import dev.vexelray.demo.editor.core.Messages.RevealAsked;
+import dev.vexelray.demo.editor.core.Messages.RevealRow;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
 import dev.vexelray.demo.editor.core.Messages.ScratchMade;
@@ -100,7 +104,8 @@ class EditorTest {
                 Ask.TOPIC, Messages.FLUSH_TOPIC, Messages.SAVE_FAILED_TOPIC, CloseAnswer.TOPIC,
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
                 Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
-                Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC, Messages.START_RUN_TOPIC)) {
+                Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC, Messages.START_RUN_TOPIC, Messages.PROJECT_WANTED_TOPIC,
+                Messages.REVEAL_ROW_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -614,6 +619,55 @@ class EditorTest {
         assertEquals(List.of(new Find(dir, Why.ARGUMENT)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.ARGUMENT, Kind.FOLDER));
         assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));
+    }
+
+    // ------------------------------------------------------------------ reveal in navigator
+
+    /** Show {@code folder} as the last session's, and forget what that sent. */
+    private void showing(Path folder) {
+        tell(Messages.FOUND_TOPIC, new Found(folder, Why.RESTORE_FOLDER, Kind.FOLDER));
+        sent.clear();
+    }
+
+    @Test
+    void revealAsksWhichProjectTheFileIsIn() {
+        Path a = file("a.txt");
+        tell(Messages.REVEAL_ASKED_TOPIC, new RevealAsked(a));
+        assertEquals(List.of(new ProjectWanted(a)), took(ProjectWanted.class));
+    }
+
+    /** The project is shown first, and the row revealed after, so the view walks the tree of the project. */
+    @Test
+    void aFileInAnotherProjectShowsThatProjectThenRevealsItsRow() {
+        showing(dir.resolve("elsewhere"));
+        Path project = dir.resolve("project");
+        Path a = project.resolve("module/src/A.java");
+        tell(Messages.PROJECT_FOUND_TOPIC, new ProjectFound(a, Optional.of(project)));
+        List<Object> shown = sent.stream().filter(m -> m instanceof ShowFolder || m instanceof RevealRow).toList();
+        assertEquals(List.of(new ShowFolder(project), new RevealRow(a)), shown);
+        assertEquals(project, editor.state().doc().folder());
+    }
+
+    @Test
+    void aFileInTheProjectShownRevealsItsRowWithoutListingAgain() {
+        showing(dir);
+        Path a = file("src/A.java");
+        tell(Messages.PROJECT_FOUND_TOPIC, new ProjectFound(a, Optional.of(dir)));
+        assertTrue(sent.stream().noneMatch(ShowFolder.class::isInstance), "nothing listed again");
+        assertEquals(List.of(new RevealRow(a)), took(RevealRow.class));
+    }
+
+    @Test
+    void aFileInNoProjectStaysInTheFolderShownOrShowsItsOwn() {
+        showing(dir);
+        Path inside = file("notes/a.md");
+        tell(Messages.PROJECT_FOUND_TOPIC, new ProjectFound(inside, Optional.empty()));
+        assertTrue(sent.stream().noneMatch(ShowFolder.class::isInstance), "the folder shown keeps it");
+        assertEquals(List.of(new RevealRow(inside)), took(RevealRow.class));
+
+        Path outside = dir.getParent().resolve("loose/b.md");
+        tell(Messages.PROJECT_FOUND_TOPIC, new ProjectFound(outside, Optional.empty()));
+        assertEquals(List.of(new ShowFolder(outside.getParent())), took(ShowFolder.class));
     }
 
     // ------------------------------------------------------------------ running

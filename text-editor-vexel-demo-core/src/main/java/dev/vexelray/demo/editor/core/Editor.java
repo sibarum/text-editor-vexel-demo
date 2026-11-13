@@ -22,6 +22,8 @@ import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.Open;
+import dev.vexelray.demo.editor.core.Messages.ProjectFound;
+import dev.vexelray.demo.editor.core.Messages.ProjectWanted;
 import dev.vexelray.demo.editor.core.Messages.Read;
 import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Recall;
@@ -30,6 +32,8 @@ import dev.vexelray.demo.editor.core.Messages.Recalled;
 import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Remember;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
+import dev.vexelray.demo.editor.core.Messages.RevealAsked;
+import dev.vexelray.demo.editor.core.Messages.RevealRow;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Messages.Save;
 import dev.vexelray.demo.editor.core.Messages.SaveFailed;
@@ -101,8 +105,8 @@ import java.util.Set;
  * <h2>Effects are jobs</h2>
  *
  * <p>The disk is the jobs' ({@link ReadFile}, {@link WriteFile}, {@link FindPath}, {@link CreateFile},
- * {@link ReadSession}, {@link WriteSession}, {@link DropScratch}): a step sends a request and a later step acts on the
- * reply, as it acts on {@link MakeScratch}'s and {@link MoveScratch}'s, which the view asked for. A slow disk is
+ * {@link ReadSession}, {@link WriteSession}, {@link DropScratch}, {@link FindProject}): a step sends a request and a
+ * later step acts on the reply, as it acts on {@link MakeScratch}'s and {@link MoveScratch}'s, which the view asked for. A slow disk is
  * a slow answer, never a stalled lane. Jobs are not in order with each other, so the restored session asks for one
  * file at a time and asks for the next when the last is answered.
  *
@@ -118,11 +122,11 @@ import java.util.Set;
 @Component
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
         Created.class, ScratchMade.class, Relocated.class, Fronted.class, Edited.class, Save.class, Written.class,
-        Answer.class, Close.class, CloseRequested.class, RunThis.class})
+        Answer.class, Close.class, CloseRequested.class, RunThis.class, RevealAsked.class, ProjectFound.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
-        Dropping.class, StartRun.class})
+        Dropping.class, StartRun.class, ProjectWanted.class, RevealRow.class})
 public final class Editor {
 
     /**
@@ -340,6 +344,8 @@ public final class Editor {
         Step<State, Save> save = b.step("save", Editor::save);
         Step<State, Written> written = b.step("written", Editor::written);
         Step<State, Answer> answered = b.step("answered", Editor::answered);
+        Step<State, RevealAsked> revealAsked = b.step("revealAsked", Editor::revealAsked);
+        Step<State, ProjectFound> projectFound = b.step("projectFound", Editor::projectFound);
 
         Step<State, Close> closeAsked = b.step("closeAsked", Editor::closeAsked);
         Step<State, CloseRequested> quitAsked = b.step("quitAsked", Editor::quitAsked);
@@ -369,7 +375,9 @@ public final class Editor {
                 .on(Messages.EDITED_TOPIC, edited)
                 .on(Messages.SAVE_TOPIC, save)
                 .on(Messages.WRITTEN_TOPIC, written)
-                .on(Answer.TOPIC, answered);
+                .on(Answer.TOPIC, answered)
+                .on(Messages.REVEAL_ASKED_TOPIC, revealAsked)
+                .on(Messages.PROJECT_FOUND_TOPIC, projectFound);
         ledger = b.build(inbox, "editor", CAPACITY);
 
         closing(Chain.start("close tabs", ledger, closeAsked).on(Messages.CLOSE_TOPIC), ask, saveThem, discard, finish,
@@ -704,6 +712,25 @@ public final class Editor {
         out.send(Messages.FRONT_TAB_TOPIC, new FrontTab(id, focus));
         caption(next, out);
         return remember(next, out);
+    }
+
+    /** Reveal in navigator: which project the file is in is the disk's to say. */
+    private static State revealAsked(State s, RevealAsked r, Out out) {
+        out.send(Messages.PROJECT_WANTED_TOPIC, new ProjectWanted(r.file()));
+        return s;
+    }
+
+    /**
+     * The project a file to reveal is in: shown, unless it is shown already, and then the file's row revealed in it.
+     * A file in no project stays in the folder shown if it is in it, and otherwise shows the folder it is in.
+     */
+    private static State projectFound(State s, ProjectFound p, Out out) {
+        Path file = p.file();
+        Path shown = s.doc().folder();
+        Path root = p.project().orElse(shown != null && file.startsWith(shown) ? shown : file.getParent());
+        State next = root.equals(shown) ? s : showFolder(s, root, out);
+        out.send(Messages.REVEAL_ROW_TOPIC, new RevealRow(file));
+        return next;
     }
 
     /** Show a folder; the one it replaces becomes recent, and the view hears the recent folders when they change. */

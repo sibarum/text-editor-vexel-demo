@@ -141,7 +141,7 @@ final class Navigator {
     static final Map<String, App> OPEN_IN = Map.of("open-in-vexplore", App.VEXPLORE,
             "open-in-mainframe", App.MAINFRAME, "open-in-rasterware", App.RASTERWARE, "open-in-host", App.HOST);
 
-    /** How many times a new scratch's row is looked for before it is left unselected. */
+    /** How many times a row being revealed, or a new scratch's, is looked for before it is left unselected. */
     private static final int REVEAL_TRIES = 10;
 
     private final Gui gui;
@@ -191,6 +191,9 @@ final class Navigator {
     private Path folder;
     /** The file a reveal is walking to, to ring when the walk lands. */
     private Path revealing;
+    /** Whether a walk to it is under way, and how many more may be tried. */
+    private boolean revealWalking;
+    private int revealTries;
     /**
      * What a row's menu put the bar in mind of, until the bar is next submitted or taken for something else: a file,
      * which is also the bar's own mind, where the text alone says what it names.
@@ -910,28 +913,53 @@ final class Navigator {
 
     /**
      * Unfold the tree down to {@code file} and select its row; when the walk lands, {@link #revealed} rings it, since
-     * a row the walk scrolled to is one the eye has not found yet. A file outside the folder is left alone: there is
-     * no way down to it from here.
+     * a row the walk scrolled to is one the eye has not found yet. The editor may just have shown another folder, whose
+     * rows come with the listings that land after this frame, so the walk is begun again as each lands
+     * ({@link #listed}) and tried again when it ends short, a few times at most, as a new scratch's is. A file outside
+     * the folder is left alone: there is no way down to it from here.
      */
-    boolean reveal(Path file) {
-        List<Path> chain = ListFolder.chain(folder, file);
-        if (chain.isEmpty()) {
-            return false;
-        }
-        revealing = chain.getLast();
-        tree.revealPath(chain);
-        return true;
+    void reveal(Path file) {
+        revealing = file;
+        revealTries = REVEAL_TRIES;
+        revealWalking = false;
+        walkToReveal();
     }
 
-    /** A walk ended: ring its row if it was the reveal's and it got there. */
+    /** A level of the files tree was answered: look for the file being revealed, if no look is under way. */
+    void listed() {
+        if (revealing != null && !revealWalking) {
+            walkToReveal();
+        }
+    }
+
+    /** A walk ended: ring its row if it was the reveal's and it got there, and try again if it did not. */
     void revealed(Object item, boolean reached) {
-        if (reached && item.equals(revealing)) {
+        if (revealing == null || !item.equals(revealing)) {
+            return;
+        }
+        revealWalking = false;
+        if (reached) {
             Node row = tree.rowNode(revealing);
             if (row != null) {
                 motion.cues.play(row, Cue.ring(gui.theme().color(Role.ACCENT), 1));
             }
             revealing = null;
+        } else if (revealTries > 0) {
+            walkToReveal();
+        } else {
+            revealing = null;
         }
+    }
+
+    private void walkToReveal() {
+        List<Path> chain = folder == null ? List.of() : ListFolder.chain(folder, revealing);
+        if (chain.isEmpty()) {
+            revealing = null;
+            return;
+        }
+        revealTries--;
+        revealWalking = true;
+        tree.revealPath(chain);
     }
 
     /**

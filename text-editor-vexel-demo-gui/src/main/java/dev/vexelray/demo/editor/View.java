@@ -39,6 +39,8 @@ import dev.vexelray.demo.editor.core.Messages.Recent;
 import dev.vexelray.demo.editor.core.Messages.Relocate;
 import dev.vexelray.demo.editor.core.Messages.Relocated;
 import dev.vexelray.demo.editor.core.Messages.Retitle;
+import dev.vexelray.demo.editor.core.Messages.RevealAsked;
+import dev.vexelray.demo.editor.core.Messages.RevealRow;
 import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.Messages.RunsOffered;
@@ -159,6 +161,7 @@ final class View {
     private final Sender<GitStatusWanted> gitStatusWanted;
     private final Sender<TreeView.Inks> inks;
     private final Sender<SymbolsWanted> symbolsWanted;
+    private final Sender<RevealAsked> revealAsked;
     /** How many times git's status has been asked for: an answer to any but the last is stale, and left. */
     private long gitAsked;
     /** How many times Symbols has asked: an answer to any but the last is stale, and left. */
@@ -215,8 +218,10 @@ final class View {
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
          Sender<WindowCommand> windows, Sender<IndexWanted> indexWanted, Sender<HandTo> handTo,
-         Sender<GitStatusWanted> gitStatusWanted, Sender<TreeView.Inks> inks, Sender<SymbolsWanted> symbolsWanted) {
+         Sender<GitStatusWanted> gitStatusWanted, Sender<TreeView.Inks> inks, Sender<SymbolsWanted> symbolsWanted,
+         Sender<RevealAsked> revealAsked) {
         this.symbolsWanted = symbolsWanted;
+        this.revealAsked = revealAsked;
         this.handTo = handTo;
         this.gitStatusWanted = gitStatusWanted;
         this.inks = inks;
@@ -324,6 +329,13 @@ final class View {
         ui.showNavigator(true);
         picture();
         wantRuns();
+    }
+
+    /** Reveal in navigator, after the project it is in is shown: unfold the tree to the file and ring its row. */
+    @Subscribe
+    public void revealRow(RevealRow m) {
+        nav.reveal(m.file());
+        ui.showNavigator(true);
     }
 
     /** A window on files alone: the navigator out of the way until a folder is shown or Ctrl+B asks for it. */
@@ -461,6 +473,7 @@ final class View {
         if (m.tree().equals(nav.treeAddress())) {
             children.send(nav.children(m));
             inks.send(nav.inks(m));
+            nav.listed();
             if (m.roots() && m.dir().equals(nav.folder())) {
                 ui.newMenu(true, m.inProject(), intents);
                 wantGit();   // the folder shown, listed again: what git says of it may have changed too
@@ -877,11 +890,7 @@ final class View {
         } else if (m.action().equals(Workspace.CLOSE_ALL)) {
             close(ws.all());
         } else if (m.action().equals(Workspace.REVEAL)) {
-            if (nav.reveal(b.path)) {
-                ui.showNavigator(true);
-            } else {
-                ui.status(b.name() + " is not inside the folder shown", false);
-            }
+            revealAsked.send(new RevealAsked(b.path));   // the editor shows its project, then says to reveal it
         } else if (m.action().equals(Workspace.FORMAT)) {
             toggleFormatted(b);
         }

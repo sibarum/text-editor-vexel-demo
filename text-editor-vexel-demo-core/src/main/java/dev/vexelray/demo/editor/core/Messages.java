@@ -125,6 +125,15 @@ public final class Messages {
     public record ScratchFolderWanted(Optional<Path> in) {
     }
 
+    /**
+     * Reveal in navigator, from a tab's menu: show the Maven project {@code file} is in and select its row there. The
+     * editor asks {@link FindProject} which project that is.
+     */
+    public static final Topic<RevealAsked> REVEAL_ASKED_TOPIC = Topic.edge(RevealAsked.class);
+
+    public record RevealAsked(Path file) {
+    }
+
     // ------------------------------------------------------------------ the editor tells the view
 
     /**
@@ -149,6 +158,15 @@ public final class Messages {
     public static final Topic<ShowFolder> SHOW_FOLDER_TOPIC = Topic.edge(ShowFolder.class);
 
     public record ShowFolder(Path path) {
+    }
+
+    /**
+     * Unfold the navigator down to {@code file}, select its row and ring it. Sent after the {@link ShowFolder} that
+     * puts the file in the tree, if one was needed, so the view hears them in that order.
+     */
+    public static final Topic<RevealRow> REVEAL_ROW_TOPIC = Topic.edge(RevealRow.class);
+
+    public record RevealRow(Path file) {
     }
 
     /** Open a tab for a file the editor has read, in front. */
@@ -283,6 +301,18 @@ public final class Messages {
     public static final Topic<Found> FOUND_TOPIC = Topic.edge(Found.class);
 
     public record Found(Path path, Why why, Kind kind) {
+    }
+
+    /** Which Maven project a file is in, the whole of it ({@link FindProject}): for Reveal in navigator. */
+    public static final Topic<ProjectWanted> PROJECT_WANTED_TOPIC = Topic.edge(ProjectWanted.class);
+
+    public record ProjectWanted(Path file) {
+    }
+
+    /** What {@link FindProject} found: the project's folder, or empty when no {@code pom.xml} is at or above the file. */
+    public static final Topic<ProjectFound> PROJECT_FOUND_TOPIC = Topic.edge(ProjectFound.class);
+
+    public record ProjectFound(Path file, Optional<Path> project) {
     }
 
     /** What a new thing on the disk is. */

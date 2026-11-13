@@ -15,6 +15,10 @@ declaration (the index is built when a project is shown and on each save, and Ct
 it by name).
 Its code is on `develop`, to copy from as each piece is rebuilt.
 
+- [ ] Reveal in navigator selects a row deep in a folder it just opened, but leaves it offscreen: the tree scrolls only
+      as far as that folder (seen 2026-11-13 with `vexelray-gui-widget`'s `TreeView.java`, before and after Reveal
+      learned to show the file's project). Revealing the same row again does not scroll, since `TreeView.select`
+      returns early on the row already selected. Whether the fault is the walk's or `scrollIntoView`'s is not known.
 - [ ] Reading the index further: uses of a name (`Query.usages`), Ctrl+click on a name, and a library's declarations
       in a read-only tab, which Symbols leaves out today.
 

@@ -130,7 +130,8 @@ as the last save. To a script: `symbols` (the field),
 **View**, after New, has word wrap, the navigator, Go to symbol…, the formatted view and zoom, each with its chord beside it.
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
-keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and Reveal in navigator. A bullet in
+keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and Reveal in navigator, which shows the Maven project the file is in (the top of the reactor
+around it) and selects its row there. A bullet in
 front of a tab's name means unsaved changes; closing anything unsaved asks first, and so does quitting.
 
 There is no file dialog, by choice: the path bar is the whole of "open", and it works the same in a test as in use. The

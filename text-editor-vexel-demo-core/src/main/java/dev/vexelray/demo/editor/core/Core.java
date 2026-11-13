@@ -15,7 +15,8 @@ import dev.vexelray.framework.api.Configuration;
         jobs = {ReadFile.class, WriteFile.class, FindPath.class, CreateFile.class, ReadSession.class, ListFolder.class,
                 MarkText.class, FormatText.class, WriteSession.class, SurveyFolder.class, MakeScratch.class,
                 DropScratch.class, FindScratches.class, MoveScratch.class, MakeScratchFolder.class, FindRuns.class,
-                TypeRun.class, CheckText.class, NavigateText.class, BuildIndex.class, FindSymbols.class, ReadGitStatus.class},
+                TypeRun.class, CheckText.class, NavigateText.class, BuildIndex.class, FindSymbols.class, ReadGitStatus.class,
+                FindProject.class},
         destinations = Runner.class)
 public final class Core {
 }
