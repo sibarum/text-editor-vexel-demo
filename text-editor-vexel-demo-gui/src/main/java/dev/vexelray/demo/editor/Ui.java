@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
 import dev.vexelray.demo.editor.core.NavigateText;
@@ -55,12 +54,10 @@ final class Ui {
     /** Set only by {@link #picturing}: whether Open's picture stands where the editor does. */
     private boolean picturing;
     private final Motion motion;
-    private final Color danger;
 
     Ui(Gui gui, Motion motion, TitleBar titleBar, Scratches scratches) {
         this.titleBar = titleBar;
         this.motion = motion;
-        this.danger = gui.theme().color(Role.DANGER);
 
         status = new StatusBar(gui)
                 .slot(Landmarks.STATUS_FILE, StatusBar.Side.LEFT, "")
@@ -97,7 +94,7 @@ final class Ui {
 
         // Two cards on the page. The title bar and the status line are the page too, not chrome: the cards are
         // what stand off it.
-        titleBar.node().background(gui.theme().color(Role.PAGE));
+        titleBar.node().background(Role.PAGE);
         // The name as the bar's wordmark, after the mark in its lockup, given here so the framework does not put the
         // build's name there: the bar inks D and E as the pointer comes and goes, and the I keeps its teal.
         TitleBar.Wordmark wordmark = Wordmark.bar(gui);
@@ -107,9 +104,9 @@ final class Ui {
         titleBar.menu(NEW, "New", Menu.NONE);
         titleBar.menu(VIEW, "View", Menu.NONE);
         titleBar.menu(RUN, "Run", Menu.NONE);
-        status.node().background(gui.theme().color(Role.PAGE));
-        status.slot(Landmarks.STATUS_LANGUAGE).textColor(gui.theme().color(Role.INK));
-        status.slot(Landmarks.STATUS_PROBLEM).textColor(danger);
+        status.node().background(Role.PAGE);
+        status.slot(Landmarks.STATUS_LANGUAGE).textColor(Role.INK);
+        status.slot(Landmarks.STATUS_PROBLEM).textColor(Role.DANGER);
         Node body = gui.box()
                 .width(Length.FILL).height(Length.grow(1f))
                 .padding(Length.ZERO, Type.GAP)
@@ -117,7 +114,7 @@ final class Ui {
                 .children(split.node());
 
         gui.root().direction(Direction.COLUMN)
-                .background(gui.theme().color(Role.PAGE))
+                .background(Role.PAGE)
                 .children(titleBar.node(), body, status.node());
     }
 
@@ -273,7 +270,7 @@ final class Ui {
     void status(String message, boolean alert) {
         status.text(Landmarks.STATUS_MESSAGE, message);
         if (alert) {
-            motion.cues.play(status.node(), Cue.ring(danger, 2));
+            motion.cues.play(status.node(), Cue.ring(Role.DANGER, 2));
         }
     }
 }

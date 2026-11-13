@@ -287,13 +287,14 @@
                                     <name>editor</name>
                                 </pair>
                                 <!-- The title bar's wordmark, /wordmark.sdgb: DE ('face') in the role tint, the
-                                     node's own colour, so the bar inks them; the I keeps the icon's teal (Wordmark). -->
+                                     node's own colour, so the bar inks them; the I ('initial') in the role accent, the teal
+                                     that reads on whichever page the look has (Wordmark). -->
                                 <pair>
                                     <art>src/main/rc/wordmark.svg</art>
                                     <name>wordmark</name>
                                     <pair>false</pair>
                                     <texels>256</texels>
-                                    <roles><role>face=tint</role></roles>
+                                    <roles><role>face=tint</role><role>initial=accent</role></roles>
                                 </pair>
                             </pairs>
                         </configuration>

@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Messages.Picture;
 import dev.vexelray.demo.editor.core.Messages.Pictured;
 import dev.vexelray.demo.editor.core.Survey;
@@ -8,9 +7,7 @@ import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
-import dev.vexelray.gui.core.style.Oklab;
 import dev.vexelray.gui.core.style.Role;
-import dev.vexelray.gui.core.style.Theme;
 
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -43,7 +40,7 @@ import java.util.Objects;
 final class Preview {
 
     private static final int MODULES = 10;
-    private static final int LANGUAGES = 6;
+    private static final int LANGUAGES = Look.LANGUAGES;
     private static final int ANNOTATIONS = 8;
     private static final Length BAR = Length.dp(8);
     /** A tile's number: smaller than the name's figure, so five tiles still hold four digits each in a narrow window. */
@@ -52,7 +49,6 @@ final class Preview {
     private static final Length COUNT_COLUMN = Length.rem(3.5f);
 
     private final Gui gui;
-    private final Theme theme;
     /** Every answer since Open last started, by folder. */
     private final Map<Path, Pictured> seen = new HashMap<>();
     /** The folder pictured, or null. */
@@ -85,10 +81,9 @@ final class Preview {
 
     Preview(Gui gui) {
         this.gui = gui;
-        this.theme = gui.theme();
 
-        name = gui.text("").font(Type.UI).textSize(Type.FIGURE).textColor(theme.color(Role.INK)).wordWrap(false);
-        path = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(theme.color(Role.FAINT)).wordWrap(false);
+        name = gui.text("").font(Type.UI).textSize(Type.FIGURE).textColor(Role.INK).wordWrap(false);
+        path = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(Role.FAINT).wordWrap(false);
 
         buildKind = chip(Type.MONO, Look.PICKING_RIM);
         modulesChip = chip(Type.UI, Look.PICKING_RIM);
@@ -101,29 +96,29 @@ final class Preview {
         figures = row().gap(Type.GAP).width(Length.FILL).clip(true);
         for (int i = 0; i < captions.length; i++) {
             figureValues[i] = gui.text("0").font(Type.MONO).textSize(TILE_FIGURE)
-                    .textColor(theme.color(i == 0 ? Role.INK : Role.ACCENT)).wordWrap(false);
+                    .textColor(i == 0 ? Role.INK : Role.ACCENT).wordWrap(false);
             Node caption = gui.text(captions[i]).font(Type.UI).textSize(Type.SMALL)
-                    .textColor(theme.color(Role.FAINT)).wordWrap(false);
+                    .textColor(Role.FAINT).wordWrap(false);
             // Each line in a cell that clips, so a tile narrower than its caption cuts it on one line rather than
             // wrapping it into a second line the tile has no room for.
             figures.append(column().width(Length.grow(1)).padding(Type.WIDE)
-                    .background(theme.color(Look.TILE)).corner(Type.CORNER).clip(true)
+                    .background(Look.TILE).corner(Type.CORNER).clip(true)
                     .children(row().width(Length.FILL).clip(true).children(figureValues[i]),
                             row().width(Length.FILL).clip(true).children(caption)));
         }
 
         languageBar = row().width(Length.FILL).height(Length.dp(14)).corner(Length.dp(4)).clip(true)
-                .background(theme.color(Look.TILE));
+                .background(Look.TILE);
         for (int i = 0; i <= LANGUAGES; i++) {
             languageSegments[i] = gui.box().height(Length.FILL).width(Length.percent(0))
-                    .background(languageColor(i)).visible(false);
+                    .background(Look.language(i)).visible(false);
             languageBar.append(languageSegments[i]);
         }
         languageLegend = row().gap(Type.WIDE).alignItems(AlignItems.CENTER).clip(true);
         for (int i = 0; i < LANGUAGES; i++) {
             Node swatch = gui.box().width(Length.dp(10)).height(Length.dp(10)).corner(Length.dp(2))
-                    .background(languageColor(i));
-            legendNames[i] = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(theme.color(Role.DIM))
+                    .background(Look.language(i));
+            legendNames[i] = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(Role.DIM)
                     .wordWrap(false);
             legendEntries[i] = row().gap(Type.TIGHT).alignItems(AlignItems.CENTER).visible(false)
                     .children(swatch, legendNames[i]);
@@ -136,7 +131,7 @@ final class Preview {
         annotationsSection = section("annotations", annotations.node);
 
         // Not a sentence about what to do: an empty folder simply looks empty, a dash where the numbers would be.
-        empty = gui.text("—").font(Type.UI).textSize(Type.FIGURE).textColor(theme.color(Role.FAINT)).visible(false);
+        empty = gui.text("—").font(Type.UI).textSize(Type.FIGURE).textColor(Role.FAINT).visible(false);
         contents = new ContentsView(gui);
 
         Node body = column().width(Length.FILL).gap(Type.EDGE).alignItems(AlignItems.STRETCH)
@@ -149,9 +144,9 @@ final class Preview {
                 .padding(Type.EDGE)
                 .gap(Type.WIDE)
                 .alignItems(AlignItems.STRETCH)
-                .background(theme.color(Look.PICKING))
+                .background(Look.PICKING)
                 .corner(Type.CORNER)
-                .border(Type.RULE, theme.color(Look.PICKING_RIM))
+                .border(Type.RULE, Look.PICKING_RIM)
                 .scroll(false, true)
                 .clip(true)
                 .visible(false)
@@ -301,27 +296,15 @@ final class Preview {
     }
 
     private Node chip(int face, Role edge) {
-        return gui.text("").font(face).textSize(Type.SMALL).textColor(theme.color(Role.INK))
+        return gui.text("").font(face).textSize(Type.SMALL).textColor(Role.INK)
                 .padding(Length.dp(3), Type.GAP).corner(Length.dp(10))
-                .border(Type.RULE, theme.color(edge)).wordWrap(false).visible(false);
+                .border(Type.RULE, edge).wordWrap(false).visible(false);
     }
 
     private Node section(String title, Node content) {
-        Node heading = gui.text(title).font(Type.UI).textSize(Type.SMALL).textColor(theme.color(Role.FAINT));
+        Node heading = gui.text(title).font(Type.UI).textSize(Type.SMALL).textColor(Role.FAINT);
         return column().gap(Type.TIGHT).alignItems(AlignItems.STRETCH).visible(false)
                 .children(heading, content);
-    }
-
-    /**
-     * The colour of the {@code i}th language: the accent's lightness and chroma, its hue turned a step per
-     * language, so the bar reads as one family; the last, everything else, is a neutral.
-     */
-    private Color languageColor(int i) {
-        if (i >= LANGUAGES) {
-            return theme.color(Look.RIM);
-        }
-        Oklab accent = theme.palette().accent();
-        return Oklab.polar(0.74 - 0.04 * (i % 2), 0.10, accent.hueDegrees() + 52.0 * i).toColor();
     }
 
     /** Rows of a name, a bar against the largest, and a number: as many rows as are ever shown, filled or hidden. */
@@ -340,17 +323,17 @@ final class Preview {
             fills = new Node[size];
             counts = new Node[size];
             for (int i = 0; i < size; i++) {
-                names[i] = gui.text("").font(face).textSize(Type.LABEL).textColor(theme.color(Role.INK))
+                names[i] = gui.text("").font(face).textSize(Type.LABEL).textColor(Role.INK)
                         .wordWrap(false);
                 // The name in a cell of its own width that clips, as the tree does its labels: a text node is as
                 // wide as its text, so sizing the text itself would not stop a long module name pushing the row.
                 Node nameCell = row().width(NAME_COLUMN).alignItems(AlignItems.CENTER).clip(true)
                         .children(names[i]);
                 fills[i] = gui.box().height(Length.FILL).width(Length.percent(0)).corner(Length.dp(3))
-                        .background(theme.color(ink));
+                        .background(ink);
                 Node track = row().width(Length.grow(1)).height(BAR).corner(Length.dp(3))
-                        .background(theme.color(Look.TILE)).children(fills[i]);
-                counts[i] = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(theme.color(Role.DIM))
+                        .background(Look.TILE).children(fills[i]);
+                counts[i] = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(Role.DIM)
                         .wordWrap(false).width(COUNT_COLUMN);
                 rows[i] = row().gap(Type.GAP).alignItems(AlignItems.CENTER).visible(false)
                         .children(nameCell, track, counts[i]);

@@ -1,10 +1,12 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Contents;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.Paint;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.style.Theme;
 import dev.vexelray.gui.fileicons.FileFamily;
@@ -37,22 +39,20 @@ final class ContentsView {
     private final Node summary;
     private final Node more;
     private final Row[] rows = new Row[ROWS];
-    private final boolean dark;
 
     ContentsView(Gui gui) {
-        Theme theme = gui.theme();
-        this.dark = FileIconView.dark(theme);
-        Node heading = gui.text("files").font(Type.UI).textSize(Type.SMALL).textColor(theme.color(Role.FAINT))
+
+        Node heading = gui.text("files").font(Type.UI).textSize(Type.SMALL).textColor(Role.FAINT)
                 .wordWrap(false);
-        summary = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(theme.color(Role.DIM)).wordWrap(false);
+        summary = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(Role.DIM).wordWrap(false);
         Node head = gui.row().scroll(false, false).gap(Type.GAP).alignItems(AlignItems.CENTER)
                 .children(heading, summary);
         Node list = gui.column().scroll(false, false).gap(Length.dp(2)).alignItems(AlignItems.STRETCH);
         for (int i = 0; i < ROWS; i++) {
-            rows[i] = new Row(gui, theme);
+            rows[i] = new Row(gui);
             list.append(rows[i].node);
         }
-        more = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(theme.color(Role.FAINT)).wordWrap(false)
+        more = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(Role.FAINT).wordWrap(false)
                 .visible(false);
         node = gui.column().scroll(false, false).gap(Type.TIGHT).alignItems(AlignItems.STRETCH).visible(false)
                 .children(head, list, more);
@@ -105,6 +105,18 @@ final class ContentsView {
         return dot <= 0 ? FileFamily.UNKNOWN : FileFamily.ofExtension(name.substring(dot + 1).toLowerCase(Locale.ROOT));
     }
 
+    /**
+     * A family's hue as a paint: its icon's colour on whichever page the tree is drawn on, decided per frame, so the
+     * bar follows a change of look as the icon beside it does. A record, so a re-pointed row writing the same family
+     * writes an equal paint and the reconciler skips it.
+     */
+    record Hue(FileFamily family) implements Paint {
+        @Override
+        public Color in(Theme theme) {
+            return family.hue(FileIconView.dark(theme));
+        }
+    }
+
     /** One file's row, re-pointed per file. */
     private final class Row {
 
@@ -115,12 +127,12 @@ final class ContentsView {
         private final Node fill;
         private final Node size;
 
-        Row(Gui gui, Theme theme) {
+        Row(Gui gui) {
             icon = IconView.of(gui, null).size(ICON);
             icon.node().hitInert(true);
-            dir = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(theme.color(Role.FAINT))
+            dir = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(Role.FAINT)
                     .wordWrap(false);
-            name = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(theme.color(Role.INK))
+            name = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(Role.INK)
                     .wordWrap(false);
             // The path in a cell that takes what the row leaves and clips, as the tree does its labels: a text node
             // is as wide as its text, so a long path would otherwise push the bar off the card.
@@ -129,8 +141,8 @@ final class ContentsView {
             // Coloured by what the row now stands for, so a re-pointed row takes its new colour at once.
             fill = gui.box().height(Length.FILL).width(Length.percent(0)).corner(Length.dp(3)).paintCuts(true);
             Node track = gui.row().scroll(false, false).width(TRACK).height(BAR).corner(Length.dp(3))
-                    .background(theme.color(Look.TILE)).children(fill);
-            size = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(theme.color(Role.DIM))
+                    .background(Look.TILE).children(fill);
+            size = gui.text("").font(Type.MONO).textSize(Type.SMALL).textColor(Role.DIM)
                     .wordWrap(false).width(SIZE_COLUMN);
             node = gui.row().scroll(false, false).gap(Type.GAP).alignItems(AlignItems.CENTER).visible(false)
                     .children(icon.node(), path, track, size);
@@ -141,7 +153,7 @@ final class ContentsView {
             icon.icon(family);
             dir.text(folderPart(e.dir()));
             name.text(e.name());
-            fill.background(family.hue(dark))
+            fill.background(new Hue(family))
                     .width(Length.percent(largest == 0 ? 0 : Math.max(2f, 100f * e.bytes() / largest)));
             size.text(Contents.size(e.bytes()));
             node.visible(true);

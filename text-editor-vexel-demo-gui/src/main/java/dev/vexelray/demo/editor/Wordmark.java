@@ -22,10 +22,12 @@ import java.io.InputStream;
  * typeface is carried for three letters. Without it the framework would put the build's name there,
  * {@code text-editor-vexel-demo}, in the bar's own type.
  *
- * <p><b>DE follows the bar; the I keeps its teal.</b> D and E are the drawing's layer {@code face}, in the role
+ * <p><b>DE follows the bar; the I is the accent.</b> D and E are the drawing's layer {@code face}, in the role
  * {@code tint}, the node's own text colour, which the bar hands over as a paint ({@link TitleBar.Wordmark#ink}):
- * resolved every frame, so the pointer lifts it into the accent as it does a caption glyph. The I is the icon's
- * #5fd4e6, as the board draws it on a dark bar, and this application has only a dark theme ({@link Look}).
+ * resolved every frame, so the pointer lifts it into the accent as it does a caption glyph. The I, the layer
+ * {@code initial}, is in the role {@code accent} (the pom's pair says so): on the dark page that is the design's teal,
+ * a hair off the icon's #5fd4e6 the drawing carries, and on the light one the darker teal that reads on white, where
+ * the icon's own would all but vanish ({@link Look}).
  *
  * <p>Sized in {@code rem}, as the bar's mark is, so the word zooms with the mark beside it.
  */

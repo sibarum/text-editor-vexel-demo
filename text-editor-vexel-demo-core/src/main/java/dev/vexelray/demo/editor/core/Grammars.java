@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor.core;
 
 import dev.vexelray.canvas.Color;
+import dev.vexelray.gui.core.style.Paint;
 import dev.vexelray.gui.core.text.Span;
 import org.eclipse.tm4e.core.grammar.IGrammar;
 import org.eclipse.tm4e.core.grammar.IStateStack;
@@ -70,8 +71,17 @@ public final class Grammars {
 
     private static final Log LOG = Log.of("text-editor-vexel-demo.highlight");
 
-    /** One rule of a colour table: a token in {@code scope}, or in a scope under it, is drawn in {@code color}. */
-    public record Colour(String scope, Color color) {
+    /**
+     * One rule of a colour table: a token in {@code scope}, or in a scope under it, is drawn in {@code paint}. A
+     * {@code Role} follows the theme: the spans hold it, so the text is repainted in a new look with nothing re-marked.
+     * Hold each paint once, as a table does, so that two marks of the same text compare equal.
+     */
+    public record Colour(String scope, Paint paint) {
+
+        /** As {@link #Colour(String, Paint)}, in a fixed colour: the same in every theme. */
+        public Colour(String scope, Color color) {
+            this(scope, Paint.of(color));
+        }
     }
 
     /** Extension -> TextMate scope name, for the bundled grammars. */
@@ -267,7 +277,7 @@ public final class Grammars {
             ITokenizeLineResult<IToken[]> result = grammar.tokenizeLine(line, state, LINE_TIME_LIMIT);
             state = result.getRuleStack();
             for (IToken token : result.getTokens()) {
-                Color color = colourOf(token.getScopes());
+                Paint color = colourOf(token.getScopes());
                 int start = lineStart + Math.min(token.getStartIndex(), line.length());
                 int end = lineStart + Math.min(token.getEndIndex(), line.length());
                 if (color != null && end > start) {
@@ -289,7 +299,7 @@ public final class Grammars {
         List<Span> spans = new ArrayList<>();
         try {
             for (PontifTokens.Token token : PontifTokens.scan(text)) {
-                Color color = colourOf(List.of(pontifScope(token, text)));
+                Paint color = colourOf(List.of(pontifScope(token, text)));
                 if (color != null) {
                     spans.add(Span.foreground(token.start(), token.end(), color));
                 }
@@ -315,12 +325,12 @@ public final class Grammars {
     }
 
     /** The most specific scope wins: scopes innermost first, the table's rules in order. */
-    private Color colourOf(List<String> scopes) {
+    private Paint colourOf(List<String> scopes) {
         for (int i = scopes.size() - 1; i >= 0; i--) {
             String scope = scopes.get(i);
             for (Colour rule : colours) {
                 if (scope.startsWith(rule.scope())) {
-                    return rule.color();
+                    return rule.paint();
                 }
             }
         }

@@ -92,7 +92,7 @@ final class Picker {
         ancestry.node().width(Length.FILL).clip(true);
         gui.landmark(Landmarks.ANCESTRY, ancestry.node());
 
-        rule = gui.box().height(Type.RULE).background(gui.theme().color(Look.PICKING_RIM)).visible(false);
+        rule = gui.box().height(Type.RULE).background(Look.PICKING_RIM).visible(false);
         treeSlot = gui.column().width(Length.FILL).height(Length.grow(1f)).alignItems(AlignItems.STRETCH);
 
         root = gui.column()

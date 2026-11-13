@@ -12,7 +12,6 @@ import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.SymbolsFound;
 import dev.vexelray.demo.editor.core.Scratches;
-import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.icons.Icon;
@@ -279,7 +278,7 @@ final class Navigator {
                 nodes.text(d.name()).font(Type.UI).textSize(Type.SMALL)
                         .wordWrap(false).width(Length.FILL).ellipsis(Ellipsis.END),
                 nodes.text(detail(d)).font(Type.UI).textSize(Type.SMALL)
-                        .textColor(gui.theme().color(Role.DIM))
+                        .textColor(Role.DIM)
                         .wordWrap(false).width(Length.FILL).ellipsis(Ellipsis.END)))
                 .name("symbol-list")
                 .looks(Look.SEARCH_SELECTED, null);
@@ -288,7 +287,7 @@ final class Navigator {
         FocusRing searching = gui.theme().focusRing().color(Look.SEARCH_FOCUS);
         symbolField.node().focusRing(searching);
         symbolList.node().focusRing(searching);
-        Color violet = gui.theme().color(Look.SEARCHING_RIM);
+        Role violet = Look.SEARCHING_RIM;
         symbolHeader = gui.row()
                 .width(Length.FILL)
                 .gap(Type.TIGHT)
@@ -297,12 +296,12 @@ final class Navigator {
                         gui.text(SYMBOLS).font(Type.UI).textColor(violet).width(Length.grow(1f))
                                 .wordWrap(false).ellipsis(Ellipsis.END),
                         gui.text("Esc").font(Type.UI).textSize(Type.SMALL).wordWrap(false)
-                                .textColor(gui.theme().color(Role.DIM)));
+                                .textColor(Role.DIM));
         symbolHeader.visible(false);
         gui.landmark(Landmarks.SYMBOL_MODE, symbolHeader);
         gui.landmark(Landmarks.SYMBOL_LIST, symbolList.node());
         symbolNote = gui.text(TYPE_A_NAME).font(Type.UI).textSize(Type.SMALL)
-                .textColor(gui.theme().color(Role.DIM));
+                .textColor(Role.DIM);
         gui.landmark(Landmarks.SYMBOL_NOTE, symbolNote);
         indexButton = new Button(gui, "Index this project").kind(Button.Kind.SECONDARY).name("index-project");
         indexButton.node().width(Length.FILL).visible(false);
@@ -339,7 +338,7 @@ final class Navigator {
     private void paint() {
         Role fill = place == Place.OPEN ? Look.PICKING : place == Place.SYMBOLS ? Look.SEARCHING : Look.CARD;
         Role edge = place == Place.FILES ? Look.RIM : place == Place.SYMBOLS ? Look.SEARCHING_RIM : Look.PICKING_RIM;
-        root.background(gui.theme().color(fill)).border(Type.RULE, gui.theme().color(edge));
+        root.background(fill).border(Type.RULE, edge);
     }
 
     /**
@@ -370,7 +369,7 @@ final class Navigator {
         }
         paint();
         if (to != Place.FILES) {
-            motion.cues.play(root, Cue.scanline(gui.theme().color(to == Place.SYMBOLS ? Look.SEARCHING_RIM : Role.ACCENT)));
+            motion.cues.play(root, Cue.scanline(to == Place.SYMBOLS ? Look.SEARCHING_RIM : Role.ACCENT));
         }
     }
 
@@ -665,7 +664,7 @@ final class Navigator {
 
     /** A name that cannot be had: the field stays, ringed, to be changed. */
     void refuseRename() {
-        motion.cues.play(renameField.node(), Cue.ring(gui.theme().color(Role.DANGER), 1));
+        motion.cues.play(renameField.node(), Cue.ring(Role.DANGER, 1));
         gui.focus(renameField.node());
     }
 
@@ -957,7 +956,7 @@ final class Navigator {
         if (reached) {
             Node row = tree.rowNode(revealing);
             if (row != null) {
-                motion.cues.play(row, Cue.ring(gui.theme().color(Role.ACCENT), 1));
+                motion.cues.play(row, Cue.ring(Role.ACCENT, 1));
             }
             revealing = null;
         } else if (revealTries > 0) {

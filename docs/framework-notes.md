@@ -212,3 +212,16 @@ nothing selected. Running `explorer /select,` from the application would be plat
 Linux's file managers each have their own way (`org.freedesktop.FileManager1.ShowItems` over D-Bus is the common one).
 What the framework could do: a `NativePlatform.reveal(Path)`, `SHOpenFolderAndSelectItems` on Windows and the
 FileManager1 call on Linux, falling back to opening the folder.
+
+## FN-18 · A terminal takes its colours as numbers, so the console cannot follow a change of look 🔬
+
+The console (`Console`) is a `TerminalScreen` per run, from `vex-suite-common-tty`. Everything else in the window
+writes a `Role` and follows the person's Light/Dark choice with nothing run, fading with the tree. The terminal takes
+`colors(int background, int foreground)` as `0xRRGGBB`, and its cells hold numbers too, so the console has to redo it:
+it hears `Seams.onTheme`, works the card and ink out again, and calls `colors` on every run's screen. That covers what
+a program wrote without colours of its own. Two things it cannot cover: the console's own lines (what ran, and how it
+ended), which it writes as truecolour escapes in the theme's faint, accent and danger, keep the look they were written
+in; and the node's background is set with a fixed `Color`, so it jumps rather than fading with the rest. What the
+framework could do: let `TerminalScreen.colors` take paints, keep the default colours as "default" in the cells rather
+than resolving them at write time, and offer a few named colours (faint, accent, danger) a feed can ask for by name, as
+a span takes a role.

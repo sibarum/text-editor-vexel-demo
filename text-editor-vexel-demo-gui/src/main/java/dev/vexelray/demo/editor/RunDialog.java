@@ -55,7 +55,7 @@ final class RunDialog {
             f.node().width(Length.FILL).height(Length.rem(4.5f)).font(Type.MONO).textSize(Type.SMALL);
         }
         go = new Button(gui, "Run").name("go");
-        problem = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(gui.theme().color(Role.DANGER))
+        problem = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(Role.DANGER)
                 .wordWrap(true).width(Length.FILL);
         gui.landmark(Landmarks.RUN_COMMAND, command.node());
         gui.landmark(Landmarks.RUN_DIR, dir.node());
@@ -67,9 +67,9 @@ final class RunDialog {
                 .padding(Type.EDGE)
                 .gap(Type.TIGHT)
                 .alignItems(AlignItems.STRETCH)
-                .background(gui.theme().color(Look.CARD))
+                .background(Look.CARD)
                 .corner(Type.CORNER)
-                .border(Type.RULE, gui.theme().color(Look.RIM))
+                .border(Type.RULE, Look.RIM)
                 .scroll(false, true)
                 .children(label("Command"), command.node(),
                         label("Folder"), dir.node(),
@@ -78,9 +78,9 @@ final class RunDialog {
                         problem,
                         gui.row().width(Length.FILL).justify(Justify.END).children(go.node()));
 
-        window.titleBar().node().background(gui.theme().color(Role.PAGE));
+        window.titleBar().node().background(Role.PAGE);
         gui.root().direction(Direction.COLUMN)
-                .background(gui.theme().color(Role.PAGE))
+                .background(Role.PAGE)
                 .children(window.titleBar().node(),
                         gui.box().width(Length.FILL).height(Length.grow(1f)).padding(Length.ZERO, Type.GAP)
                                 .scroll(false, false).children(card),
@@ -88,7 +88,7 @@ final class RunDialog {
     }
 
     private Node label(String text) {
-        return gui.text(text).font(Type.UI).textSize(Type.SMALL).textColor(gui.theme().color(Role.DIM))
+        return gui.text(text).font(Type.UI).textSize(Type.SMALL).textColor(Role.DIM)
                 .padding(Length.dp(4), Length.ZERO);
     }
 

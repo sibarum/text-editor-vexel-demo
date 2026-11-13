@@ -50,10 +50,15 @@ final class Recipes {
      * The look, and the smallest window this UI is still coherent in. Built from nothing the framework makes, so it
      * exists in the first phase and the framework applies it the moment it creates the {@code Gui}: "the theme is
      * applied before the first widget" is structural rather than a comment somebody has to keep obeying.
+     *
+     * <p>Both looks are declared, so the app menu offers Light and Dark under Theme and the framework remembers the
+     * choice ({@code theme=light|dark} in the settings). The first is the one a run opens in until the person chooses:
+     * dark, the design's own.
      */
     @Provides
     Appearance look() {
-        return Appearance.of(Look.THEME, Length.rem(TextEditor.MIN_W_EM), Length.rem(TextEditor.MIN_H_EM));
+        return Appearance.of(Look.DARK, Length.rem(TextEditor.MIN_W_EM), Length.rem(TextEditor.MIN_H_EM))
+                .themes(Look.LIGHT, Look.DARK);
     }
 
     /**
@@ -100,7 +105,7 @@ final class Recipes {
     }
 
     /**
-     * The grammars, in this look's code colours, for {@code MarkText} to colour documents with. A part rather than
+     * The grammars, in the code colours (roles, with an answer in each look), for {@code MarkText} to colour documents with. A part rather than
      * the job's own state, because parsing a grammar is slow and a job keeps nothing between requests. Built from
      * nothing the framework makes, so first; it parses no grammar until a document wants one.
      */

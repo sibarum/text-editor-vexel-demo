@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.canvas.Color;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.InteractionState;
@@ -49,7 +48,6 @@ final class Workspace {
     private final Tabs tabs;
     private final Node hint;
     private final Node root;
-    private final Color accent;
 
     /** Parallel to the bar's tabs. */
     private final List<Buffer> buffers = new ArrayList<>();
@@ -63,7 +61,6 @@ final class Workspace {
         this.gui = gui;
         this.builtins = builtins.toAbsolutePath().normalize();
         this.motion = motion;
-        this.accent = gui.theme().color(Role.ACCENT);
 
         // Flat labels on the card, the selected one lifted a step and underlined by an accent mark that glides to the
         // next selection: the design's bar. Set before any tab is added, so every header is painted this way.
@@ -82,7 +79,7 @@ final class Workspace {
         Node empty = gui.text("Open a file from the navigator, or type a path above it (Ctrl+L)")
                 .font(Type.UI)
                 .textSize(Type.SMALL)
-                .textColor(gui.theme().color(Role.FAINT));
+                .textColor(Role.FAINT);
         gui.landmark(Landmarks.EMPTY, empty);
         hint = gui.row().width(Length.FILL).height(Length.grow(1f))
                 .justify(Justify.CENTER).alignItems(AlignItems.CENTER)
@@ -92,9 +89,9 @@ final class Workspace {
 
         // The second card: the tabs and their pages, rounded and edged like the navigator's.
         root = gui.column().width(Length.FILL).height(Length.FILL)
-                .background(gui.theme().color(Look.CARD))
+                .background(Look.CARD)
                 .corner(Type.CORNER)
-                .border(Type.RULE, gui.theme().color(Look.RIM))
+                .border(Type.RULE, Look.RIM)
                 .clip(true)
                 .children(hint, tabs.node());
     }
@@ -198,7 +195,7 @@ final class Workspace {
             return;
         }
         tabs.select(i);
-        motion.cues.play(tabs.header(i), Cue.ring(accent, 1));
+        motion.cues.play(tabs.header(i), Cue.ring(Role.ACCENT, 1));
         if (focus) {
             gui.focus(buffer.keyboard());
         }

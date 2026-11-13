@@ -8,7 +8,9 @@ import dev.vexelray.framework.shell.Window;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.layout.LayoutEnums.Direction;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.spi.Seams;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.core.style.Theme;
 import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.text.FontSet;
@@ -68,11 +70,11 @@ final class Console {
     private final Gui gui;
     private final GlyphLayout glyphs;
     private final Tabs tabs;
-    private final int background;
-    private final int foreground;
-    private final int faint;
-    private final int accent;
-    private final int danger;
+    private int background;
+    private int foreground;
+    private int faint;
+    private int accent;
+    private int danger;
 
     /** Parallel to the bar's tabs. */
     private final List<Entry> entries = new ArrayList<>();
@@ -83,11 +85,9 @@ final class Console {
         this.window = window;
         this.gui = window.gui();
         this.glyphs = fonts.layout(fonts.face(Type.MONO));
-        this.background = rgb(gui.theme().color(Look.CARD));
-        this.foreground = rgb(gui.theme().color(Role.INK));
-        this.faint = rgb(gui.theme().color(Role.FAINT));
-        this.accent = rgb(gui.theme().color(Role.ACCENT));
-        this.danger = rgb(gui.theme().color(Role.DANGER));
+        colours();
+        // A terminal takes its colours as numbers, not roles, so it is told again when the look changes.
+        Seams.of(gui).onTheme(this::retheme);
 
         tabs = new Tabs(gui).name("runs").closable(false)
                 .action(MenuAction.of(STOP, "Stop"))
@@ -98,20 +98,45 @@ final class Console {
         gui.landmark(Landmarks.CONSOLE_TABS, tabs.node());
 
         // The window's own title bar, which a window places as the main one does, then the tabs on a card.
-        window.titleBar().node().background(gui.theme().color(Role.PAGE));
+        window.titleBar().node().background(Role.PAGE);
         gui.root().direction(Direction.COLUMN)
-                .background(gui.theme().color(Role.PAGE))
+                .background(Role.PAGE)
                 .children(window.titleBar().node(), gui.box().width(Length.FILL).height(Length.grow(1f))
                         .padding(Length.ZERO, Type.GAP)
                         .scroll(false, false)
                         .children(gui.box().width(Length.FILL).height(Length.FILL)
                         .padding(Length.dp(4))
-                        .background(gui.theme().color(Look.CARD))
+                        .background(Look.CARD)
                         .corner(Type.CORNER)
-                        .border(Type.RULE, gui.theme().color(Look.RIM))
+                        .border(Type.RULE, Look.RIM)
                         .clip(true)
                         .children(tabs.node())),
                         gui.box().width(Length.FILL).height(Type.GAP));
+    }
+
+    /**
+     * The terminal's colours in the tree's look, as the numbers {@link TerminalScreen#colors} and the console's own
+     * escapes take. Worked out from the theme, so redone on every change of look ({@link #retheme}).
+     */
+    private void colours() {
+        Theme theme = gui.theme();
+        background = rgb(theme.color(Look.CARD));
+        foreground = rgb(theme.color(Role.INK));
+        faint = rgb(theme.color(Role.FAINT));
+        accent = rgb(theme.color(Role.ACCENT));
+        danger = rgb(theme.color(Role.DANGER));
+    }
+
+    /**
+     * The look changed: every run's terminal takes the new default colours, so what a program wrote without colours of
+     * its own follows. What it wrote in colours of its own keeps them, as do the console's own lines already written
+     * (framework-notes FN-18): a terminal's cells hold numbers.
+     */
+    private void retheme() {
+        colours();
+        for (Entry e : entries) {
+            e.screen.colors(background, foreground);
+        }
     }
 
     Window window() {

@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.CheckText;
 import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.demo.editor.core.Markdown;
@@ -15,6 +14,7 @@ import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.edit.History;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.Paint;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.text.Span;
 import dev.vexelray.gui.core.text.Whitespace;
@@ -97,7 +97,7 @@ final class Buffer implements AutoCloseable {
     private int line = 1;
     private int column = 1;
     /** The ground under a problem: the theme's {@code DANGER}, faint, which also tells a problem span from a colour. */
-    private final Color problemGround;
+    private final Paint problemGround;
     /** Whether a {@link Check} is out and not yet answered. */
     private boolean checking;
     /** The text the last check was sent for, and when; null when this has not been checked as it is named now. */
@@ -111,7 +111,7 @@ final class Buffer implements AutoCloseable {
         this.id = id;
         this.gui = gui;
         this.path = path;
-        this.problemGround = Color.withAlpha(gui.theme().color(Role.DANGER), PROBLEM_GROUND);
+        this.problemGround = Role.DANGER.alpha(PROBLEM_GROUND);
         this.scope = Grammars.scopeFor(String.valueOf(path.getFileName()));
         // A document: its past is its own, so Ctrl+Z in one file never reaches into another, and its save mark
         // says whether this file is saved rather than whether the window is. Named, so its messages say which.
@@ -328,8 +328,8 @@ final class Buffer implements AutoCloseable {
     }
 
     private boolean isProblem(Span s) {
-        // A span's colours are paints now; this one was written as a colour, so it is the fixed paint of it.
-        return s.underline() && dev.vexelray.gui.core.style.Paint.of(problemGround).equals(s.bg());
+        // The danger role thinned, held once, so every problem span carries an equal paint and it follows the look.
+        return s.underline() && problemGround.equals(s.bg());
     }
 
     private static String firstLine(String message) {

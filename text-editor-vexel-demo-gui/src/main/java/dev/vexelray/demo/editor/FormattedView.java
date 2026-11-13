@@ -1,6 +1,5 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.canvas.Color;
 import dev.vexelray.demo.editor.core.Markdown;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
@@ -63,9 +62,9 @@ final class FormattedView {
         this.root = gui.column()
                 .width(Length.FILL).height(Length.FILL)
                 .scroll(false, true)
-                .background(color(Look.CARD))
+                .background(Look.CARD)
                 .corner(Length.rem(0.5f))
-                .border(Length.rem(0.1f), color(Look.CARD))
+                .border(Length.rem(0.1f), Look.CARD)
                 .visible(false)
                 .focusRing(FocusRing.NONE);
         // It takes the keyboard in the field's place, and stays lit while the keyboard is in any of its blocks too:
@@ -74,7 +73,7 @@ final class FormattedView {
         gui.focusable(root, true);
         this.ring = gui.bus().subscribe(gui.focusEvents(), e -> {
             if (ours(e.nodeId())) {
-                root.border(Length.rem(0.1f), color(e.gained() ? Look.FOCUS : Look.CARD));
+                root.border(Length.rem(0.1f), e.gained() ? Look.FOCUS : Look.CARD);
             }
         });
     }
@@ -137,7 +136,7 @@ final class FormattedView {
     private Node heading(Markdown.Block b) {
         Node title = prose(b.body(), HEADINGS[Math.min(b.level(), 6) - 1]).bold();
         if (b.level() > 2) {
-            return b.level() == 6 ? title.textColor(color(Role.DIM)) : title;
+            return b.level() == 6 ? title.textColor(Role.DIM) : title;
         }
         // The two top levels are ruled off, as a README is read on the web.
         return gui.column().width(Length.FILL).gap(Length.dp(4))
@@ -149,7 +148,7 @@ final class FormattedView {
         // Down by the field's top gutter, so it sits on the first line. Not in by its side gutter: the item's text
         // keeps the column it had, and the bullet hangs out by the gutter instead of crowding a "10." against it.
         Node marker = gui.text(b.marker())
-                .width(MARKER).textSize(BODY).textColor(color(Role.DIM))
+                .width(MARKER).textSize(BODY).textColor(Role.DIM)
                 .padding(TextMetrics.PAD_Y, Length.ZERO);
         Node indent = gui.box().width(Length.rem(INDENT_REM * b.level()));
         return gui.row()
@@ -162,18 +161,18 @@ final class FormattedView {
         return field(text, List.of())
                 .font(Type.MONO).textSize(Type.CODE)
                 .corner(Type.CORNER)
-                .background(color(Role.PANEL));
+                .background(Role.PANEL);
     }
 
     private Node rule(Length thickness) {
-        return gui.box().width(Length.FILL).height(thickness).background(color(Role.LINE));
+        return gui.box().width(Length.FILL).height(thickness).background(Role.LINE);
     }
 
     /** {@code inner} with a bar down its left, one per level of quoting. */
     private Node quoted(Node inner) {
         Node bar = gui.box().width(Length.dp(3)).height(Length.FILL).corner(Length.dp(1.5f))
-                .background(color(Role.EDGE));
-        Node body = gui.column().width(Length.FILL).children(inner.textColor(color(Role.DIM)));
+                .background(Role.EDGE);
+        Node body = gui.column().width(Length.FILL).children(inner.textColor(Role.DIM));
         return gui.row().width(Length.FILL).gap(Type.WIDE).alignItems(AlignItems.STRETCH).children(bar, body);
     }
 
@@ -182,13 +181,13 @@ final class FormattedView {
         Node grid = gui.column()
                 .width(Length.FILL)
                 .corner(Type.CORNER)
-                .border(Type.RULE, color(Role.LINE))
+                .border(Type.RULE, Role.LINE)
                 .clip(true);
         for (int r = 0; r < rows.size(); r++) {
             List<Markdown.Inline> row = rows.get(r);
             Node line = gui.row().width(Length.FILL);
             if (r == 0) {
-                line.background(color(Role.PANEL));
+                line.background(Role.PANEL);
             }
             for (int c = 0; c < columns; c++) {
                 // The field's gutter is the cell's padding.
@@ -211,9 +210,9 @@ final class FormattedView {
             spans.add(switch (s.mark()) {
                 case BOLD -> Span.bold(s.start(), s.end());
                 case ITALIC -> Span.italic(s.start(), s.end());
-                case CODE -> new Span(s.start(), s.end(), color(Role.INK), color(Role.PANEL), false);
-                case LINK -> new Span(s.start(), s.end(), color(Role.ACCENT), null, true);
-                case STRIKE -> Span.foreground(s.start(), s.end(), color(Role.FAINT));
+                case CODE -> new Span(s.start(), s.end(), Role.INK, Role.PANEL, false);
+                case LINK -> new Span(s.start(), s.end(), Role.ACCENT, null, true);
+                case STRIKE -> Span.foreground(s.start(), s.end(), Role.FAINT);
             });
         }
         return field(text.text(), spans).textSize(size);
@@ -238,13 +237,9 @@ final class FormattedView {
         gui.releaseClaim(n, Shortcut.of(Key.F, Modifier.CONTROL));
         return n.width(Length.FILL).height(Length.AUTO)
                 .align(TextLayout.HAlign.LEFT, TextLayout.VAlign.TOP)
-                .textColor(color(Role.INK))
+                .textColor(Role.INK)
                 .background((Paint) null)
                 .border(Length.ZERO, (Paint) null)
                 .focusRing(FocusRing.NONE);
-    }
-
-    private Color color(Role role) {
-        return gui.theme().color(role);
     }
 }
