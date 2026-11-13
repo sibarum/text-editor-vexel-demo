@@ -145,6 +145,15 @@ final class Look {
     /** The hairline round the navigator in Symbols, its header and its icon: the violet at full voice. */
     static final Role SEARCHING_RIM = p -> Oklab.polar(0.74, 0.13, SEARCH_HUE).toColor();
 
+    /**
+     * The ring round Symbols' field or list while it has the keyboard: built as {@link #FOCUS} is, but in violet and a
+     * little louder, so it reads on the violet card. The theme's teal ring there said Open, in a mode that is not.
+     */
+    static final Role SEARCH_FOCUS = p -> {
+        double l = p.page().l() + 0.45 * (p.ink().l() - p.page().l());
+        return Oklab.polar(l, 0.080, SEARCH_HUE).toColor();
+    };
+
     /** A selected declaration in Symbols: two steps above {@link #SEARCHING}, in its hue, where elsewhere it is teal. */
     static final Role SEARCH_SELECTED = p -> {
         Oklab level = Oklab.of(p.surface(4));

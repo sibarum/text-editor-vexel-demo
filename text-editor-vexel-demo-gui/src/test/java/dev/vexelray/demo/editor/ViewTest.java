@@ -824,7 +824,8 @@ class ViewTest {
         b.field.insert("    void wave() {\n    }\n");
         eventually("unsaved", b::dirty);
         tell(Intent.Command.SAVE_FRONT);
-        eventually("indexed again", () -> indexed.size() >= 2);
+        // Showing a folder may index it more than once, so wait for the index that holds the method saved.
+        eventually("indexed again", () -> indexed.stream().anyMatch(m -> m.summary().contains("2 methods")));
         assertTrue(said.stream().noneMatch(s -> s instanceof Status st && st.message().startsWith("Indexed")));
 
         List<Messages.SymbolsFound> found = new CopyOnWriteArrayList<>();

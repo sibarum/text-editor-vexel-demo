@@ -19,6 +19,7 @@ import dev.vexelray.gui.icons.Icon;
 import dev.vexelray.gui.icons.IconView;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
+import dev.vexelray.gui.core.style.FocusRing;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.text.Ellipsis;
 import dev.vexelray.gui.fileicons.FileFamily;
@@ -277,6 +278,10 @@ final class Navigator {
                 .name("symbol-list")
                 .looks(Look.SEARCH_SELECTED, null);
         symbolList.node().width(Length.FILL).height(Length.grow(1f));
+        // Focus in Symbols is ringed in its violet, not the theme's teal, which is Open's colour.
+        FocusRing searching = gui.theme().focusRing().color(Look.SEARCH_FOCUS);
+        symbolField.node().focusRing(searching);
+        symbolList.node().focusRing(searching);
         Color violet = gui.theme().color(Look.SEARCHING_RIM);
         symbolHeader = gui.row()
                 .width(Length.FILL)
