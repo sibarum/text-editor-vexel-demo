@@ -15,9 +15,6 @@ declaration (the index is built when a project is shown and on each save, and Ct
 it by name).
 Its code is on `develop`, to copy from as each piece is rebuilt.
 
-- [ ] Deep rows have no room for their names: nine levels down (`vexelray-gui-widget`'s `TreeView.java`) the indent is
-      wider than the navigator, so a row Reveal lands on is on screen but blank (seen 2026-11-13). A narrower indent
-      past some depth, the navigator scrolling across, or a wider navigator.
 - [ ] Reading the index further: uses of a name (`Query.usages`), Ctrl+click on a name, and a library's declarations
       in a read-only tab, which Symbols leaves out today.
 

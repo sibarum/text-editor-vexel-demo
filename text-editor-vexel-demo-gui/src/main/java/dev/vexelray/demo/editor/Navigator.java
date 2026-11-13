@@ -37,6 +37,7 @@ import dev.vexelray.gui.widget.Unclip;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -185,6 +186,8 @@ final class Navigator {
     private final Set<Path> folders = new HashSet<>();
     /** Every path the files tree has been told of since the folder was shown, so new colours reach every row. */
     private final Set<Path> listed = new HashSet<>();
+    /** Each folder a compacted row stands for, and the row's path: what a reveal walks through as that row. */
+    private final Map<Path, Path> folded = new HashMap<>();
     /** What git last said of the folder shown, or null: outside a repository, or before it answers. */
     private Status git;
     /** The folder shown, or null for none yet. */
@@ -767,6 +770,7 @@ final class Navigator {
         if (another) {
             git = null;   // another folder's colours are not this one's; its own status is asked for
             listed.clear();
+            folded.clear();
         }
         naming = Made.FILE;
         namingFrom = null;
@@ -785,16 +789,23 @@ final class Navigator {
      */
     Listing wanted(Object parent) {
         if (parent instanceof Path dir) {
-            return new Listing(treeAddress(), dir, false, false);
+            return new Listing(treeAddress(), dir, false, false, true);
         }
-        return folder == null ? null : new Listing(treeAddress(), folder, true, false);
+        return folder == null ? null : new Listing(treeAddress(), folder, true, false, true);
     }
 
-    /** {@code ListFolder}'s answer, as the tree's entries for the level it asked about. */
+    /**
+     * {@code ListFolder}'s answer, as the tree's entries for the level it asked about. A compacted folder's row stands
+     * for the folders between the level and it, which are noted in {@link #folded} for a reveal to walk through.
+     */
     TreeView.Children children(Listed listed) {
         List<TreeView.Entry> entries = new ArrayList<>(listed.items().size());
         for (Item item : listed.items()) {
             this.listed.add(item.path());
+            folded.remove(item.path());   // a row of its own now, whatever it was folded into before
+            for (Path p = item.path().getParent(); p != null && !p.equals(listed.dir()); p = p.getParent()) {
+                folded.put(p, item.path());
+            }
             TreeView.Entry entry;
             if (item.folder()) {
                 folders.add(item.path());
@@ -896,6 +907,11 @@ final class Navigator {
         return new TreeView.Children(treeAddress(), null, List.of());
     }
 
+    /** The files tree's selected row, or null. */
+    Path selected() {
+        return tree.selected();
+    }
+
     /** Whether the tree has a row for {@code item}: listed, and under folders that are open. */
     boolean hasRow(Path item) {
         return tree.rowNode(item) != null;
@@ -952,7 +968,7 @@ final class Navigator {
     }
 
     private void walkToReveal() {
-        List<Path> chain = folder == null ? List.of() : ListFolder.chain(folder, revealing);
+        List<Path> chain = rows(folder == null ? List.of() : ListFolder.chain(folder, revealing));
         if (chain.isEmpty()) {
             revealing = null;
             return;
@@ -960,6 +976,22 @@ final class Navigator {
         revealTries--;
         revealWalking = true;
         tree.revealPath(chain);
+    }
+
+    /**
+     * The way down to a file as the files tree's rows: each folder a compacted row stands for is that row, once. A
+     * level not listed yet is left as the folder it is; the walk stops short there, and the next try, once that level
+     * is listed and its folds known, goes on past it.
+     */
+    List<Path> rows(List<Path> chain) {
+        List<Path> rows = new ArrayList<>(chain.size());
+        for (Path p : chain) {
+            Path row = folded.getOrDefault(p, p);
+            if (rows.isEmpty() || !rows.getLast().equals(row)) {
+                rows.add(row);
+            }
+        }
+        return rows;
     }
 
     /**

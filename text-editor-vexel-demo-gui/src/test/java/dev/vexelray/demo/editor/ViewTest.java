@@ -4,7 +4,9 @@ import dev.vexelray.demo.editor.core.Editor;
 import dev.vexelray.demo.editor.core.Messages;
 import dev.vexelray.demo.editor.core.Messages.Caption;
 import dev.vexelray.demo.editor.core.CreateFile;
+import dev.vexelray.demo.editor.core.ListFolder;
 import dev.vexelray.demo.editor.core.Messages.Go;
+import dev.vexelray.demo.editor.core.Messages.RevealRow;
 import dev.vexelray.demo.editor.core.Messages.Indexed;
 import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
@@ -876,6 +878,28 @@ class ViewTest {
         eventually("the status to say so", () -> said.stream().anyMatch(s -> s instanceof Status st
                 && st.message().startsWith("Created new-project, a Maven project")));
         assertEquals(Made.FILE, nav.naming(), "the bar's mind goes back to its own");
+    }
+
+    /**
+     * A package's folders are one row, and Reveal walks through it to the file: the way down names every folder, and
+     * the tree has a row only for the deepest of a package's.
+     */
+    @Test
+    void revealWalksThroughACompactedPackageToTheFile() throws Exception {
+        Path pkg = Files.createDirectories(dir.resolve("src/main/java/dev/x/y")).toAbsolutePath().normalize();
+        Path a = Files.writeString(pkg.resolve("A.java"), "class A {}");
+        Files.writeString(pkg.resolve("B.java"), "class B {}");
+        Files.createDirectories(dir.resolve("src/test"));
+        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
+        Navigator nav = wiring.ui().navigator();
+        Path src = dir.toAbsolutePath().normalize().resolve("src");
+        eventually("a row for src", () -> nav.hasRow(src));
+
+        shell.bus().publish(Messages.REVEAL_ROW_TOPIC, new RevealRow(a));
+        eventually("the file's row selected", () -> a.equals(nav.selected()));
+        assertTrue(nav.hasRow(pkg), "the package is a row");
+        assertFalse(nav.hasRow(pkg.getParent()), "and the folders it stands for are not");
+        assertEquals(List.of(src, src.resolve("main/java"), pkg, a), nav.rows(ListFolder.chain(dir, a)));
     }
 
     /** Inside a project a folder offers a module rather than a project; its archive is named beside it. */

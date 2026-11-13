@@ -469,12 +469,19 @@ public final class Messages {
     /**
      * {@code roots}: the level is the tree's top, the folder shown, rather than a folder opened in it.
      * {@code foldersOnly}: Open's tree, which lists the folders a folder can be picked from and no files.
+     * {@code compact}: the files tree, where a folder holding one folder and nothing else is one row with it, down to
+     * the first that holds more ({@link ListFolder}): so a package's folders are one row, and deep files have room
+     * for their names.
      */
-    public record Listing(String tree, Path dir, boolean roots, boolean foldersOnly) {
+    public record Listing(String tree, Path dir, boolean roots, boolean foldersOnly, boolean compact) {
+        public Listing(String tree, Path dir, boolean roots, boolean foldersOnly) {
+            this(tree, dir, roots, foldersOnly, false);
+        }
     }
 
     /**
-     * One entry of a level: where it is, what its row says, and whether it opens. {@code inProject}: a Maven project is
+     * One entry of a level: where it is, what its row says, and whether it opens. A compacted folder's path is the
+     * deepest of the folders its row stands for, and its name is theirs, joined. {@code inProject}: a Maven project is
      * at or above it, so what is added in it is a module of that project rather than a project of its own.
      */
     public record Item(Path path, String name, boolean folder, boolean inProject) {
