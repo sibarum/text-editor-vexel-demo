@@ -758,6 +758,45 @@ class ViewTest {
         }
     }
 
+    /**
+     * Ctrl+T: Symbols says a project has no index, its button builds one, and then what is typed lists declarations, and
+     * Enter opens the best one's file with its name selected and puts the files back.
+     */
+    @Test
+    void symbolsFindsADeclarationAndEnterGoesToIt() throws Exception {
+        Path root = dir.resolve("p").toAbsolutePath().normalize();
+        Path source = Files.createDirectories(root.resolve("src/main/java/demo"));
+        Files.writeString(root.resolve("pom.xml"),
+                "<project><groupId>x</groupId><artifactId>p</artifactId><version>1</version></project>\n");
+        Path greeter = Files.writeString(source.resolve("Greeter.java"), "package demo;\n\npublic class Greeter {\n"
+                + "    @Deprecated\n    public String greet() {\n        return \"hello\";\n    }\n}\n");
+        List<Messages.SymbolsFound> found = new CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.SYMBOLS_FOUND_TOPIC, found::add);
+        shell.bus().publish(Messages.GO_TOPIC, new Go(root.toString()));
+        Navigator nav = wiring.ui().navigator();
+        eventually("the project shown", () -> root.equals(nav.folder()));
+
+        tell(Intent.Command.TOGGLE_SYMBOLS);
+        eventually("an answer", () -> !found.isEmpty());
+        assertTrue(nav.symbolsUp());
+        assertEquals(Navigator.SYMBOLS, nav.chipLabel());
+        assertFalse(found.getLast().indexed());
+        assertEquals("p has no index yet", Navigator.note(found.getLast()));
+
+        shell.bus().publish(Button.PRESSED, new Button.Pressed(nav.indexButtonAddress()));
+        eventually("asked again once indexed", () -> found.size() >= 2 && found.getLast().indexed());
+
+        shell.bus().publish(TextField.CHANGED, new TextField.Changed(nav.symbolFieldAddress(), "greet", 1));
+        eventually("greet listed", () -> nav.symbolChosen() != null && nav.symbolChosen().name().equals("greet"));
+        assertEquals("method of Greeter", Navigator.detail(nav.symbolChosen()));
+
+        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.symbolFieldAddress(), "greet"));
+        eventually("Greeter.java open", () -> ws.find(greeter) != null);
+        Buffer b = ws.find(greeter);
+        eventually("the name selected", () -> b.field.caret() == b.field.text().indexOf("greet()") + "greet".length());
+        assertFalse(nav.symbolsUp(), "going there puts the files back");
+    }
+
     /** New → File… and Project… name their thing in the folder shown, from wherever the navigator was. */
     @Test
     void theNewMenuNamesThingsInTheFolderShown() throws Exception {

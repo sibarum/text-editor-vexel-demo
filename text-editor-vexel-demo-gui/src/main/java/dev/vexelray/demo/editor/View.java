@@ -51,7 +51,11 @@ import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ScratchesFound;
 import dev.vexelray.demo.editor.core.Messages.ScratchesWanted;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
+import dev.vexelray.demo.editor.core.Messages.Declaration;
 import dev.vexelray.demo.editor.core.Messages.Status;
+import dev.vexelray.demo.editor.core.Messages.SymbolsFound;
+import dev.vexelray.demo.editor.core.Messages.SymbolsWanted;
+import dev.vexelray.demo.editor.core.FindSymbols;
 import dev.vexelray.demo.editor.core.NavigateText;
 import dev.vexelray.framework.api.Subscribe;
 import dev.vexelray.framework.core.WindowCommand;
@@ -64,6 +68,7 @@ import dev.vexelray.gui.core.input.Shortcut;
 import dev.vexelray.gui.keymap.Keymap;
 import dev.vexelray.gui.widget.Breadcrumb;
 import dev.vexelray.gui.widget.Button;
+import dev.vexelray.gui.widget.ListView;
 import dev.vexelray.gui.widget.Select;
 import dev.vexelray.gui.widget.Tabs;
 import dev.vexelray.gui.widget.TextField;
@@ -148,8 +153,11 @@ final class View {
     private final Sender<HandTo> handTo;
     private final Sender<GitStatusWanted> gitStatusWanted;
     private final Sender<TreeView.Inks> inks;
+    private final Sender<SymbolsWanted> symbolsWanted;
     /** How many times git's status has been asked for: an answer to any but the last is stale, and left. */
     private long gitAsked;
+    /** How many times Symbols has asked: an answer to any but the last is stale, and left. */
+    private long symbolsAsked;
     /** The folder an index was asked for and has not been answered yet, or null: one at a time. */
     private Path indexing;
     /** What the Run menu was last asked about, so an answer about anything else is left. */
@@ -161,8 +169,15 @@ final class View {
     /** The last Ctrl+Enter asked, whose text an import is worked out from; null before the first. */
     private Navigate asked;
 
-    /** Where a declaration is: in {@code file}, {@code [start, end)} as the file on disk has it, named {@code name}. */
-    private record Reveal(Path file, int start, int end, String name) {
+    /**
+     * Where a declaration is: in {@code file}, {@code [start, end)} as the file on disk has it, named {@code name}; or,
+     * from Symbols, {@code at}, by line and column, whose range is found in the text once the file is open.
+     */
+    private record Reveal(Path file, int start, int end, String name, Declaration at) {
+
+        Reveal(Path file, int start, int end, String name) {
+            this(file, start, end, name, null);
+        }
     }
 
     /**
@@ -186,7 +201,8 @@ final class View {
          Sender<ScratchesWanted> scratchesWanted, Sender<Relocate> relocate,
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
          Sender<WindowCommand> windows, Sender<IndexWanted> indexWanted, Sender<HandTo> handTo,
-         Sender<GitStatusWanted> gitStatusWanted, Sender<TreeView.Inks> inks) {
+         Sender<GitStatusWanted> gitStatusWanted, Sender<TreeView.Inks> inks, Sender<SymbolsWanted> symbolsWanted) {
+        this.symbolsWanted = symbolsWanted;
         this.handTo = handTo;
         this.gitStatusWanted = gitStatusWanted;
         this.inks = inks;
@@ -223,6 +239,13 @@ final class View {
         ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
                 new Intent(Command.LEAVE_RENAME));
+        // Symbols: Down from the field into the list, and Escape from either back to the files.
+        gui.claim(nav.symbolFieldNode(), Shortcut.of(Key.DOWN), ClaimScope.FOCUSED, intents,
+                new Intent(Command.SYMBOLS_DOWN));
+        gui.claim(nav.symbolFieldNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
+                new Intent(Command.LEAVE_SYMBOLS));
+        gui.claim(nav.symbolListNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
+                new Intent(Command.LEAVE_SYMBOLS));
     }
 
     /**
@@ -255,6 +278,7 @@ final class View {
         command(keys, CommandIds.NAVIGATOR, "Show or hide the navigator", Command.TOGGLE_NAVIGATOR,
                 Shortcut.of(Key.B, Modifier.CONTROL));
         command(keys, "folder.open", "Open a folder", Command.TOGGLE_OPEN, Shortcut.of(Key.O, Modifier.CONTROL));
+        command(keys, CommandIds.SYMBOLS, "Go to symbol", Command.TOGGLE_SYMBOLS, Shortcut.of(Key.T, Modifier.CONTROL));
         command(keys, "scratch.new", "New scratch", Command.NEW_SCRATCH,
                 Shortcut.of(Key.N, Modifier.CONTROL, Modifier.SHIFT));
         command(keys, "scratch.list", "Show or hide the scratches", Command.TOGGLE_SCRATCHES,
@@ -439,6 +463,9 @@ final class View {
     @Subscribe
     public void indexed(Indexed m) {
         indexing = null;
+        if (nav.symbolsUp()) {
+            askSymbols(nav.symbolText());   // what was typed, asked again of the index just built
+        }
         String name = Picker.label(m.project());
         if (!m.problem().isEmpty()) {
             ui.status("Not indexed: " + m.problem(), true);
@@ -627,10 +654,102 @@ final class View {
 
     /** The declaration wanted, selected in {@code b} if {@code b} is its file. */
     private void revealIn(Buffer b) {
-        if (reveal != null && b.path.toAbsolutePath().normalize().equals(reveal.file())) {
-            b.reveal(reveal.start(), reveal.end(), reveal.name());
-            reveal = null;
+        if (reveal == null || !b.path.toAbsolutePath().normalize().equals(reveal.file())) {
+            return;
         }
+        if (reveal.at() != null) {
+            int[] name = FindSymbols.nameAt(b.field.text(), reveal.at());
+            b.reveal(name[0], name[1], reveal.name());
+        } else {
+            b.reveal(reveal.start(), reveal.end(), reveal.name());
+        }
+        reveal = null;
+    }
+
+    // ------------------------------------------------------------------ Symbols
+
+    /** Ctrl+T: Symbols over the navigator's files, asking at once for what was typed last; or the files again. */
+    void toggleSymbols() {
+        if (nav.symbolsUp() && ui.navigatorShown()) {
+            leaveSymbols();
+            return;
+        }
+        open(false);
+        ui.showNavigator(true);
+        nav.symbols(true);
+        picture();
+        askSymbols(nav.symbolText());
+    }
+
+    /** Escape in Symbols: the files back, and the keyboard in the document in front, or in the tree. */
+    void leaveSymbols() {
+        nav.symbols(false);
+        Buffer b = ws.front();
+        if (b != null) {
+            gui.focus(b.keyboard());
+        } else {
+            nav.focusTree();
+        }
+    }
+
+    /** Down in Symbols' field: into the list. */
+    void symbolsDown() {
+        nav.focusSymbolList();
+    }
+
+    /** Ask {@code FindSymbols} what {@code typed} names in the project the folder shown is in. */
+    private void askSymbols(String typed) {
+        Path in = nav.folder();
+        if (in != null) {
+            symbolsWanted.send(new SymbolsWanted(in, typed, ++symbolsAsked));
+        } else {
+            ui.status("Open a folder first", true);
+        }
+    }
+
+    /** What {@code FindSymbols} found, if it answers the last question: listed. */
+    @Subscribe
+    public void symbolsFound(SymbolsFound m) {
+        if (m.asked() == symbolsAsked) {
+            nav.symbolsFound(m);
+        }
+    }
+
+    /** Enter on a row of Symbols, or a double click: go to it. */
+    @Subscribe
+    public void symbolActivated(ListView.Activated m) {
+        if (m.list().equals(nav.symbolListAddress()) && m.item() instanceof Declaration d) {
+            goToSymbol(d);
+        }
+    }
+
+    /** A click on a row of Symbols: go to it. */
+    @Subscribe
+    public void symbolClicked(ListView.Clicked m) {
+        if (m.list().equals(nav.symbolListAddress()) && m.item() instanceof Declaration d) {
+            goToSymbol(d);
+        }
+    }
+
+    /**
+     * Go to {@code d}: its file opened, or fronted, with its name selected once its text is there; and the files back,
+     * as picking ends Open. Ctrl+T comes back to what was typed.
+     */
+    private void goToSymbol(Declaration d) {
+        if (d == null) {
+            return;
+        }
+        Path file = d.file().toAbsolutePath().normalize();
+        reveal = new Reveal(file, 0, 0, d.name(), d);
+        nav.symbols(false);
+        Buffer open = ws.find(file);
+        if (open != null && open.id == front) {
+            revealIn(open);
+            gui.focus(open.keyboard());
+        } else {
+            this.open.send(new Open(file, true));
+        }
+        ui.status(d.name() + ", " + Navigator.detail(d), false);
     }
 
     @Subscribe
@@ -690,6 +809,10 @@ final class View {
     /** A document's text changed: whether it is now unsaved, and its colours. */
     @Subscribe
     public void fieldChanged(TextField.Changed m) {
+        if (m.field().equals(nav.symbolFieldAddress())) {
+            askSymbols(m.text());
+            return;
+        }
         Buffer b = ws.byField(m.field());
         if (b == null) {
             return;
@@ -723,6 +846,10 @@ final class View {
      */
     @Subscribe
     public void fieldSubmitted(TextField.Submitted m) {
+        if (m.field().equals(nav.symbolFieldAddress())) {
+            goToSymbol(nav.symbolChosen());
+            return;
+        }
         if (m.field().equals(nav.renameAddress())) {
             Path from = nav.renaming();
             Path to = nav.renamedTo(m.text());
@@ -834,6 +961,8 @@ final class View {
     public void buttonPressed(Button.Pressed m) {
         if (m.button().equals(nav.newScratchAddress())) {
             newScratch();
+        } else if (m.button().equals(nav.indexButtonAddress())) {
+            indexHere();
         } else if (m.button().equals(nav.picker().scratchesAddress())) {
             pick(nav.picker().scratchesFolder());
         }
@@ -1209,6 +1338,7 @@ final class View {
         } else {
             indexing = in;
             indexWanted.send(new IndexWanted(in));
+            nav.indexing(in);
             ui.status("Indexing " + Picker.label(in) + "…", false);
         }
     }

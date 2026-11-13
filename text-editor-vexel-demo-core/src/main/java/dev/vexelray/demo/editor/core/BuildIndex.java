@@ -21,8 +21,8 @@ import java.util.Optional;
 
 /**
  * Concordance's index of a Maven project: every declaration and every use of a name in its sources, and what its
- * libraries export, read from their {@code -sources.jar} or, failing that, their class files. What reads it (going to
- * a declaration, names as links) is still to come; this builds it and keeps it ({@link IndexStore}).
+ * libraries export, read from their {@code -sources.jar} or, failing that, their class files. This builds it and keeps
+ * it ({@link IndexStore}), on disk and in memory; {@link FindSymbols} reads it.
  *
  * <p><b>The whole project.</b> The folder asked about may be a module, so the project is the outermost of the
  * folders with a {@code pom.xml} that run unbroken up from it: the reactor a module is built in, not the module alone.
@@ -71,6 +71,7 @@ public final class BuildIndex {
                     LOG.warn("could not save the index of {} to {}: {}", root, saved, e.toString());
                 }
             }
+            store.hold(root, live.index());   // what FindSymbols reads from now on
             String summary = live.index().summary();
             LOG.info("indexed {} in {} ms: {}; {}", root, (System.nanoTime() - started) / 1_000_000, summary, changes);
             return new Indexed(root, summary, problems.size(), "");

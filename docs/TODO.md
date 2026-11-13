@@ -11,11 +11,13 @@ Keep an entry short enough that it does not need editing, and delete it when it 
 The 0.1 editor is being rebuilt on the v0.2 template, one milestone at a time: highlighting (done); editing details
 (done; word wrap is toggled, and is kept once there are preferences); the navigator's Add
 menu, Open mode and folder pictures; scratches; preferences; running things and the console; Git mode; go to
-declaration (the index is built, by New → Index this project; nothing reads it yet). Its code is on `develop`, to
-copy from as each piece is rebuilt.
+declaration (the index is built by New → Index this project, and Ctrl+T's Symbols finds declarations in it by name).
+Its code is on `develop`, to copy from as each piece is rebuilt.
 
 - [ ] Index without being asked: 0.1 indexed a Maven project when it was opened, and again on save. Today only New →
-      Index this project does, which is enough until something reads the index.
+      Index this project (or Symbols' button) does, so Symbols is as stale as the last index.
+- [ ] Reading the index further: uses of a name (`Query.usages`), Ctrl+click on a name, and a library's declarations
+      in a read-only tab, which Symbols leaves out today.
 
 - [ ] A native build with highlighting. TM4E reads its grammars by reflection: the 0.1 editor's metadata registered
       the `org.eclipse.tm4e.core.internal.grammar.raw.Raw*` classes, `grammars/*.json` and jcodings' `tables/*.bin`.

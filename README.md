@@ -95,6 +95,7 @@ groups the button with other Java programs, and pinning it pins Java. The native
 | Ctrl+Tab, Ctrl+PageDown / Ctrl+Shift+Tab, Ctrl+PageUp | next / previous tab |
 | Ctrl+Shift+E | put the keyboard in the navigator |
 | Ctrl+F | find in the file (Enter / Shift+Enter step, Escape closes) |
+| Ctrl+T | Symbols: find a declaration in the project by name (see below); Enter goes to it, Escape closes |
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+Enter | in a Pontif file: go to the definition of the name at the caret, or add its `requires` |
 | Ctrl+= / Ctrl+- / Ctrl+0 | zoom |
@@ -108,10 +109,20 @@ at or above the folder. Each puts its name in the path bar, and Enter makes it. 
 and use of a name in the whole reactor around the folder, and what its libraries export, from their sources jars or
 decompiled. It is kept in `~/.text-editor-vexel-demo/index`, one file per project, so indexing again rereads only
 what changed, and libraries go through Concordance's shared cache (`~/.concordance/jars`). The status line says what
-it holds. Nothing reads it yet: going to a declaration will. To a script the menu is `titlebar-menu.new`, with
-`menu.file`, `menu.project`, `menu.submodule` and `menu.index-this-project`.
+it holds. To a script the menu is `titlebar-menu.new`, with `menu.file`, `menu.project`, `menu.submodule` and
+`menu.index-this-project`.
 
-**View**, after New, has word wrap, the navigator, the formatted view and zoom, each with its chord beside it.
+**Symbols** (Ctrl+T, or View → Go to symbol…) reads that index. A name field and a list take the files' place in the
+navigator, and as you type, the list shows the project's declarations whose names fit (`FindSymbols`): an exact match
+first, then a prefix, a substring, camel humps (`GC` finds `GreetingCard`) and a subsequence, 200 at most. Each row is
+the name over what it is and where. Down moves into the list; Enter, or a click, opens the file with the name selected
+and puts the files back; Ctrl+T again comes back to what was typed. A project never indexed says so, with an **Index
+this project** button, rather than showing an empty list. Only the project's own sources are listed: a library's
+declarations wait for read-only tabs. The index is held in memory once built or first read, so a keystroke costs a
+search, not a disk read; it is as fresh as the last time it was built. To a script: `symbols` (the field),
+`symbols.list`, `symbols.note` (the line under the list, "12 declarations", worth an `await`) and `symbols.index`.
+
+**View**, after New, has word wrap, the navigator, Go to symbol…, the formatted view and zoom, each with its chord beside it.
 
 Selecting a file in the navigator opens it — a click, or walking the tree with the arrow keys, which keep the
 keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and Reveal in navigator. A bullet in
@@ -173,7 +184,7 @@ and a reply out), and **recipes** (a part built once and handed to whoever takes
 | `Messages.java` | **every message the parts send each other**, grouped by who sends it to whom, each record beside its topic. A record crosses as itself, so it holds only immutable values; a list it holds is copied in its constructor. |
 | `Editor.java` | **the controller**: every decision (what a typed path names, whether a file is already open, when closing needs a question, what the status line says, what comes back next time) as a declared step on one immutable state, held by a ledger. Each message it hears runs one step; closing is a chain of them that waits on the person and the disk without anything waiting on a thread. It needs no lock, because only its steps change its state and they run one at a time. |
 | `Doc.java` | the shape of the session (which files, which in front, which unsaved, which folder) as one immutable value, part of the editor's state. |
-| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java`, `CheckText.java`, `NavigateText.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
+| `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java`, `CheckText.java`, `NavigateText.java`, `BuildIndex.java`, `FindSymbols.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
 | `TextFile.java`, `Markdown.java` | the policy between bytes and text, and Markdown as spans: pure functions. |
 | `Core.java` | the list of this module's component and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it. |
 

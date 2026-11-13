@@ -339,6 +339,34 @@ public final class Messages {
     }
 
     /**
+     * The declarations whose names answer {@code typed}, in the index of the project {@code folder} is in
+     * ({@link FindSymbols}). {@code asked} counts the questions, so an answer to any but the last is left.
+     */
+    public static final Topic<SymbolsWanted> SYMBOLS_WANTED_TOPIC = Topic.edge(SymbolsWanted.class);
+
+    public record SymbolsWanted(Path folder, String typed, long asked) {
+    }
+
+    /**
+     * What {@link SymbolsWanted} found: the best of them, best first, and how many more there were. {@code indexed}
+     * is false when the project has no index yet, which is not the same as one that holds nothing of that name.
+     * {@code problem}: why nothing could be asked, empty when it could.
+     */
+    public static final Topic<SymbolsFound> SYMBOLS_FOUND_TOPIC = Topic.edge(SymbolsFound.class);
+
+    public record SymbolsFound(Path project, String typed, long asked, boolean indexed, List<Declaration> rows,
+                               int more, String problem) {
+    }
+
+    /**
+     * A declaration in a file on disk: its simple name, what it is ("class", "method"), what it is in (the type for a
+     * member, the package for a type, empty for none), and where the declaration begins, by line and column, both
+     * from 1. Its name is the first word {@code name} at or after that place: annotations and modifiers come first.
+     */
+    public record Declaration(String name, String kind, String owner, Path file, int line, int column) {
+    }
+
+    /**
      * What {@link NewScratch} made: the new, empty scratch, with the line endings a save gives it, or why not
      * ({@code problem}, and {@code path} the scratches' folder).
      */

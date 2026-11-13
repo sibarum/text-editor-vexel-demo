@@ -4,22 +4,26 @@ import dev.vexelray.demo.editor.core.CreateFile;
 import dev.vexelray.demo.editor.core.ListFolder;
 import dev.sibarum.suite.git.Status;
 import dev.vexelray.demo.editor.core.Messages.App;
+import dev.vexelray.demo.editor.core.Messages.Declaration;
 import dev.vexelray.demo.editor.core.Messages.GitStatusRead;
 import dev.vexelray.demo.editor.core.Messages.Item;
 import dev.vexelray.demo.editor.core.Messages.Listed;
 import dev.vexelray.demo.editor.core.Messages.Listing;
 import dev.vexelray.demo.editor.core.Messages.Made;
+import dev.vexelray.demo.editor.core.Messages.SymbolsFound;
 import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.layout.LayoutEnums.AlignItems;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.Role;
+import dev.vexelray.gui.core.text.Ellipsis;
 import dev.vexelray.gui.fileicons.FileFamily;
 import dev.vexelray.gui.widget.Button;
 import dev.vexelray.gui.widget.Cue;
 import dev.vexelray.gui.core.drop.DropEffect;
 import dev.vexelray.gui.widget.Framing;
+import dev.vexelray.gui.widget.ListView;
 import dev.vexelray.gui.widget.MenuAction;
 import dev.vexelray.gui.widget.Placement;
 import dev.vexelray.gui.widget.TextField;
@@ -87,11 +91,20 @@ import java.util.Set;
  * pasted there, is moved there ({@link #placedTo}), and Rename… puts a name field above the tree, Enter to rename and
  * Escape to leave it. New folder here makes one and opens the field on it. The view asks {@code MoveScratch} for each,
  * and the window's history takes in each that lands, so Ctrl+Z puts it back.
+ *
+ * <h2>Symbols: the project's declarations, by name</h2>
+ *
+ * <p>Ctrl+T puts a name field and a list where the files were: the declarations in the project's index
+ * ({@code FindSymbols}) whose names answer what is typed, best first, each row its name over what it is and where.
+ * The keyboard stays in the field while typing; Down goes into the list, Enter or a click on a row goes to the
+ * declaration, and Escape puts the files back. Under the list a line says how many were found, or that the project has
+ * no index yet, with the button that builds one. It is edged in the accent as the scratches are: the editor is still
+ * beside it.
  */
 final class Navigator {
 
     /** Where the card is: the folder's files, Open in their place, or the scratches over them. */
-    enum Place { FILES, OPEN, SCRATCHES }
+    enum Place { FILES, OPEN, SCRATCHES, SYMBOLS }
 
     /** The rows' menu actions, by the id {@code TreeView.CHOSEN} carries back. */
     static final String OPEN = "open";
@@ -139,6 +152,14 @@ final class Navigator {
     /** Rename's field, above the scratches' tree while a row is being renamed. */
     private final TextField renameField;
     private final Node scratchPane;
+    /** Symbols: the name typed, the declarations it answers, and the line saying how many or why none. */
+    private final TextField symbolField;
+    private final ListView<Declaration> symbolList;
+    private final Node symbolNote;
+    private final Button indexButton;
+    private final Node symbolPane;
+    /** The declarations listed now. */
+    private List<Declaration> symbols = List.of();
     /** The scratch or folder the name field is for, or null while it is put away. */
     private Path renaming;
     private final Node root;
@@ -234,6 +255,33 @@ final class Navigator {
                 .children(newScratch.node(), renameField.node(), scratchTree.node());
         scratchPane.visible(false);
 
+        symbolField = new TextField(gui, "").name("symbols");
+        symbolField.node().width(Length.FILL).font(Type.UI).textSize(Type.SMALL);
+        gui.landmark(Landmarks.SYMBOLS, symbolField.node());
+        // Two lines a row: the name, then what it is and where, fainter. Each kept to its line, cut with an ellipsis,
+        // since the navigator is narrow and a row's height is fixed.
+        symbolList = new ListView<Declaration>(gui, 2.5f, (nodes, d) -> nodes.column().width(Length.FILL).children(
+                nodes.text(d.name()).font(Type.UI).textSize(Type.SMALL)
+                        .wordWrap(false).width(Length.FILL).ellipsis(Ellipsis.END),
+                nodes.text(detail(d)).font(Type.UI).textSize(Type.SMALL)
+                        .textColor(gui.theme().color(Role.DIM))
+                        .wordWrap(false).width(Length.FILL).ellipsis(Ellipsis.END)))
+                .name("symbol-list");
+        symbolList.node().width(Length.FILL).height(Length.grow(1f));
+        gui.landmark(Landmarks.SYMBOL_LIST, symbolList.node());
+        symbolNote = gui.text(TYPE_A_NAME).font(Type.UI).textSize(Type.SMALL)
+                .textColor(gui.theme().color(Role.DIM));
+        gui.landmark(Landmarks.SYMBOL_NOTE, symbolNote);
+        indexButton = new Button(gui, "Index this project").kind(Button.Kind.SECONDARY).name("index-project");
+        indexButton.node().width(Length.FILL).visible(false);
+        gui.landmark(Landmarks.INDEX_PROJECT, indexButton.node());
+        symbolPane = gui.column()
+                .width(Length.FILL).height(Length.grow(1f))
+                .gap(Type.TIGHT)
+                .alignItems(AlignItems.STRETCH)
+                .children(symbolField.node(), symbolList.node(), symbolNote, indexButton.node());
+        symbolPane.visible(false);
+
         // The edge is there in every place, in the panel's own colour while the files are shown, so it costs no
         // layout when it turns to the accent.
         // The trees sit in the card rather than in wells of their own.
@@ -245,7 +293,7 @@ final class Navigator {
                 .padding(Type.GAP, Type.GAP)
                 .corner(Type.CORNER)
                 .alignItems(AlignItems.STRETCH)
-                .children(chip.node(), path.node(), tree.node(), picker.node(), scratchPane);
+                .children(chip.node(), path.node(), tree.node(), picker.node(), scratchPane, symbolPane);
         paint();
     }
 
@@ -269,10 +317,12 @@ final class Navigator {
         place = to;
         chip.show(to != Place.FILES);
         chip.label(chipLabel());
-        path.node().visible(to != Place.SCRATCHES);
+        path.node().visible(to == Place.FILES || to == Place.OPEN);
         tree.node().visible(to == Place.FILES);
         picker.node().visible(to == Place.OPEN);
         scratchPane.visible(to == Place.SCRATCHES);
+        symbolPane.visible(to == Place.SYMBOLS);
+        symbolList.showing(to == Place.SYMBOLS);
         if (to != Place.SCRATCHES) {
             scratchWanted = null;
             endRename();   // a rename left unfinished when the scratches went is a rename not made
@@ -308,6 +358,133 @@ final class Navigator {
             picker.start(folder);
             picker.focus();
         }
+    }
+
+    // ------------------------------------------------------------------ symbols
+
+    /** What the chip says while Symbols is up. */
+    static final String SYMBOLS = "Symbols";
+
+    /** What the note says before anything is typed. */
+    static final String TYPE_A_NAME = "Type a name: a class, a method, a field";
+
+    /** Whether Symbols is up. */
+    boolean symbolsUp() {
+        return place == Place.SYMBOLS;
+    }
+
+    /**
+     * Put Symbols where the files were, with the keyboard in its field and what was typed last selected, so typing
+     * replaces it and Enter goes to it again; or put the files back.
+     */
+    void symbols(boolean value) {
+        if (value != symbolsUp()) {
+            place(value ? Place.SYMBOLS : Place.FILES);
+        }
+        if (value) {
+            gui.focus(symbolField.node());
+            symbolField.select(0, symbolField.text().length());
+        }
+    }
+
+    /** Down from the field: the keyboard in the list, on its first row if none is selected. */
+    void focusSymbolList() {
+        if (symbols.isEmpty()) {
+            return;
+        }
+        if (symbolList.selection().lead() == null) {
+            symbolList.selection().at(symbols.getFirst());
+        }
+        gui.focus(symbolList.node());
+    }
+
+    /** The row Enter in the field goes to: the one selected, or the first. Null when the list is empty. */
+    Declaration symbolChosen() {
+        Declaration lead = symbolList.selection().lead();
+        return lead != null ? lead : symbols.isEmpty() ? null : symbols.getFirst();
+    }
+
+    /** What {@code FindSymbols} answered: listed, the best first and selected, and the note saying what it is. */
+    void symbolsFound(SymbolsFound m) {
+        symbols = m.rows();
+        symbolList.items(symbols);
+        symbolList.selection().clear();
+        if (!symbols.isEmpty()) {
+            symbolList.selection().at(symbols.getFirst());
+            symbolList.reveal(symbols.getFirst());
+        }
+        indexButton.node().visible(!m.indexed() && m.problem().isEmpty());
+        symbolNote.text(note(m));
+    }
+
+    /** The line under the list: why there is nothing, or how many there are. */
+    static String note(SymbolsFound m) {
+        if (!m.problem().isEmpty()) {
+            return "Nothing to search: " + m.problem();
+        }
+        if (!m.indexed()) {
+            return Picker.label(m.project()) + " has no index yet";
+        }
+        if (m.typed().isEmpty()) {
+            return TYPE_A_NAME;
+        }
+        int found = m.rows().size() + m.more();
+        if (found == 0) {
+            return "No declaration is named like " + m.typed();
+        }
+        String count = found == 1 ? "1 declaration" : found + " declarations";
+        return m.more() == 0 ? count : count + ", the first " + m.rows().size() + " listed";
+    }
+
+    /**
+     * What a row says under its name: what it is, and the type it is a member of, or the last two parts of the package
+     * a type is in, which is what tells two of a name apart in a narrow navigator.
+     */
+    static String detail(Declaration d) {
+        if (d.owner().isEmpty()) {
+            return d.kind();
+        }
+        if (TYPES.contains(d.kind())) {
+            int last = d.owner().lastIndexOf('.');
+            int before = last < 0 ? -1 : d.owner().lastIndexOf('.', last - 1);
+            return d.kind() + " in " + d.owner().substring(before + 1);
+        }
+        int dot = d.owner().lastIndexOf('.');
+        return d.kind() + " of " + d.owner().substring(dot + 1);
+    }
+
+    /** The kinds that declare a type, as {@code FindSymbols} names them. */
+    private static final Set<String> TYPES = Set.of("class", "interface", "enum", "record", "annotation");
+
+    /** An index is being built: the button goes, and the note says so. */
+    void indexing(Path project) {
+        indexButton.node().visible(false);
+        symbolNote.text("Indexing " + Picker.label(project) + "…");
+    }
+
+    /** What is typed in Symbols' field. */
+    String symbolText() {
+        return symbolField.text();
+    }
+
+    String symbolFieldAddress() {
+        return symbolField.address();
+    }
+
+    Node symbolFieldNode() {
+        return symbolField.node();
+    }
+
+    String symbolListAddress() {
+        return symbolList.address();
+    }
+
+    Node symbolListNode() {
+        return symbolList.node();
+    }
+
+    String indexButtonAddress() {
+        return indexButton.address();
     }
 
     // ------------------------------------------------------------------ the scratches
@@ -512,9 +689,9 @@ final class Navigator {
         return chip.address();
     }
 
-    /** What the chip says: the folder shown's name, or Scratches while they are over its files. */
+    /** What the chip says: the folder shown's name, Scratches while they are over its files, or Symbols. */
     String chipLabel() {
-        return scratching() ? Scratches.NAME : chipText;
+        return scratching() ? Scratches.NAME : place == Place.SYMBOLS ? SYMBOLS : chipText;
     }
 
     Node node() {
@@ -723,11 +900,12 @@ final class Navigator {
     }
 
     /**
-     * Put the keyboard in the path bar, everything in it selected so typing replaces it. The scratches hide the bar,
-     * so they go first.
+     * Put the keyboard in the path bar, everything in it selected so typing replaces it. The scratches and Symbols hide
+     * the bar, so they go first.
      */
     void focusPath() {
         scratches(false);
+        symbols(false);
         naming = Made.FILE;
         namingFrom = null;
         gui.focus(path.node());
@@ -784,10 +962,12 @@ final class Navigator {
         return asked;
     }
 
-    /** Put the keyboard in the tree shown: the scratches' while they are up, the files' otherwise. */
+    /** Put the keyboard in what is shown: the scratches' tree, Symbols' field, or the files' tree. */
     void focusTree() {
         if (scratching()) {
             scratchTree.focus();
+        } else if (symbolsUp()) {
+            symbols(true);
         } else {
             tree.focus();
         }

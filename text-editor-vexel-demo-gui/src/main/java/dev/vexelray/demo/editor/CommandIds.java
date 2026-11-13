@@ -30,6 +30,9 @@ final class CommandIds {
     /** The navigator shown or hidden. */
     static final String NAVIGATOR = "view.navigator";
 
+    /** Symbols: the project's declarations, found by name. */
+    static final String SYMBOLS = "go.symbol";
+
     /** Zoom in, out, or back to where it started. */
     static final String ZOOM_IN = "view.zoom-in";
     static final String ZOOM_OUT = "view.zoom-out";

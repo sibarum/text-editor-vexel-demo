@@ -46,6 +46,15 @@ final class Landmarks {
     /** The name field Rename… puts above the scratches' tree. */
     static final String RENAME_SCRATCH = "rename-scratch";
 
+    /**
+     * Symbols, laid over the navigator's files by Ctrl+T: the name field, the declarations it finds, the line under
+     * them saying how many (or that there is no index yet: await it for the answer), and the button that indexes.
+     */
+    static final String SYMBOLS = "symbols";
+    static final String SYMBOL_LIST = "symbols.list";
+    static final String SYMBOL_NOTE = "symbols.note";
+    static final String INDEX_PROJECT = "symbols.index";
+
     /** Open's picture of a folder, where the editor stands, and its list of the folder's files. */
     static final String PREVIEW = "preview";
     static final String CONTENTS = "preview.files";

@@ -195,7 +195,7 @@ final class Ui {
 
     /**
      * The View menu, declared again when what it says changes: word wrap first, a line ticked while documents wrap,
-     * then the navigator and the formatted view, then zoom. Each line names its command, so it shows the chord as the
+     * then the navigator, Symbols and the formatted view, then zoom. Each line names its command, so it shows the chord as the
      * person has it bound. Word wrap's line sets the setting to the other way from its tick rather than flipping it,
      * so it does what it said when it was drawn; the rest send the same {@link Intent} as their chord.
      */
@@ -207,6 +207,8 @@ final class Ui {
                 .separator()
                 .item("Show or hide the navigator", intents, new Intent(Intent.Command.TOGGLE_NAVIGATOR))
                 .command(CommandIds.NAVIGATOR)
+                .item("Go to symbol…", intents, new Intent(Intent.Command.TOGGLE_SYMBOLS))
+                .command(CommandIds.SYMBOLS)
                 .item("Formatted or source", intents, new Intent(Intent.Command.TOGGLE_FORMATTED))
                 .command(CommandIds.FORMATTED)
                 .separator()

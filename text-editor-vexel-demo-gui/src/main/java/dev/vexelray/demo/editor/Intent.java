@@ -118,6 +118,24 @@ record Intent(Command command) {
                 view.toggleScratches();
             }
         },
+        TOGGLE_SYMBOLS {
+            @Override
+            void on(View view) {
+                view.toggleSymbols();
+            }
+        },
+        SYMBOLS_DOWN {
+            @Override
+            void on(View view) {
+                view.symbolsDown();
+            }
+        },
+        LEAVE_SYMBOLS {
+            @Override
+            void on(View view) {
+                view.leaveSymbols();
+            }
+        },
         LEAVE_RENAME {
             @Override
             void on(View view) {
