@@ -132,9 +132,9 @@ public final class Editor {
     /**
      * How many of each message the editor's inbox holds before a sender is refused. A person sends one at a time; the
      * most that arrive at once are a closing's saves, a {@code Save} and then a {@code Written} for each unsaved tab,
-     * because each file is its own write.
+     * because each file is its own write. The view's mailbox for {@code Written} holds as many, for the same closing.
      */
-    static final int CAPACITY = 256;
+    public static final int CAPACITY = 256;
 
     /** No close gate: the closing is of tabs, not of the window. */
     static final long NO_GATE = -1;

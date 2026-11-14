@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.Intent.Command;
+import dev.vexelray.demo.editor.core.Editor;
 import dev.vexelray.demo.editor.core.Messages;
 import dev.vexelray.demo.editor.core.Messages.Add;
 import dev.vexelray.demo.editor.core.Messages.AddTab;
@@ -440,7 +441,8 @@ final class View {
         ui.openRunMenu();
     }
 
-    @Subscribe
+    /** As deep as the editor's inbox: a closing's saves each say "Saved", all in one frame. */
+    @Subscribe(capacity = Editor.CAPACITY)
     public void status(Status m) {
         ui.status(m.message(), m.alert());
     }
@@ -551,9 +553,10 @@ final class View {
 
     /**
      * A file written: a Java source or a pom changes what the project declares, so its project is indexed again. Heard
-     * beside the editor, which says the save on the status line.
+     * beside the editor, which says the save on the status line, and as deep as its inbox: a closing's saves are one
+     * {@code Written} per unsaved tab, all in one frame.
      */
-    @Subscribe
+    @Subscribe(capacity = Editor.CAPACITY)
     public void written(Written m) {
         String name = String.valueOf(m.path().getFileName());
         if (m.problem().isEmpty() && m.path().getParent() != null
