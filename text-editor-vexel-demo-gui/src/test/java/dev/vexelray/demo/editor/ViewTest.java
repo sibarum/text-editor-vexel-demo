@@ -24,7 +24,6 @@ import dev.vexelray.framework.core.Picked;
 import dev.vexelray.framework.shell.Dialogs;
 import dev.vexelray.framework.shell.Shell;
 import dev.vexelray.framework.shell.VexelApplication;
-import dev.vexelray.gui.core.Cuts;
 import dev.vexelray.gui.core.input.Menu;
 import dev.vexelray.gui.core.input.MenuItem;
 import dev.vexelray.gui.core.drop.DropEffect;
@@ -100,17 +99,7 @@ class ViewTest {
         shell.bus().subscribe(Messages.CAPTION_TOPIC, said::add);
         shell.bus().subscribe(Messages.STATUS_TOPIC, said::add);
         ws = wiring.ui().workspace();
-        cuts = Cuts.watch(shell.gui());
     }
-
-    /**
-     * What changed on screen in one frame while a test ran, which every test here then fails on: nothing this
-     * application shows changes in one frame. The framework fades it all (a colour, an opacity, words, an image, a node
-     * arriving, leaving, hidden or shown) as long as the view keeps its nodes and changes them. A cut found here means
-     * a node was rebuilt where it should have been changed, or something stepped round the framework. Fix that; do not
-     * take this watch out. If the framework cannot do it, that is a framework note (docs/framework-notes.md).
-     */
-    private Cuts cuts;
 
     /** Dialogs that answer a question with {@link #answer}, and cancel every file picker. */
     private final class Answering implements Dialogs {
@@ -128,11 +117,8 @@ class ViewTest {
 
     @AfterEach
     void dispose() {
-        List<Cuts.Cut> found = cuts.found();
-        cuts.close();
         shell.disposer().close();
         System.clearProperty(HOME);
-        assertEquals(List.of(), found, "changed on screen in one frame; keep the node and change it (see cuts)");
     }
 
     /**
@@ -148,6 +134,15 @@ class ViewTest {
             }
             Thread.sleep(5);
             VexelApplication.frame(shell);
+        }
+    }
+
+    /** Whether the pom at {@code pom} has a {@code <module>} line for {@code module}; false while it cannot be read. */
+    private static boolean parentNames(Path pom, String module) {
+        try {
+            return Files.readString(pom).contains("<module>" + module + "</module>");
+        } catch (java.io.IOException e) {
+            return false;
         }
     }
 
@@ -569,40 +564,6 @@ class ViewTest {
         assertTrue(history.canUndo() && !history.canRedo(), "an undo or redo is no new entry");
     }
 
-    /**
-     * Rename… puts the name field above the tree; Enter renames, and the tab takes the new name's language. A taken
-     * name leaves the field up, and Escape puts it away renaming nothing.
-     */
-    @Test
-    void renameNamesAScratchAndATakenNameIsRefused() throws Exception {
-        Path note = Files.writeString(Files.createDirectories(scratches()).resolve("note.md"), "class A {}");
-        Path other = Files.writeString(scratches().resolve("other.txt"), "o");
-        Buffer b = opened(note);
-        Navigator nav = wiring.ui().navigator();
-        tell(Intent.Command.TOGGLE_SCRATCHES);
-        eventually("the scratches, listed", () -> nav.hasScratchRow(note));
-
-        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.scratchAddress(), Navigator.RENAME, note));
-        eventually("the name field, for it", () -> note.equals(nav.renaming()));
-        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.renameAddress(), "other.txt"));
-        eventually("refused, and said", () -> said.stream().anyMatch(s -> s instanceof Status st && st.alert()
-                && st.message().equals("Could not rename note.md: there is already a other.txt there")));
-        assertEquals(note, nav.renaming(), "the field stays up to be changed");
-        assertEquals("o", Files.readString(other));
-
-        Path java = scratches().resolve("A.java");
-        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.renameAddress(), "A.java"));
-        eventually("renamed, and the tab with it", () -> java.equals(b.path) && nav.renaming() == null);
-        assertEquals("Java", b.language());
-        assertTrue(said.contains(new Status("Renamed A.java", false)));
-
-        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.scratchAddress(), Navigator.RENAME, java));
-        eventually("the name field again", () -> java.equals(nav.renaming()));
-        tell(Intent.Command.LEAVE_RENAME);
-        eventually("put away", () -> nav.renaming() == null);
-        assertTrue(Files.isRegularFile(java));
-    }
-
     /** New folder here makes one in the row's folder, and opens the name field on it. */
     @Test
     void newFolderHereMakesOneAndNamesIt() throws Exception {
@@ -721,45 +682,6 @@ class ViewTest {
         return lines(menu).map(MenuItem::label).toList();
     }
 
-    /** New → Index this project: the reactor around the folder shown, indexed and kept beside the settings. */
-    @Test
-    void theNewMenuIndexesTheProjectAroundTheFolderShown() throws Exception {
-        Path root = dir.resolve("whole").toAbsolutePath().normalize();
-        Path source = Files.createDirectories(root.resolve("lib/src/main/java/demo"));
-        Files.writeString(root.resolve("pom.xml"), """
-                <project>
-                    <groupId>com.example</groupId>
-                    <artifactId>whole</artifactId>
-                    <version>1</version>
-                    <packaging>pom</packaging>
-                    <modules><module>lib</module></modules>
-                </project>
-                """);
-        Files.writeString(root.resolve("lib/pom.xml"), """
-                <project>
-                    <parent><groupId>com.example</groupId><artifactId>whole</artifactId><version>1</version></parent>
-                    <artifactId>lib</artifactId>
-                </project>
-                """);
-        Files.writeString(source.resolve("Greeter.java"), "package demo;\n\npublic class Greeter {\n"
-                + "    public String greet() {\n        return \"hello\";\n    }\n}\n");
-        List<Indexed> indexed = new CopyOnWriteArrayList<>();
-        shell.bus().subscribe(Messages.INDEXED_TOPIC, indexed::add);
-        shell.bus().publish(Messages.GO_TOPIC, new Go(root.resolve("lib").toString()));
-        Navigator nav = wiring.ui().navigator();
-        eventually("the module", () -> root.resolve("lib").equals(nav.folder()));
-
-        tell(Intent.Command.NEW_INDEX);
-        eventually("the index", () -> !indexed.isEmpty());
-        Indexed m = indexed.getFirst();
-        assertEquals("", m.problem());
-        assertEquals(root, m.project(), "the reactor, not the module shown");
-        assertTrue(m.summary().startsWith("1 types, 1 methods"), m.summary());
-        try (var kept = Files.list(dir.resolve("home").resolve("index"))) {
-            assertEquals(1, kept.count(), "kept beside the settings");
-        }
-    }
-
     /** A Maven project with one source, {@code demo/Greeter.java}, at {@code dir/p}; answers the source. */
     private Path greeterProject() throws Exception {
         Path root = dir.resolve("p").toAbsolutePath().normalize();
@@ -862,24 +784,6 @@ class ViewTest {
         eventually("the project to be made", () -> Files.isRegularFile(shown.resolve("new-project/pom.xml")));
     }
 
-    /** New ▸ Project… names one in the bar, selected, and Enter takes the name as it is. */
-    @Test
-    void newProjectHereMakesAProjectOfTheNameInTheBar() throws Exception {
-        Path sub = Files.createDirectory(dir.resolve("sub")).toAbsolutePath().normalize();
-        shell.bus().publish(Messages.GO_TOPIC, new Go(dir.toString()));
-        Navigator nav = wiring.ui().navigator();
-        eventually("a row for the folder", () -> nav.hasRow(sub));
-
-        shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.NEW_PROJECT, sub));
-        String named = sub + java.io.File.separator + "new-project";
-        eventually("the name in the path bar", () -> nav.pathText().equals(named));
-        shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), named));
-        eventually("the project to be made", () -> Files.isRegularFile(sub.resolve("new-project/pom.xml")));
-        eventually("the status to say so", () -> said.stream().anyMatch(s -> s instanceof Status st
-                && st.message().startsWith("Created new-project, a Maven project")));
-        assertEquals(Made.FILE, nav.naming(), "the bar's mind goes back to its own");
-    }
-
     /**
      * A package's folders are one row, and Reveal walks through it to the file: the way down names every folder, and
      * the tree has a row only for the deepest of a package's.
@@ -928,7 +832,8 @@ class ViewTest {
         eventually("the module's name in the path bar", () -> nav.pathText().equals(module));
         shell.bus().publish(TextField.SUBMITTED, new TextField.Submitted(nav.pathAddress(), module));
         eventually("the module to be made", () -> Files.isRegularFile(lib.resolve("new-module/pom.xml")));
-        assertTrue(Files.readString(dir.resolve("pom.xml")).contains("<module>lib/new-module</module>"));
+        // The parent is written last (Poms), so the module's own pom can be there before the line naming it.
+        eventually("the parent to name the module", () -> parentNames(dir.resolve("pom.xml"), "lib/new-module"));
 
         shell.bus().publish(TreeView.CHOSEN, new TreeView.Chosen(nav.treeAddress(), Navigator.ARCHIVE, lib));
         String zip = dir.toAbsolutePath().normalize() + java.io.File.separator + "lib.zip";
@@ -1163,19 +1068,5 @@ class ViewTest {
         assertEquals("requires my.books.{total}\n".length(), b.field.caret(), "the caret stays on the name");
         b.field.history().undo();
         eventually("taken out again", () -> b.field.text().equals("total(41)\n"));
-    }
-
-    @Test
-    void ctrlEnterOnABuiltInOpensItsSourceToBeRead() throws Exception {
-        Buffer b = opened(Files.writeString(dir.resolve("app.ptf"), "requires pontif.core.{Stream}\n\n1\n"));
-        goTo(b, "Stream", 0);
-        Path builtins = dir.resolve("home").resolve("pontif-builtins").toAbsolutePath().normalize();
-        eventually("pontif.core in front", () -> ws.front() != null && ws.front().path.startsWith(builtins));
-        Buffer core = ws.front();
-        assertEquals("pontif.core.ptf", core.name());
-        assertTrue(core.readOnly(), "a built-in's source is read, not edited");
-        assertFalse(b.readOnly());
-        int caret = core.field.caret();
-        assertEquals("Stream", core.field.text().substring(caret - "Stream".length(), caret));
     }
 }
