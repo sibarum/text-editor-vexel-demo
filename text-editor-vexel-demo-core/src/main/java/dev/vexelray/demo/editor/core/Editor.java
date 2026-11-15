@@ -877,12 +877,13 @@ public final class Editor {
         Ask question;
         if (c.gate() != NO_GATE) {
             question = new Ask(out.run(), "Quit with unsaved changes?", several,
-                    Choice.labels("Save all", "Discard"));
+                    Choice.labels("Save all", "Discard"), Editor.class);
         } else if (c.tabs().size() == 1) {
             question = new Ask(out.run(), "Unsaved changes", "Save the changes to " + names + " before closing it?",
-                    Choice.labels("Save", "Don't save"));
+                    Choice.labels("Save", "Don't save"), Editor.class);
         } else {
-            question = new Ask(out.run(), "Unsaved changes", several, Choice.labels("Save all", "Discard"));
+            question = new Ask(out.run(), "Unsaved changes", several, Choice.labels("Save all", "Discard"),
+                    Editor.class);
         }
         out.send(Ask.TOPIC, question);
         return s.withClosing(out.run(), c.holding(out.holdForPerson(), Set.of()));
