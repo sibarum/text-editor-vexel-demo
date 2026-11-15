@@ -6,7 +6,7 @@
 
     <groupId>dev.vexelray.demo</groupId>
     <artifactId>text-editor-vexel-demo</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.2.0</version>
     <packaging>pom</packaging>
 
     <name>text-editor-vexel-demo</name>
@@ -35,14 +35,14 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <vexelray-framework.version>0.2.0-SNAPSHOT</vexelray-framework.version>
-        <vexelray-gui.version>0.2.0-SNAPSHOT</vexelray-gui.version>
-        <vexelray.version>0.2.0-SNAPSHOT</vexelray.version>
-        <tactroller.version>1.3-SNAPSHOT</tactroller.version>
-        <vexelray-codec.version>0.2.0-SNAPSHOT</vexelray-codec.version>
-        <concordance.version>0.1.3-SNAPSHOT</concordance.version>
-        <pontif.version>1.0-SNAPSHOT</pontif.version>
-        <vex-suite-common.version>0.2.0-SNAPSHOT</vex-suite-common.version>
+        <vexelray-framework.version>0.2.0</vexelray-framework.version>
+        <vexelray-gui.version>0.2.0</vexelray-gui.version>
+        <vexelray.version>0.2.0</vexelray.version>
+        <tactroller.version>1.3</tactroller.version>
+        <vexelray-codec.version>0.2.0</vexelray-codec.version>
+        <concordance.version>0.1.3</concordance.version>
+        <pontif.version>1.0</pontif.version>
+        <vex-suite-common.version>0.2.0</vex-suite-common.version>
         <junit.version>5.11.4</junit.version>
 
         <app.mainClass>dev.vexelray.demo.editor.TextEditor</app.mainClass>
@@ -117,7 +117,7 @@
             <plugin>
                 <groupId>dev.vexelray.build</groupId>
                 <artifactId>vexelray-build-maven-plugin</artifactId>
-                <version>0.2.0-SNAPSHOT</version>
+                <version>0.2.0</version>
                 <executions>
                     <execution>
                         <goals>
