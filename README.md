@@ -38,8 +38,8 @@ Two builds, made with GraalVM native-image (a GraalVM JDK as `JAVA_HOME`, and Vi
 development with C++" workload):
 
 ```
-native-build.cmd -Pnative-release package -DskipTests   # text-editor-vexel-demo-gui/target/text-editor-vexel-demo.exe        what ships: no console
-native-build.cmd -Pnative package -DskipTests           # text-editor-vexel-demo-gui/target/text-editor-vexel-demo-debug.exe  a console: prints the automation port line
+native-build.cmd -Pnative-release package -DskipTests   # text-editor-vexel-demo-gui/target/vexelray-ide.exe        what ships: no console
+native-build.cmd -Pnative package -DskipTests           # text-editor-vexel-demo-gui/target/vexelray-ide-debug.exe  a console: prints the automation port line
 ```
 
 Both carry the automation sockets, off until asked for ([Automation](#automation)), so ottermate can drive either.
@@ -47,7 +47,7 @@ Both carry the automation sockets, off until asked for ([Automation](#automation
 On Linux there is one build, with no console subsystem or icon step to choose, and plain `mvn`:
 
 ```
-mvn -Pnative-linux package -DskipTests                  # text-editor-vexel-demo-gui/target-linux/text-editor-vexel-demo
+mvn -Pnative-linux package -DskipTests                  # text-editor-vexel-demo-gui/target-linux/vexelray-ide
 ```
 
 `native-build.cmd` is `mvn` inside a Visual Studio developer environment: native-image needs the MSVC `link.exe` and

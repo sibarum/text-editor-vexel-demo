@@ -1,5 +1,5 @@
 {
-  "id": "text-editor",
+  "id": "vexelray-ide",
   "name": "VexelRay IDE",
   "publisher": "sibarum",
   "description": "A tabbed text editor with a file navigator, on the VexelRay stack.",
@@ -7,15 +7,16 @@
 
   "repo": "sibarum/vexelray-dist",
   "branch": "main",
-  "repoPath": "apps/text-editor",
+  "repoPath": "apps/vexelray-ide",
   "releasesRepo": "sibarum/vexelray-dist",
-  "tagFormat": "text-editor-v{version}",
+  "tagFormat": "vexelray-ide-v{version}",
+  "replaces": [ { "id": "text-editor", "repoPath": "apps/text-editor" } ],
 
   "windows": {
     "binaries": [
       {
-        "name": "text-editor",
-        "source": "text-editor-vexel-demo-gui/target/text-editor-vexel-demo.exe",
+        "name": "vexelray-ide",
+        "source": "text-editor-vexel-demo-gui/target/vexelray-ide.exe",
         "icon": "text-editor-vexel-demo-gui/src/main/rc/editor.ico",
         "addToPath": true,
         "shortcuts": { "desktop": true, "startMenu": true, "label": "VexelRay IDE" },
@@ -50,8 +51,8 @@
         ]
       },
       {
-        "name": "text-editor-ffmpeg-record",
-        "source": "text-editor-vexel-demo-gui/target/text-editor-vexel-demo-ffmpeg-record-windows-x86_64.zip",
+        "name": "vexelray-ide-ffmpeg-record",
+        "source": "text-editor-vexel-demo-gui/target/vexelray-ide-ffmpeg-record-windows-x86_64.zip",
         "dir": "ffmpeg-record"
       },
       { "name": "notices", "source": "THIRD-PARTY-NOTICES.txt" }
@@ -61,9 +62,9 @@
   "linux": {
     "binaries": [
       {
-        "name": "text-editor",
+        "name": "vexelray-ide",
         "appId": "dev.vexelray.demo.text-editor-vexel-demo",
-        "source": "text-editor-vexel-demo-gui/target-linux/text-editor",
+        "source": "text-editor-vexel-demo-gui/target-linux/vexelray-ide",
         "icon": "text-editor-vexel-demo-gui/src/main/rc/editor.ico",
         "addToPath": true,
         "shortcuts": { "desktop": true, "startMenu": true, "label": "VexelRay IDE" },
@@ -98,8 +99,8 @@
         ]
       },
       {
-        "name": "text-editor-ffmpeg-record",
-        "source": "text-editor-vexel-demo-gui/target-linux/text-editor-ffmpeg-record-linux-x86_64.tar.gz",
+        "name": "vexelray-ide-ffmpeg-record",
+        "source": "text-editor-vexel-demo-gui/target-linux/vexelray-ide-ffmpeg-record-linux-x86_64.tar.gz",
         "dir": "ffmpeg-record"
       },
       { "name": "notices", "source": "THIRD-PARTY-NOTICES.txt" }

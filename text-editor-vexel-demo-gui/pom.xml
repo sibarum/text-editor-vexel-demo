@@ -193,8 +193,8 @@
                                     <copy todir="${project.build.directory}/ffmpeg-record" flatten="true">
                                         <fileset dir="${project.build.directory}/ffmpeg-wrapper-record/natives/record/windows-x86_64"/>
                                     </copy>
-                                    <delete file="${project.build.directory}/text-editor-vexel-demo-ffmpeg-record-windows-x86_64.zip"/>
-                                    <zip destfile="${project.build.directory}/text-editor-vexel-demo-ffmpeg-record-windows-x86_64.zip"
+                                    <delete file="${project.build.directory}/vexelray-ide-ffmpeg-record-windows-x86_64.zip"/>
+                                    <zip destfile="${project.build.directory}/vexelray-ide-ffmpeg-record-windows-x86_64.zip"
                                          basedir="${project.build.directory}/ffmpeg-record"
                                          modificationtime="2026-01-01T00:00:00Z"/>
                                 </target>
@@ -310,8 +310,8 @@
           takes minutes. This program's own reachability metadata is under src/main/resources/META-INF/native-image/;
           the libraries and the processor bring the rest.
 
-            native-build.cmd -Pnative-release package -DskipTests  ->  text-editor-vexel-demo-gui/target/text-editor-vexel-demo.exe        what ships
-            native-build.cmd -Pnative package -DskipTests          ->  text-editor-vexel-demo-gui/target/text-editor-vexel-demo-debug.exe  for ottermate
+            native-build.cmd -Pnative-release package -DskipTests  ->  text-editor-vexel-demo-gui/target/vexelray-ide.exe        what ships
+            native-build.cmd -Pnative package -DskipTests          ->  text-editor-vexel-demo-gui/target/vexelray-ide-debug.exe  for ottermate
 
           release: Windows GUI subsystem (no console window ever).
           debug:   console subsystem (stdout is the `automation: localhost:<port>` protocol line).
@@ -323,7 +323,7 @@
         <profile>
             <id>native</id>
             <properties>
-                <native.imageName>text-editor-vexel-demo-debug</native.imageName>
+                <native.imageName>vexelray-ide-debug</native.imageName>
                 <native.subsystem>CONSOLE</native.subsystem>
             </properties>
             <build>
@@ -347,7 +347,7 @@
         <profile>
             <id>native-release</id>
             <properties>
-                <native.imageName>text-editor-vexel-demo</native.imageName>
+                <native.imageName>vexelray-ide</native.imageName>
                 <native.subsystem>WINDOWS</native.subsystem>
             </properties>
             <build>
@@ -368,13 +368,13 @@
                 </plugins>
             </build>
         </profile>
-        <!-- Linux: mvn -Pnative-linux package -DskipTests  ->  text-editor-vexel-demo-gui/target-linux/text-editor-vexel-demo. No linker options and no
+        <!-- Linux: mvn -Pnative-linux package -DskipTests  ->  text-editor-vexel-demo-gui/target-linux/vexelray-ide. No linker options and no
              rc.exe; a Linux executable has no subsystem and no icon of its own. VexelRay IDE, Calculator and MainFrame each
              carried this profile by hand before the template did. -->
         <profile>
             <id>native-linux</id>
             <properties>
-                <native.imageName>text-editor-vexel-demo</native.imageName>
+                <native.imageName>vexelray-ide</native.imageName>
             </properties>
             <build>
                 <plugins>
@@ -389,7 +389,7 @@
                         </configuration>
                     </plugin>
                     <!-- The camera's recording encoder beside the executable, as on Windows: ffmpeg-wrapper-record-linux's
-                         libraries, flat in target-linux/ffmpeg-record, and packed as text-editor-vexel-demo-ffmpeg-record-linux-x86_64.tar.gz
+                         libraries, flat in target-linux/ffmpeg-record, and packed as vexelray-ide-ffmpeg-record-linux-x86_64.tar.gz
                          for an installer to unpack into the install's own ffmpeg-record folder (Linux's form of
                          ffmpeg-record-zip: names in order, fixed times, owners and modes, gzip without a name or time,
                          so the same libraries make the same archive). -->
@@ -421,7 +421,7 @@
                                 <configuration>
                                     <executable>sh</executable>
                                     <workingDirectory>${project.build.directory}/ffmpeg-record</workingDirectory>
-                                    <commandlineArgs>-c "LC_ALL=C tar --sort=name --mtime=2026-01-01T00:00:00Z --owner=0 --group=0 --numeric-owner --mode=a=r,u+w -cf - * | gzip -n > ../text-editor-vexel-demo-ffmpeg-record-linux-x86_64.tar.gz"</commandlineArgs>
+                                    <commandlineArgs>-c "LC_ALL=C tar --sort=name --mtime=2026-01-01T00:00:00Z --owner=0 --group=0 --numeric-owner --mode=a=r,u+w -cf - * | gzip -n > ../vexelray-ide-ffmpeg-record-linux-x86_64.tar.gz"</commandlineArgs>
                                 </configuration>
                             </execution>
                         </executions>

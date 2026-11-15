@@ -72,7 +72,7 @@ them even when a shortcut looks harmless:
 ```
 mvn compile exec:exec                       # run it
 mvn test                                    # unit tests, and the real window tree built headless
-native-build.cmd -Pnative package -DskipTests   # the native debug build, text-editor-vexel-demo-gui/target/text-editor-vexel-demo-debug.exe
+native-build.cmd -Pnative package -DskipTests   # the native debug build, text-editor-vexel-demo-gui/target/vexelray-ide-debug.exe
 ```
 
 **Native builds go through `native-build.cmd`**, not plain `mvn -Pnative...` (`./native-build.cmd` from Git Bash).
