@@ -107,14 +107,7 @@ Copyright (C) 2011, 2013-2026 The JavaParser Team.
 JavaParser is dual-licensed under the GNU Lesser General Public License 3.0 or later and the Apache License 2.0. It is used here under the Apache License 2.0.
 
 ===============================================================================
-15. Vineflower (Java decompiler, based on JetBrains Fernflower) 1.12.0
-https://github.com/Vineflower/vineflower
-Licence: Apache License 2.0
-Copyright 2000-2023 JetBrains s.r.o.
-Copyright the Vineflower contributors.
-
-===============================================================================
-16. Jacquard 24 font
+15. Jacquard 24 font
 https://github.com/scfried/soft-type-jacquard
 Licence: SIL Open Font License 1.1
 Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jacquard)
