@@ -15,6 +15,12 @@ declaration (the index is built when a project is shown and on each save, and Ct
 it by name).
 Its code is on `develop`, to copy from as each piece is rebuilt.
 
+- [ ] Welcome, after slice 1 (Recent, the main window hidden until a choice; done 2026-11-20): the home folder
+      scanned breadth-first for git repositories, listed as found (a `@Source`, bounded by depth, folders visited,
+      repositories found and time); Java runtime and Maven auto-detected and chosen there, kept in the settings; the
+      Run menu's Maven and `java` lines run with them (`JAVA_HOME` and the `PATH` set in the line, as Run… does); a
+      Welcome… item to bring it back. Closing Welcome before choosing quits, which only `EditorTest` covers: ottermate
+      has no verb for a window's close box.
 - [ ] Reading the index further: uses of a name (`Query.usages`), Ctrl+click on a name, and a library's declarations
       in a read-only tab, which Symbols leaves out today.
 

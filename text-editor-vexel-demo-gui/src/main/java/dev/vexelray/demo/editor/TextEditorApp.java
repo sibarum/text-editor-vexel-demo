@@ -25,7 +25,7 @@ import dev.vexelray.framework.automation.AutomationStarter;
  * Draw your own, render it to an {@code .ico}, and replace that one file; see the README, <i>The icon</i>.
  */
 @VexelApp(name = TextEditor.APP, title = TextEditor.TITLE, width = TextEditor.W, height = TextEditor.H,
-        icon = TextEditor.ICON, starters = {AutomationStarter.class, Core.class})
+        icon = TextEditor.ICON, startsHidden = true, starters = {AutomationStarter.class, Core.class})
 final class TextEditorApp {
 
     private TextEditorApp() {

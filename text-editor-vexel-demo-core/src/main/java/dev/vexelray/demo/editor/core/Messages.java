@@ -134,7 +134,31 @@ public final class Messages {
     public record RevealAsked(Path file) {
     }
 
+    /** A folder chosen in the Welcome window: the main window opens on it. */
+    public static final Topic<OpenProject> OPEN_PROJECT_TOPIC = Topic.edge(OpenProject.class);
+
+    public record OpenProject(Path folder) {
+    }
+
     // ------------------------------------------------------------------ the editor tells the view
+
+    /**
+     * The Welcome window's key: {@code WindowCommand.show(WELCOME)}, a {@code WindowClosed} naming it, and a script's
+     * {@code window welcome}. Here rather than in {@code -gui} because the editor decides what its closing means.
+     */
+    public static final String WELCOME = "welcome";
+
+    /**
+     * Put the Welcome window up, listing {@code recent}: the folders worked in lately, newest first, the last session's
+     * first. The main window stays hidden until one is chosen ({@link OpenProject}); closing Welcome first quits.
+     */
+    public static final Topic<Welcome> WELCOME_TOPIC = Topic.edge(Welcome.class);
+
+    public record Welcome(List<Path> recent) {
+        public Welcome {
+            recent = List.copyOf(recent);
+        }
+    }
 
     /**
      * A window on files alone ({@code vex notes.md}): the navigator out of the layout, so the editor has the whole

@@ -22,6 +22,7 @@ import dev.vexelray.demo.editor.core.Messages.Made;
 import dev.vexelray.demo.editor.core.Messages.Moved;
 import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.Open;
+import dev.vexelray.demo.editor.core.Messages.OpenProject;
 import dev.vexelray.demo.editor.core.Messages.ProjectFound;
 import dev.vexelray.demo.editor.core.Messages.ProjectWanted;
 import dev.vexelray.demo.editor.core.Messages.Read;
@@ -40,6 +41,7 @@ import dev.vexelray.demo.editor.core.Messages.SaveFailed;
 import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
+import dev.vexelray.demo.editor.core.Messages.Welcome;
 import dev.vexelray.demo.editor.core.Messages.Why;
 import dev.vexelray.demo.editor.core.Messages.Write;
 import dev.vexelray.demo.editor.core.Messages.Written;
@@ -51,6 +53,8 @@ import dev.vexelray.framework.core.Answer;
 import dev.vexelray.framework.core.Ask;
 import dev.vexelray.framework.core.CloseAnswer;
 import dev.vexelray.framework.core.CloseRequested;
+import dev.vexelray.framework.core.WindowClosed;
+import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.framework.core.WindowOpened;
 import sibarum.atchung.Chain;
 import sibarum.atchung.TimedOut;
@@ -122,11 +126,12 @@ import java.util.Set;
 @Component
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
         Created.class, ScratchMade.class, Relocated.class, Fronted.class, Edited.class, Save.class, Written.class,
-        Answer.class, Close.class, CloseRequested.class, RunThis.class, RevealAsked.class, ProjectFound.class})
+        Answer.class, Close.class, CloseRequested.class, RunThis.class, RevealAsked.class, ProjectFound.class,
+        OpenProject.class, WindowClosed.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
-        Dropping.class, StartRun.class, ProjectWanted.class, RevealRow.class})
+        Dropping.class, StartRun.class, ProjectWanted.class, RevealRow.class, Welcome.class, WindowCommand.class})
 public final class Editor {
 
     /**
@@ -155,11 +160,13 @@ public final class Editor {
      * @param keeps     whether this window's session is kept: not when the command line named what to open
      * @param last      the session last sent to be remembered, so an unchanged one is not written again
      * @param fresh     scratches this run made and nothing has been written to since: closed like that, they go again
+     * @param welcoming the session brought back, held while the Welcome window is up and nothing is chosen yet
      */
     @Withers
     record State(Doc doc, long ids, Set<Path> reading, Map<Long, Closing> closings, List<Restore> restoring,
                  Optional<Path> front, Optional<Path> started, boolean armed, boolean keeps,
-                 Optional<Remember> last, Set<Path> fresh) implements EditorStateWithers {
+                 Optional<Remember> last, Set<Path> fresh, Optional<Recalled> welcoming)
+            implements EditorStateWithers {
 
         State {
             reading = Set.copyOf(reading);
@@ -170,7 +177,7 @@ public final class Editor {
 
         static State initial() {
             return new State(Doc.initial(), 0, Set.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(),
-                    false, true, Optional.empty(), Set.of());
+                    false, true, Optional.empty(), Set.of(), Optional.empty());
         }
 
         // One wither per component (withDoc, withIds, ... withFresh) is generated for @Withers. These are the ones
@@ -346,6 +353,8 @@ public final class Editor {
         Step<State, Answer> answered = b.step("answered", Editor::answered);
         Step<State, RevealAsked> revealAsked = b.step("revealAsked", Editor::revealAsked);
         Step<State, ProjectFound> projectFound = b.step("projectFound", Editor::projectFound);
+        Step<State, OpenProject> chosen = b.step("chosen", Editor::chosen);
+        Step<State, WindowClosed> windowClosed = b.step("windowClosed", Editor::windowClosed);
 
         Step<State, Close> closeAsked = b.step("closeAsked", Editor::closeAsked);
         Step<State, CloseRequested> quitAsked = b.step("quitAsked", Editor::quitAsked);
@@ -377,7 +386,9 @@ public final class Editor {
                 .on(Messages.WRITTEN_TOPIC, written)
                 .on(Answer.TOPIC, answered)
                 .on(Messages.REVEAL_ASKED_TOPIC, revealAsked)
-                .on(Messages.PROJECT_FOUND_TOPIC, projectFound);
+                .on(Messages.PROJECT_FOUND_TOPIC, projectFound)
+                .on(Messages.OPEN_PROJECT_TOPIC, chosen)
+                .on(WindowClosed.TOPIC, windowClosed);
         ledger = b.build(inbox, "editor", CAPACITY);
 
         closing(Chain.start("close tabs", ledger, closeAsked).on(Messages.CLOSE_TOPIC), ask, saveThem, discard, finish,
@@ -432,9 +443,13 @@ public final class Editor {
     }
 
     /**
-     * Bring back the folder, then the files that were open, in that order and one at a time, so the tabs come back as
-     * they were. A remembered file that has gone is skipped and a folder that has gone is forgotten; the person moved
-     * them, and an editor should not complain about it.
+     * What the last session left, and what the command line named. With nothing named, the Welcome window comes up
+     * and the main window stays hidden until a folder is chosen there ({@link #chosen}); the session is held until
+     * then, since which of it comes back depends on the choice.
+     *
+     * <p>Bringing it back is the folder, then the files that were open, in that order and one at a time, so the tabs
+     * come back as they were. A remembered file that has gone is skipped and a folder that has gone is forgotten; the
+     * person moved them, and an editor should not complain about it.
      *
      * <p>A window the command line named things for ({@code vex notes.md}) is about those, not the last session: it
      * brings nothing back and keeps nothing, so opening a file from a shell leaves the session alone. It is plain, the
@@ -442,6 +457,59 @@ public final class Editor {
      * first argument is looked at, so the navigator is never seen to go.
      */
     private static State recalled(State s, Recalled r, Out out) {
+        if (r.arguments().isEmpty()) {
+            out.send(Messages.WELCOME_TOPIC, new Welcome(welcomed(r)));
+            return s.withWelcoming(Optional.of(r));
+        }
+        out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
+        return restore(s, r, out);
+    }
+
+    /**
+     * What Welcome lists: the folder last shown, the ones before it, and the folder the application started in, so
+     * there is always one to choose. Each once, newest first.
+     */
+    static List<Path> welcomed(Recalled r) {
+        List<Path> out = new ArrayList<>();
+        r.folder().ifPresent(out::add);
+        out.addAll(r.recent());
+        out.add(r.started());
+        return out.stream().distinct().toList();
+    }
+
+    /**
+     * A folder chosen in Welcome: the main window comes up on it. The last session's folder brings its tabs back with
+     * it (or, with none, the folder started in, as before); any other opens alone, and the last session's folder
+     * becomes recent, as leaving it would have made it.
+     * Heard only while Welcome is waiting; a second choice, or a late one, changes nothing.
+     */
+    private static State chosen(State s, OpenProject m, Out out) {
+        if (s.welcoming().isEmpty()) {
+            return s;
+        }
+        Recalled r = s.welcoming().get();
+        State next = s.withWelcoming(Optional.empty());
+        out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
+        if (m.folder().equals(r.folder().orElse(r.started()))) {
+            return restore(next, r, out);
+        }
+        List<Path> recent = new ArrayList<>();
+        r.folder().ifPresent(recent::add);
+        recent.addAll(r.recent());
+        return restore(next, new Recalled(Optional.of(m.folder()), List.of(), Optional.empty(), recent, List.of(),
+                r.started()), out);
+    }
+
+    /** Welcome closed with nothing chosen: there is nothing to work on, so the application goes. */
+    private static State windowClosed(State s, WindowClosed m, Out out) {
+        if (m.window().equals(Messages.WELCOME) && s.welcoming().isPresent()) {
+            out.send(WindowCommand.TOPIC, WindowCommand.close(CloseRequested.MAIN));
+        }
+        return s;
+    }
+
+    /** Bring back what {@code r} names, as {@link #recalled} describes. */
+    private static State restore(State s, Recalled r, Out out) {
         List<Restore> steps = new ArrayList<>();
         // The recent folders are history rather than this window's tabs, so a window on files alone offers them too.
         State next = s.withDoc(s.doc().withRecent(r.recent()));

@@ -78,6 +78,15 @@ final class Recipes {
         return new Console(windows.named(Console.KEY, "Console", 960, 600), fonts);
     }
 
+    /**
+     * Welcome: what the IDE opens on, while the main window is still hidden. A window of its own, not a satellite,
+     * since the main one is not on screen to own it.
+     */
+    @Provides
+    Welcome welcome(Windows windows) {
+        return new Welcome(windows.named(Welcome.KEY, "Welcome", Welcome.W, Welcome.H));
+    }
+
     /** Run…: a window for a command of the person's own, starting from what it last ran. */
     @Provides
     RunDialog runDialog(Windows windows, Settings settings) {

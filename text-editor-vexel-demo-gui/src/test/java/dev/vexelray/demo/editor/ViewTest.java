@@ -101,6 +101,20 @@ class ViewTest {
         ws = wiring.ui().workspace();
     }
 
+    /** A folder opened in Welcome is the editor's to open: the view says which, and decides nothing else. */
+    @org.junit.jupiter.api.Test
+    void aFolderOpenedInWelcomeIsToldToTheEditor() throws InterruptedException {
+        Path a = dir.resolve("a").toAbsolutePath();
+        List<Messages.OpenProject> told = new java.util.concurrent.CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.OPEN_PROJECT_TOPIC, told::add);
+        shell.bus().publish(Messages.WELCOME_TOPIC, new Messages.Welcome(List.of(a, dir)));
+        VexelApplication.frame(shell);
+        shell.bus().publish(dev.vexelray.gui.widget.ListView.ACTIVATED,
+                new dev.vexelray.gui.widget.ListView.Activated(wiring.welcome().listAddress(), a));
+        eventually("the folder told", () -> !told.isEmpty());
+        assertEquals(List.of(new Messages.OpenProject(a)), told);
+    }
+
     /** Dialogs that answer a question with {@link #answer}, and cancel every file picker. */
     private final class Answering implements Dialogs {
 

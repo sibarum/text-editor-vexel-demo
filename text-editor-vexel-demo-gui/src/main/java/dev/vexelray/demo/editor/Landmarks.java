@@ -92,6 +92,9 @@ final class Landmarks {
     static final String RUN_PATH = "run.path";
     static final String RUN_GO = "run.go";
 
+    /** The Welcome window's list of recent folders ({@code ottermate --window welcome}). */
+    static final String WELCOME_RECENT = "welcome.recent";
+
     private Landmarks() {
     }
 }

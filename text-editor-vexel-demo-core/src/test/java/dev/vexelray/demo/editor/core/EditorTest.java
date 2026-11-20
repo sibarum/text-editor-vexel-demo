@@ -41,10 +41,14 @@ import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.Why;
 import dev.vexelray.demo.editor.core.Messages.Write;
 import dev.vexelray.demo.editor.core.Messages.Written;
+import dev.vexelray.demo.editor.core.Messages.OpenProject;
+import dev.vexelray.demo.editor.core.Messages.Welcome;
 import dev.vexelray.framework.core.Answer;
 import dev.vexelray.framework.core.Ask;
 import dev.vexelray.framework.core.CloseAnswer;
 import dev.vexelray.framework.core.CloseRequested;
+import dev.vexelray.framework.core.WindowClosed;
+import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.framework.core.WindowOpened;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -105,7 +109,7 @@ class EditorTest {
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
                 Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
                 Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC, Messages.START_RUN_TOPIC, Messages.PROJECT_WANTED_TOPIC,
-                Messages.REVEAL_ROW_TOPIC)) {
+                Messages.REVEAL_ROW_TOPIC, Messages.WELCOME_TOPIC, WindowCommand.TOPIC)) {
             listen(heard, t);
         }
     }
@@ -135,6 +139,17 @@ class EditorTest {
     /** What ReadSession would answer, with no recent folders and started in {@code dir}. */
     private Recalled recalled(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> arguments) {
         return new Recalled(folder, files, front, List.of(), arguments, dir);
+    }
+
+    /**
+     * Start as a launch with nothing named does: the session recalled, Welcome up, and the person choosing the folder
+     * the last session showed (or the one started in). Forgets what Welcome sent.
+     */
+    private void start(Recalled r) {
+        tell(Messages.RECALLED_TOPIC, r);
+        sent.clear();
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(r.folder().orElse(r.started())));
+        sent.removeIf(WindowCommand.class::isInstance);
     }
 
     private Path file(String name) {
@@ -211,7 +226,7 @@ class EditorTest {
 
     @Test
     void thePathBarCreatesANameThatIsNotThereYetInTheFolderShown() {
-        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
+        start(recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         sent.clear();
         tell(Messages.GO_TOPIC, new Go("new.txt"));
@@ -229,7 +244,7 @@ class EditorTest {
 
     @Test
     void aNameEndingInASeparatorIsAFolderToMake() {
-        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
+        start(recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         sent.clear();
         tell(Messages.GO_TOPIC, new Go("made" + java.io.File.separator));
@@ -363,7 +378,7 @@ class EditorTest {
 
     @Test
     void aNewScratchInTheFolderShownListsItAgain() {
-        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
+        start(recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
         sent.clear();
         tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(file("t.md"), false, ""));
         assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));
@@ -428,7 +443,7 @@ class EditorTest {
 
     @Test
     void theFolderShownFollowsAMoveOfItAndIsListedAgainForOneInIt() {
-        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
+        start(recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
         sent.clear();
         tell(Messages.RELOCATED_TOPIC, new Relocated(file("a.md"), file("b.md"), true, ""));
         assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class), "listed again");
@@ -553,7 +568,7 @@ class EditorTest {
         tell(WindowOpened.TOPIC, new WindowOpened(CloseRequested.MAIN));
         assertEquals(List.of(new Recall()), took(Recall.class));
 
-        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(a, b), Optional.of(a), List.of()));
+        start(recalled(Optional.of(dir), List.of(a, b), Optional.of(a), List.of()));
         assertEquals(List.of(new Find(dir, Why.RESTORE_FOLDER)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class), "only the first file");
@@ -569,7 +584,7 @@ class EditorTest {
 
     @Test
     void anUnchangedSessionIsNotRememberedTwice() {
-        tell(Messages.RECALLED_TOPIC, recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
+        start(recalled(Optional.empty(), List.of(), Optional.empty(), List.of()));
         assertEquals(1, took(Remember.class).size());
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.GO, Kind.FOLDER));
         assertTrue(took(Remember.class).isEmpty(), "the same folder again is the same session");
@@ -580,7 +595,7 @@ class EditorTest {
     void recentFoldersAreBroughtBackToldAndRemembered() {
         Path old = dir.resolve("old");
         Path other = dir.resolve("other");
-        tell(Messages.RECALLED_TOPIC,
+        start(
                 new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(old), List.of(), dir));
         assertEquals(List.of(new Recent(List.of(old))), took(Recent.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
@@ -601,8 +616,9 @@ class EditorTest {
         Path a = file("a.txt");
         Path b = file("b.txt");
         tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(b), Optional.of(b), List.of(a)));
-        assertEquals(List.of(new Recent(List.of()), new Plain(), new Find(a, Why.ARGUMENT)), List.copyOf(sent),
-                "plain first, then only the argument: no folder, no remembered files");
+        assertEquals(List.of(WindowCommand.show(CloseRequested.MAIN), new Recent(List.of()), new Plain(),
+                        new Find(a, Why.ARGUMENT)), List.copyOf(sent),
+                "no Welcome; the main window up, plain, then only the argument: no folder, no remembered files");
         sent.clear();
         tell(Messages.FOUND_TOPIC, new Found(a, Why.ARGUMENT, Kind.FILE));
         assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class));
@@ -619,6 +635,67 @@ class EditorTest {
         assertEquals(List.of(new Find(dir, Why.ARGUMENT)), took(Find.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.ARGUMENT, Kind.FOLDER));
         assertEquals(List.of(new ShowFolder(dir)), took(ShowFolder.class));
+    }
+
+    // ------------------------------------------------------------------ Welcome
+
+    /** With nothing named, Welcome lists the folders worked in lately, and nothing is brought back yet. */
+    @Test
+    void aLaunchNamingNothingPutsWelcomeUpAndWaits() {
+        Path old = dir.resolve("old");
+        Path started = dir.resolve("started");
+        tell(Messages.RECALLED_TOPIC,
+                new Recalled(Optional.of(dir), List.of(file("a.txt")), Optional.empty(), List.of(old, dir), List.of(),
+                        started));
+        assertEquals(List.of(new Welcome(List.of(dir, old, started))), List.copyOf(sent),
+                "Welcome, each folder once and the last session's first; no folder looked at, no main window yet");
+    }
+
+    /** The last session's folder chosen: the main window comes up and the session comes back, tabs and all. */
+    @Test
+    void choosingTheLastSessionsFolderBringsItBack() {
+        Path a = file("a.txt");
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(a), Optional.of(a), List.of()));
+        sent.clear();
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(dir));
+        assertEquals(List.of(WindowCommand.show(CloseRequested.MAIN), new Recent(List.of()),
+                        new Find(dir, Why.RESTORE_FOLDER)),
+                List.copyOf(sent), "the main window up, then the session's folder looked at");
+        sent.clear();
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class), "its tabs come back");
+    }
+
+    /** Another folder chosen opens alone, and the last session's folder is recent, as leaving it would make it. */
+    @Test
+    void choosingAnotherFolderOpensItAloneAndTheLastOneIsRecent() {
+        Path other = dir.resolve("other");
+        Path old = dir.resolve("old");
+        tell(Messages.RECALLED_TOPIC,
+                new Recalled(Optional.of(dir), List.of(file("a.txt")), Optional.empty(), List.of(old, other), List.of(),
+                        dir));
+        sent.clear();
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(other));
+        assertEquals(List.of(new Find(other, Why.RESTORE_FOLDER)), took(Find.class));
+        tell(Messages.FOUND_TOPIC, new Found(other, Why.RESTORE_FOLDER, Kind.FOLDER));
+        assertTrue(sent.stream().noneMatch(Read.class::isInstance), "the last session's tabs stay where they were");
+        assertEquals(List.of(new Remember(Optional.of(other), List.of(), Optional.empty(), List.of(dir, old))),
+                took(Remember.class));
+    }
+
+    /** Welcome closed with nothing chosen quits; closed after a choice, or a second choice, changes nothing. */
+    @Test
+    void closingWelcomeBeforeChoosingQuits() {
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
+        sent.clear();
+        tell(WindowClosed.TOPIC, new WindowClosed(Messages.WELCOME));
+        assertEquals(List.of(WindowCommand.close(CloseRequested.MAIN)), took(WindowCommand.class));
+
+        start(recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
+        sent.clear();
+        tell(WindowClosed.TOPIC, new WindowClosed(Messages.WELCOME));
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(dir.resolve("late")));
+        assertTrue(sent.isEmpty(), "Welcome is done with once a folder is chosen: " + sent);
     }
 
     // ------------------------------------------------------------------ reveal in navigator

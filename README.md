@@ -21,9 +21,13 @@ From this folder, the parent of the two modules:
 mvn compile exec:exec
 ```
 
-`exec:exec` rather than `exec:java`, so native access can be enabled for Panama FFM. The window comes up where you
-last left it, at 1180x720 the first time, with the folder and the files you last had open. The first time,
-the navigator shows the working directory.
+`exec:exec` rather than `exec:java`, so native access can be enabled for Panama FFM. It opens on **Welcome**, a
+small window listing the folders you worked in lately, the last one first and selected, and the folder it was started
+in last. Enter or a double-click opens one: the main window comes up where you last left it (1180x720 the first time)
+on that folder, with the files you last had open if it is the folder you were last in. Closing Welcome without
+choosing quits. The main window is created hidden (`@VexelApp(startsHidden = true)`) and shown only then, so it never
+flashes up behind Welcome. A launch that names a folder or file skips Welcome. To a script, Welcome is `window
+welcome` and its list `welcome.recent`.
 
 ```
 mvn compile exec:exec "-Dapp.args=C:/notes"               # open a folder (or files) named on the command line
