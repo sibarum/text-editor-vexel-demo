@@ -23,11 +23,15 @@ mvn compile exec:exec
 
 `exec:exec` rather than `exec:java`, so native access can be enabled for Panama FFM. It opens on **Welcome**, a
 small window listing the folders you worked in lately, the last one first and selected, and the folder it was started
-in last. Enter or a double-click opens one: the main window comes up where you last left it (1180x720 the first time)
+in last; and under them the git repositories in your home folder, listed as they are found. That look (`ScanRepos`, a
+source, walking `Repositories`) is breadth first, so the nearest come first; it goes six folders deep at most, opens
+20,000 folders and lists 200 at most, gives up after 20 seconds, follows no link or junction, and skips hidden folders
+and tools' own (`AppData`, `node_modules`, `target`, …). It stops when Welcome goes, and the line under the list says
+how it went. Enter or a double-click opens one: the main window comes up where you last left it (1180x720 the first time)
 on that folder, with the files you last had open if it is the folder you were last in. Closing Welcome without
 choosing quits. The main window is created hidden (`@VexelApp(startsHidden = true)`) and shown only then, so it never
 flashes up behind Welcome. A launch that names a folder or file skips Welcome. To a script, Welcome is `window
-welcome` and its list `welcome.recent`.
+welcome`, its lists `welcome.recent` and `welcome.repos`, and the line under the repositories `welcome.note`.
 
 ```
 mvn compile exec:exec "-Dapp.args=C:/notes"               # open a folder (or files) named on the command line

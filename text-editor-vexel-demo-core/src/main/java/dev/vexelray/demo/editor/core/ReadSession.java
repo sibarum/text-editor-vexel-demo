@@ -41,7 +41,7 @@ public final class ReadSession {
     public Recalled run(Recall r) {
         return new Recalled(path(settings.getString(FOLDER, "")), paths(settings.getList(FILES)),
                 path(settings.getString(FRONT, "")), folders(paths(settings.getList(RECENT))), paths(launch.rest()),
-                Path.of("").toAbsolutePath());
+                Path.of("").toAbsolutePath(), Path.of(System.getProperty("user.home")).toAbsolutePath());
     }
 
     /** Those of {@code paths} that are still folders: a recent folder that has gone is not offered. */

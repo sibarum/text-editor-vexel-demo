@@ -110,7 +110,7 @@ class ViewTest {
         shell.bus().publish(Messages.WELCOME_TOPIC, new Messages.Welcome(List.of(a, dir)));
         VexelApplication.frame(shell);
         shell.bus().publish(dev.vexelray.gui.widget.ListView.ACTIVATED,
-                new dev.vexelray.gui.widget.ListView.Activated(wiring.welcome().listAddress(), a));
+                new dev.vexelray.gui.widget.ListView.Activated(wiring.welcome().reposAddress(), a));
         eventually("the folder told", () -> !told.isEmpty());
         assertEquals(List.of(new Messages.OpenProject(a)), told);
     }

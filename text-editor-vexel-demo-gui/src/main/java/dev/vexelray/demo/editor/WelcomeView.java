@@ -34,13 +34,19 @@ public final class WelcomeView {
         windows.send(WindowCommand.show(Welcome.KEY));
     }
 
+    /** The repositories found so far, as the editor lists them, and how the looking goes. */
+    @Subscribe
+    public void repos(Messages.Repos m) {
+        welcome.repos(m.repositories(), m.note());
+    }
+
     /**
      * Enter or a double-click: that folder, in the main window. Welcome is hidden rather than closed, since a closed
      * Welcome is a quit while nothing is chosen.
      */
     @Subscribe
     public void activated(ListView.Activated m) {
-        if (m.list().equals(welcome.listAddress()) && m.item() instanceof Path folder) {
+        if (welcome.opens(m.list()) && m.item() instanceof Path folder) {
             open.send(new OpenProject(folder));
             windows.send(WindowCommand.hide(Welcome.KEY));
         }

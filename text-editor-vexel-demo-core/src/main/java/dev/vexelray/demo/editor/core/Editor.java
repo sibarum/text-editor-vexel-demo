@@ -42,6 +42,11 @@ import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.Welcome;
+import dev.vexelray.demo.editor.core.Messages.Repos;
+import dev.vexelray.demo.editor.core.Messages.ReposFound;
+import dev.vexelray.demo.editor.core.Messages.Scan;
+import dev.vexelray.demo.editor.core.Messages.Scanned;
+import dev.vexelray.demo.editor.core.Messages.StopScan;
 import dev.vexelray.demo.editor.core.Messages.Why;
 import dev.vexelray.demo.editor.core.Messages.Write;
 import dev.vexelray.demo.editor.core.Messages.Written;
@@ -127,11 +132,12 @@ import java.util.Set;
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
         Created.class, ScratchMade.class, Relocated.class, Fronted.class, Edited.class, Save.class, Written.class,
         Answer.class, Close.class, CloseRequested.class, RunThis.class, RevealAsked.class, ProjectFound.class,
-        OpenProject.class, WindowClosed.class})
+        OpenProject.class, WindowClosed.class, ReposFound.class, Scanned.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
-        Dropping.class, StartRun.class, ProjectWanted.class, RevealRow.class, Welcome.class, WindowCommand.class})
+        Dropping.class, StartRun.class, ProjectWanted.class, RevealRow.class, Welcome.class, WindowCommand.class,
+        Scan.class, StopScan.class, Repos.class})
 public final class Editor {
 
     /**
@@ -160,12 +166,13 @@ public final class Editor {
      * @param keeps     whether this window's session is kept: not when the command line named what to open
      * @param last      the session last sent to be remembered, so an unchanged one is not written again
      * @param fresh     scratches this run made and nothing has been written to since: closed like that, they go again
-     * @param welcoming the session brought back, held while the Welcome window is up and nothing is chosen yet
+     * @param welcoming what Welcome is waiting on: the session brought back and the repositories found, while it is up
+     *                  and nothing is chosen yet
      */
     @Withers
     record State(Doc doc, long ids, Set<Path> reading, Map<Long, Closing> closings, List<Restore> restoring,
                  Optional<Path> front, Optional<Path> started, boolean armed, boolean keeps,
-                 Optional<Remember> last, Set<Path> fresh, Optional<Recalled> welcoming)
+                 Optional<Remember> last, Set<Path> fresh, Optional<Welcoming> welcoming)
             implements EditorStateWithers {
 
         State {
@@ -275,6 +282,18 @@ public final class Editor {
     record Restore(Why why, Path path) {
     }
 
+    /**
+     * Welcome, up and waiting for a choice.
+     *
+     * @param session what the last session left, which comes back if its folder is chosen
+     * @param repos   the repositories found so far that Recent does not list, in the order found
+     */
+    record Welcoming(Recalled session, List<Path> repos) {
+        Welcoming {
+            repos = List.copyOf(repos);
+        }
+    }
+
     // ------------------------------------------------------------------ what a closing run goes on with
 
     /** Something is unsaved: ask. */
@@ -355,6 +374,8 @@ public final class Editor {
         Step<State, ProjectFound> projectFound = b.step("projectFound", Editor::projectFound);
         Step<State, OpenProject> chosen = b.step("chosen", Editor::chosen);
         Step<State, WindowClosed> windowClosed = b.step("windowClosed", Editor::windowClosed);
+        Step<State, ReposFound> reposFound = b.step("reposFound", Editor::reposFound);
+        Step<State, Scanned> scanned = b.step("scanned", Editor::scanned);
 
         Step<State, Close> closeAsked = b.step("closeAsked", Editor::closeAsked);
         Step<State, CloseRequested> quitAsked = b.step("quitAsked", Editor::quitAsked);
@@ -388,7 +409,9 @@ public final class Editor {
                 .on(Messages.REVEAL_ASKED_TOPIC, revealAsked)
                 .on(Messages.PROJECT_FOUND_TOPIC, projectFound)
                 .on(Messages.OPEN_PROJECT_TOPIC, chosen)
-                .on(WindowClosed.TOPIC, windowClosed);
+                .on(WindowClosed.TOPIC, windowClosed)
+                .on(Messages.REPOS_FOUND_TOPIC, reposFound)
+                .on(Messages.SCANNED_TOPIC, scanned);
         ledger = b.build(inbox, "editor", CAPACITY);
 
         closing(Chain.start("close tabs", ledger, closeAsked).on(Messages.CLOSE_TOPIC), ask, saveThem, discard, finish,
@@ -459,7 +482,8 @@ public final class Editor {
     private static State recalled(State s, Recalled r, Out out) {
         if (r.arguments().isEmpty()) {
             out.send(Messages.WELCOME_TOPIC, new Welcome(welcomed(r)));
-            return s.withWelcoming(Optional.of(r));
+            out.send(Messages.SCAN_TOPIC, new Scan(r.home()));
+            return s.withWelcoming(Optional.of(new Welcoming(r, List.of())));
         }
         out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
         return restore(s, r, out);
@@ -487,8 +511,9 @@ public final class Editor {
         if (s.welcoming().isEmpty()) {
             return s;
         }
-        Recalled r = s.welcoming().get();
+        Recalled r = s.welcoming().get().session();
         State next = s.withWelcoming(Optional.empty());
+        out.send(Messages.STOP_SCAN_TOPIC, new StopScan());
         out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
         if (m.folder().equals(r.folder().orElse(r.started()))) {
             return restore(next, r, out);
@@ -497,15 +522,57 @@ public final class Editor {
         r.folder().ifPresent(recent::add);
         recent.addAll(r.recent());
         return restore(next, new Recalled(Optional.of(m.folder()), List.of(), Optional.empty(), recent, List.of(),
-                r.started()), out);
+                r.started(), r.home()), out);
     }
 
     /** Welcome closed with nothing chosen: there is nothing to work on, so the application goes. */
     private static State windowClosed(State s, WindowClosed m, Out out) {
         if (m.window().equals(Messages.WELCOME) && s.welcoming().isPresent()) {
+            out.send(Messages.STOP_SCAN_TOPIC, new StopScan());
             out.send(WindowCommand.TOPIC, WindowCommand.close(CloseRequested.MAIN));
         }
         return s;
+    }
+
+    /**
+     * Repositories found under the home folder: those Recent does not already list join Welcome's, in the order found.
+     * Heard only while Welcome is up; a late batch, after a choice, changes nothing.
+     */
+    private static State reposFound(State s, ReposFound m, Out out) {
+        if (s.welcoming().isEmpty()) {
+            return s;
+        }
+        Welcoming w = s.welcoming().get();
+        List<Path> recent = welcomed(w.session());
+        List<Path> repos = new ArrayList<>(w.repos());
+        for (Path p : m.repositories()) {
+            if (!recent.contains(p) && !repos.contains(p)) {
+                repos.add(p);
+            }
+        }
+        out.send(Messages.REPOS_TOPIC, new Repos(repos, "Looking… " + count(m.folders(), "folder", "folders")
+                + " so far"));
+        return s.withWelcoming(Optional.of(new Welcoming(w.session(), repos)));
+    }
+
+    /** The scan has ended: Welcome says what it came to. */
+    private static State scanned(State s, Scanned m, Out out) {
+        if (s.welcoming().isEmpty()) {
+            return s;
+        }
+        out.send(Messages.REPOS_TOPIC, new Repos(s.welcoming().get().repos(), scanNote(m)));
+        return s;
+    }
+
+    /** What a finished scan says under the repositories. */
+    static String scanNote(Scanned m) {
+        String found = m.found() == 0 ? "No repositories" : count(m.found(), "repository", "repositories");
+        return m.end().says(found, count(m.folders(), "folder", "folders"));
+    }
+
+    /** {@code n}, grouped by thousands, and {@code one} or {@code many} after it. */
+    static String count(int n, String one, String many) {
+        return String.format(java.util.Locale.ROOT, "%,d %s", n, n == 1 ? one : many);
     }
 
     /** Bring back what {@code r} names, as {@link #recalled} describes. */

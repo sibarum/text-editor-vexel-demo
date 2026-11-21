@@ -458,13 +458,14 @@ public final class Messages {
 
     /**
      * What there is to bring back, every path absolute and normalised: the folder shown, the files open in tab order,
-     * the one in front, the recent folders that are still there, the command line's paths, and the folder the
-     * application started in, for when there is none.
+     * the one in front, the recent folders that are still there, the command line's paths, the folder the
+     * application started in, for when there is none, and the person's home folder, which Welcome looks in for
+     * repositories.
      */
     public static final Topic<Recalled> RECALLED_TOPIC = Topic.edge(Recalled.class);
 
     public record Recalled(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> recent,
-                           List<Path> arguments, Path started) {
+                           List<Path> arguments, Path started, Path home) {
         public Recalled {
             files = List.copyOf(files);
             recent = List.copyOf(recent);
@@ -825,5 +826,52 @@ public final class Messages {
     public static final Topic<Fitted> FITTED_TOPIC = Topic.edge(Fitted.class, Fitted::run);
 
     public record Fitted(long run, int cols, int rows) {
+    }
+
+    // ------------------------------------------------------------------ Welcome's repositories
+
+    /**
+     * Look for git repositories under {@code root}, breadth first, within Welcome's limits ({@link ScanRepos}). One
+     * scan at a time: asking again stops the one going and starts afresh.
+     */
+    public static final Topic<Scan> SCAN_TOPIC = Topic.edge(Scan.class);
+
+    public record Scan(Path root) {
+    }
+
+    /** Stop the scan going, if there is one: Welcome has gone. Its {@link Scanned} still comes. */
+    public static final Topic<StopScan> STOP_SCAN_TOPIC = Topic.edge(StopScan.class);
+
+    public record StopScan() {
+    }
+
+    /**
+     * Repositories just found, in the order found, and how many folders the scan has opened so far. Sent as they are
+     * found; one with none says only how far it has got.
+     */
+    public static final Topic<ReposFound> REPOS_FOUND_TOPIC = Topic.edge(ReposFound.class);
+
+    public record ReposFound(List<Path> repositories, int folders) {
+        public ReposFound {
+            repositories = List.copyOf(repositories);
+        }
+    }
+
+    /** How a scan ended, and what it came to. */
+    public static final Topic<Scanned> SCANNED_TOPIC = Topic.edge(Scanned.class);
+
+    public record Scanned(Repositories.End end, int folders, int found) {
+    }
+
+    /**
+     * What Welcome lists under Repositories: those found so far that Recent does not already list, in the order found,
+     * and a line saying how the looking goes.
+     */
+    public static final Topic<Repos> REPOS_TOPIC = Topic.edge(Repos.class);
+
+    public record Repos(List<Path> repositories, String note) {
+        public Repos {
+            repositories = List.copyOf(repositories);
+        }
     }
 }

@@ -94,6 +94,9 @@ final class Landmarks {
 
     /** The Welcome window's list of recent folders ({@code ottermate --window welcome}). */
     static final String WELCOME_RECENT = "welcome.recent";
+    /** Welcome's list of git repositories found in the home folder, and the line under it saying how the looking goes. */
+    static final String WELCOME_REPOS = "welcome.repos";
+    static final String WELCOME_NOTE = "welcome.note";
 
     private Landmarks() {
     }

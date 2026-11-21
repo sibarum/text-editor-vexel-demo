@@ -43,6 +43,11 @@ import dev.vexelray.demo.editor.core.Messages.Write;
 import dev.vexelray.demo.editor.core.Messages.Written;
 import dev.vexelray.demo.editor.core.Messages.OpenProject;
 import dev.vexelray.demo.editor.core.Messages.Welcome;
+import dev.vexelray.demo.editor.core.Messages.Repos;
+import dev.vexelray.demo.editor.core.Messages.ReposFound;
+import dev.vexelray.demo.editor.core.Messages.Scan;
+import dev.vexelray.demo.editor.core.Messages.Scanned;
+import dev.vexelray.demo.editor.core.Messages.StopScan;
 import dev.vexelray.framework.core.Answer;
 import dev.vexelray.framework.core.Ask;
 import dev.vexelray.framework.core.CloseAnswer;
@@ -109,7 +114,8 @@ class EditorTest {
                 Messages.READ_TOPIC, Messages.WRITE_TOPIC, Messages.FIND_TOPIC, Messages.CREATE_TOPIC,
                 Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
                 Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC, Messages.START_RUN_TOPIC, Messages.PROJECT_WANTED_TOPIC,
-                Messages.REVEAL_ROW_TOPIC, Messages.WELCOME_TOPIC, WindowCommand.TOPIC)) {
+                Messages.REVEAL_ROW_TOPIC, Messages.WELCOME_TOPIC, WindowCommand.TOPIC, Messages.SCAN_TOPIC,
+                Messages.STOP_SCAN_TOPIC, Messages.REPOS_TOPIC)) {
             listen(heard, t);
         }
     }
@@ -138,7 +144,7 @@ class EditorTest {
 
     /** What ReadSession would answer, with no recent folders and started in {@code dir}. */
     private Recalled recalled(Optional<Path> folder, List<Path> files, Optional<Path> front, List<Path> arguments) {
-        return new Recalled(folder, files, front, List.of(), arguments, dir);
+        return new Recalled(folder, files, front, List.of(), arguments, dir, dir);
     }
 
     /**
@@ -149,7 +155,7 @@ class EditorTest {
         tell(Messages.RECALLED_TOPIC, r);
         sent.clear();
         tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(r.folder().orElse(r.started())));
-        sent.removeIf(WindowCommand.class::isInstance);
+        sent.removeIf(m -> m instanceof WindowCommand || m instanceof StopScan);
     }
 
     private Path file(String name) {
@@ -596,7 +602,7 @@ class EditorTest {
         Path old = dir.resolve("old");
         Path other = dir.resolve("other");
         start(
-                new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(old), List.of(), dir));
+                new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(old), List.of(), dir, dir));
         assertEquals(List.of(new Recent(List.of(old))), took(Recent.class));
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         assertTrue(took(Recent.class).isEmpty(), "the first folder shown leaves nothing new behind");
@@ -646,9 +652,10 @@ class EditorTest {
         Path started = dir.resolve("started");
         tell(Messages.RECALLED_TOPIC,
                 new Recalled(Optional.of(dir), List.of(file("a.txt")), Optional.empty(), List.of(old, dir), List.of(),
-                        started));
-        assertEquals(List.of(new Welcome(List.of(dir, old, started))), List.copyOf(sent),
-                "Welcome, each folder once and the last session's first; no folder looked at, no main window yet");
+                        started, dir));
+        assertEquals(List.of(new Welcome(List.of(dir, old, started)), new Scan(dir)), List.copyOf(sent),
+                "Welcome, each folder once and the last session's first, and the home folder scanned for repositories;"
+                        + " no folder opened, no main window yet");
     }
 
     /** The last session's folder chosen: the main window comes up and the session comes back, tabs and all. */
@@ -658,9 +665,9 @@ class EditorTest {
         tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(a), Optional.of(a), List.of()));
         sent.clear();
         tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(dir));
-        assertEquals(List.of(WindowCommand.show(CloseRequested.MAIN), new Recent(List.of()),
+        assertEquals(List.of(new StopScan(), WindowCommand.show(CloseRequested.MAIN), new Recent(List.of()),
                         new Find(dir, Why.RESTORE_FOLDER)),
-                List.copyOf(sent), "the main window up, then the session's folder looked at");
+                List.copyOf(sent), "the scan stopped, the main window up, then the session's folder looked at");
         sent.clear();
         tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
         assertEquals(List.of(new Read(a, Why.RESTORE_FILE, true)), took(Read.class), "its tabs come back");
@@ -673,7 +680,7 @@ class EditorTest {
         Path old = dir.resolve("old");
         tell(Messages.RECALLED_TOPIC,
                 new Recalled(Optional.of(dir), List.of(file("a.txt")), Optional.empty(), List.of(old, other), List.of(),
-                        dir));
+                        dir, dir));
         sent.clear();
         tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(other));
         assertEquals(List.of(new Find(other, Why.RESTORE_FOLDER)), took(Find.class));
@@ -681,6 +688,40 @@ class EditorTest {
         assertTrue(sent.stream().noneMatch(Read.class::isInstance), "the last session's tabs stay where they were");
         assertEquals(List.of(new Remember(Optional.of(other), List.of(), Optional.empty(), List.of(dir, old))),
                 took(Remember.class));
+    }
+
+    /**
+     * Repositories join Welcome as they are found, without those Recent lists or any found twice; the end says what
+     * the scan came to; and once a folder is chosen, nothing more is said.
+     */
+    @Test
+    void repositoriesFoundJoinWelcomeAndTheEndIsSaid() {
+        Path old = dir.resolve("old");
+        Path a = dir.resolve("a");
+        Path b = dir.resolve("b");
+        tell(Messages.RECALLED_TOPIC,
+                new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(old), List.of(), dir, dir));
+        sent.clear();
+        tell(Messages.REPOS_FOUND_TOPIC, new ReposFound(List.of(a, old), 3));
+        tell(Messages.REPOS_FOUND_TOPIC, new ReposFound(List.of(a, b), 1200));
+        assertEquals(List.of(new Repos(List.of(a), "Looking… 3 folders so far"),
+                new Repos(List.of(a, b), "Looking… 1,200 folders so far")), took(Repos.class));
+
+        tell(Messages.SCANNED_TOPIC, new Scanned(Repositories.End.LIMIT, 20_000, 3));
+        assertEquals(List.of(new Repos(List.of(a, b),
+                "3 repositories in the first 20,000 folders; stopped looking there")), took(Repos.class));
+
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(a));
+        sent.clear();
+        tell(Messages.REPOS_FOUND_TOPIC, new ReposFound(List.of(dir.resolve("c")), 1300));
+        tell(Messages.SCANNED_TOPIC, new Scanned(Repositories.End.STOPPED, 1300, 4));
+        assertTrue(took(Repos.class).isEmpty(), "Welcome has gone; nothing more is said to it");
+    }
+
+    @Test
+    void aScanThatFindsNothingSaysSo() {
+        assertEquals("No repositories in 1 folder", Editor.scanNote(new Scanned(Repositories.End.DONE, 1, 0)));
+        assertEquals("1 repository in 12 folders", Editor.scanNote(new Scanned(Repositories.End.DONE, 12, 1)));
     }
 
     /** Welcome closed with nothing chosen quits; closed after a choice, or a second choice, changes nothing. */
