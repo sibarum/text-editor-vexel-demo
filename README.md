@@ -8,7 +8,7 @@ offers is wired in the tree you are reading — and it is a working editor, so i
 whatever you are actually building.
 
 It knows Pontif natively: a `.ptf` file is coloured by the language's own token scan rather than a TextMate grammar
-(`Grammars.PONTIF`), through `pontif-tooling` from the sibling `pontif-framework` checkout (branch `v0.2`), which has
+(`Pontif`, a `Language` it gives the framework's highlighting), through `pontif-tooling` from the sibling `pontif-framework` checkout (branch `v0.2`), which has
 to be `mvn install`ed first. The Run menu runs a `.ptf` file or its project through `pontif run` (*Running things*), a `.ptf` is checked as it
 is typed (*Spans*), its first error underlined and on the status line, and Ctrl+Enter on a name goes to its definition
 or adds its `requires` (*Pontif: Ctrl+Enter*).
@@ -90,9 +90,9 @@ This program writes no `-H` flags, and its own native-image metadata,
 almost nothing is this program's. Each library carries what it needs in its own jar
 (`META-INF/native-image/<groupId>/<artifactId>/`): its downcalls, its resources, and the FFM flags
 (`-H:+ForeignAPISupport`, shared arenas, `--enable-native-access`), which native-image merges from every jar on the
-class path; the processor registers the icon. What is left is what only this program reads: its fonts, its wordmark,
-and the syntax highlighting's grammars, joni tables and TM4E's two `clone()` methods, which move to a
-text-highlighting starter when there is one. If a native run fails on something the JVM run did not (a `Missing...RegistrationError`), run it
+class path; the processor registers the icon, and syntax highlighting's grammars, joni tables and TM4E's two `clone()`
+methods are `vexelray-framework-highlight`'s. What is left is what only this program reads: its fonts and its wordmark.
+If a native run fails on something the JVM run did not (a `Missing...RegistrationError`), run it
 on a JVM under `-agentlib:native-image-agent=config-output-dir=...`, do the thing that failed, and add
 only the entries that name this program.
 
@@ -236,7 +236,8 @@ and a reply out), and **recipes** (a part built once and handed to whoever takes
 | `Doc.java` | the shape of the session (which files, which in front, which unsaved, which folder) as one immutable value, part of the editor's state. |
 | `ReadFile.java`, `WriteFile.java`, `FindPath.java`, `CreateFile.java`, `ReadSession.java`, `WriteSession.java`, `ListFolder.java`, `MarkText.java`, `CheckText.java`, `NavigateText.java`, `BuildIndex.java`, `FindSymbols.java` | the jobs: every touch of the disk, on the offload lane. What can go wrong is part of the reply. |
 | `TextFile.java`, `Markdown.java` | the policy between bytes and text, and Markdown as spans: pure functions. |
-| `Core.java` | the list of this module's component and jobs. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it. |
+| `Pontif.java` | Pontif as a language the framework's highlighting colours: `pontif-tooling`'s token scan, each token given a TextMate-style scope, coloured by the same table as every grammar. |
+| `Core.java` | the list of this module's component and jobs, and the Pontif `Language` it provides to `HighlightStarter`. The processor compiling `-gui` sees only `-gui`'s sources, so this list, named among `TextEditorApp`'s starters, is how the wiring hears of them. A new component or job goes on it. |
 
 **`text-editor-vexel-demo-gui`, the view and the framework integration.**
 
@@ -334,6 +335,7 @@ Pontif, Concordance and the third-party libraries, which are not the stack's.
 | --- | --- |
 | `vexelray-framework-api`, `vexelray-gui-core` | all `-core` builds against: the framework's annotations, and the values (a span, a colour, the settings store) and the bus that are safe from any thread |
 | `vexelray-framework-shell`, `-automation`, `-processor` | the application edge, the driving socket, and the processor that checks both modules and writes the wiring |
+| `vexelray-framework-highlight` | syntax highlighting as a starter (`HighlightStarter`, named in `TextEditorApp`): the sixteen TextMate grammars, TM4E and their native-image metadata. The editor gives it its colour table (`Look.CODE`) and Pontif (`Core.pontif`) |
 | `vexelray-gui-widget` | the widgets: `Tabs`, `TreeView`, `TextField`, `SplitPane`, `StatusBar`, `Cues` |
 | `vexelray-gui-krono` | the clock: every transition and cue |
 | `vexelray-gui-automation` | driving the running app the way a person does — a debugging instrument |

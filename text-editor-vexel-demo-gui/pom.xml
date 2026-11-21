@@ -44,6 +44,13 @@
             <groupId>dev.vexelray.framework</groupId>
             <artifactId>vexelray-framework-automation</artifactId>
         </dependency>
+        <!-- Syntax highlighting, as a framework starter. Reached through -core, which colours with it; named here because
+             this module names HighlightStarter, provides the colour table (Look.CODE) and asks which file is which
+             language (Buffer). -->
+        <dependency>
+            <groupId>dev.vexelray.framework</groupId>
+            <artifactId>vexelray-framework-highlight</artifactId>
+        </dependency>
         <!-- The widget shelf, and the framework core and draw modules behind it. Reached through -shell as
              well; named here because this project's own Ui builds against it directly. -->
         <dependency>

@@ -1,7 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.canvas.Color;
-import dev.vexelray.demo.editor.core.Grammars;
+import dev.vexelray.framework.highlight.Colour;
 import dev.vexelray.gui.core.style.Paint;
 import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.style.Theme;
@@ -90,7 +90,7 @@ class LookTest {
     @ParameterizedTest
     @MethodSource("looks")
     void everyCodeColourReadsOnTheCard(Theme look) {
-        for (Grammars.Colour rule : Look.CODE) {
+        for (Colour rule : Look.CODE.rules()) {
             double ratio = contrast(rule.paint().in(look), look.color(Look.CARD));
             assertTrue(ratio >= 4.5, rule.scope() + " is " + String.format("%.2f", ratio) + ":1 on the card in the "
                     + name(look) + " look; it needs 4.5:1");
@@ -100,8 +100,7 @@ class LookTest {
     /** The code's colours are roles, so marked text follows a change of look; and each has a light answer of its own. */
     @Test
     void theCodeColoursFollowTheLook() {
-        List<Grammars.Colour> code = Look.CODE;
-        for (Grammars.Colour rule : code) {
+        for (Colour rule : Look.CODE.rules()) {
             assertInstanceOf(Role.class, rule.paint(), rule.scope() + " should be a role, not a fixed colour");
             assertNotEquals(rule.paint().in(Look.DARK), rule.paint().in(Look.LIGHT),
                     rule.scope() + " has an answer in each look");
@@ -185,7 +184,7 @@ class LookTest {
     }
 
     private static Paint keyword() {
-        for (Grammars.Colour rule : Look.CODE) {
+        for (Colour rule : Look.CODE.rules()) {
             if (rule.scope().equals("keyword")) {
                 return rule.paint();
             }

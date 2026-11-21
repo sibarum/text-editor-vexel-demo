@@ -1,10 +1,11 @@
 package dev.vexelray.demo.editor;
 
-import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.demo.editor.core.IndexStore;
 import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.framework.api.Configuration;
 import dev.vexelray.framework.api.Provides;
+import dev.vexelray.framework.highlight.Colours;
+import dev.vexelray.framework.highlight.Highlighting;
 import dev.vexelray.framework.shell.Appearance;
 import dev.vexelray.framework.shell.Windows;
 import dev.vexelray.gui.core.Gui;
@@ -32,7 +33,7 @@ import sibarum.concordance.index.JarCache;
  * <p>Not every part is a recipe. The {@link View} is a {@code @Component}: a lane of its own, built from its one
  * constructor, reached by messages. The editor and the jobs that touch the disk are in {@code -core}, and reach the
  * wiring through {@code Core}, which {@code TextEditorApp} names among its starters beside {@code AutomationStarter},
- * the automation sockets.
+ * the automation sockets, and {@code HighlightStarter}, syntax highlighting.
  *
  * <p>Opening an input backend, installing a clipboard, remembering where the window was, attaching a clock, wiring
  * the frame loop with its wakes and its pacing, parsing the command line, installing the dialogs, and closing
@@ -65,11 +66,12 @@ final class Recipes {
      * The window's contents. Needs the {@code Gui}, its clock and its title bar, and no window — so a test can build
      * the real tree headless ({@code VexelApplication.tree}), which {@code ViewTest} does.
      *
-     * <p>The clock is for motion: {@link Motion} makes the ramps every widget here animates with.
+     * <p>The clock is for motion: {@link Motion} makes the ramps every widget here animates with. The highlighting says
+     * which file is in which language, for each document's face and its status line.
      */
     @Provides
-    Ui ui(Gui gui, TitleBar titleBar, Scratches scratches) {
-        return new Ui(gui, new Motion(gui), titleBar, scratches);
+    Ui ui(Gui gui, TitleBar titleBar, Scratches scratches, Highlighting highlighting) {
+        return new Ui(gui, new Motion(gui), titleBar, scratches, highlighting);
     }
 
     /** The console: a window of its own, one tab per run, brought up when something is run. */
@@ -114,13 +116,13 @@ final class Recipes {
     }
 
     /**
-     * The grammars, in the code colours (roles, with an answer in each look), for {@code MarkText} to colour documents with. A part rather than
-     * the job's own state, because parsing a grammar is slow and a job keeps nothing between requests. Built from
-     * nothing the framework makes, so first; it parses no grammar until a document wants one.
+     * The code colours (roles, with an answer in each look), which the framework's {@code HighlightStarter} colours
+     * every document with in place of its standard table. The rest of highlighting is not here: the starter holds the
+     * grammars and builds the part {@code MarkText} takes, and Pontif is {@code -core}'s ({@code Core.pontif}).
      */
     @Provides
-    Grammars grammars() {
-        return new Grammars(Look.CODE);
+    Colours codeColours() {
+        return Look.CODE;
     }
 
     /**

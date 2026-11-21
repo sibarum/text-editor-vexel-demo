@@ -2,7 +2,8 @@ package dev.vexelray.demo.editor;
 
 import dev.sibarum.suite.tty.TerminalColors;
 import dev.vexelray.canvas.Color;
-import dev.vexelray.demo.editor.core.Grammars;
+import dev.vexelray.framework.highlight.Colour;
+import dev.vexelray.framework.highlight.Colours;
 import dev.vexelray.gui.core.layout.Length;
 import dev.vexelray.gui.core.style.FocusRing;
 import dev.vexelray.gui.core.style.Oklab;
@@ -12,7 +13,6 @@ import dev.vexelray.gui.core.style.Role;
 import dev.vexelray.gui.core.style.Shading;
 import dev.vexelray.gui.core.style.Theme;
 
-import java.util.List;
 
 /**
  * The two looks, dark and light, as anchors. The dark one is measured from the October 2026 design; the light one is
@@ -292,7 +292,7 @@ final class Look {
 
     /**
      * The code colours: a TextMate scope prefix and its colour in each look, the first rule naming a token's most
-     * specific scope winning ({@link Grammars}). Each is a role, so the spans a document was marked with follow the
+     * specific scope winning ({@link Colours}). Each is a role, so the spans a document was marked with follow the
      * person's choice with nothing re-marked.
      *
      * <p>The dark set is the design's, measured where it shows them -- keywords (#8aa9f0), types (#7dd3e6), numbers
@@ -303,7 +303,7 @@ final class Look {
      * the code sits on (LookTest holds it there), keeping its hue so a keyword is the same blue in both looks. Comment
      * and punctuation stay the quietest, as they are in the dark set.
      */
-    static final List<Grammars.Colour> CODE = List.of(
+    static final Colours CODE = Colours.of(
             code("comment", 0x7f8994, 0x5d6672),
             code("string", 0xa6d189, 0x3b7520),
             code("constant.numeric", 0xe5a477, 0x9c4e12),
@@ -342,11 +342,11 @@ final class Look {
             code("punctuation", 0x8b95a1, 0x5a6470));
 
     /** One rule: {@code scope} in {@code dark} on the dark page and {@code light} on the light one. */
-    private static Grammars.Colour code(String scope, int dark, int light) {
+    private static Colour code(String scope, int dark, int light) {
         Color d = Color.rgb(dark);
         Color l = Color.rgb(light);
         Role role = p -> light(p) ? l : d;
-        return new Grammars.Colour(scope, role);
+        return Colour.of(scope, role);
     }
 
     /**

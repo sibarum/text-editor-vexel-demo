@@ -1,7 +1,6 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.CheckText;
-import dev.vexelray.demo.editor.core.Grammars;
 import dev.vexelray.demo.editor.core.Markdown;
 import dev.vexelray.demo.editor.core.Messages.Check;
 import dev.vexelray.demo.editor.core.Messages.Checked;
@@ -10,6 +9,7 @@ import dev.vexelray.demo.editor.core.Messages.Formatted;
 import dev.vexelray.demo.editor.core.Messages.Mark;
 import dev.vexelray.demo.editor.core.Messages.Marked;
 import dev.vexelray.demo.editor.core.Messages.Problem;
+import dev.vexelray.framework.highlight.Highlighting;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.edit.History;
@@ -41,8 +41,8 @@ import java.util.List;
  *
  * <h2>Colours, off the GUI thread</h2>
  *
- * <p>A file in a format {@link Grammars} knows gets its colours after every edit. That is a pass over the whole text,
- * so it is a job ({@code MarkText}): {@link #changed} says what to ask it, and {@link #marked} applies the answer only
+ * <p>A file in a format the framework's {@link Highlighting} knows gets its colours after every edit. That is a pass
+ * over the whole text, so it is a job ({@code MarkText}): {@link #changed} says what to ask it, and {@link #marked} applies the answer only
  * if the field still says the text it was computed for, because colours worked out for one text and attached to
  * another are on the wrong characters. Such a file is code, and is shown in the mono face; anything else is plain text,
  * which reads better in the proportional one.
@@ -68,6 +68,8 @@ final class Buffer implements AutoCloseable {
     final TextField field;
 
     private final Gui gui;
+    /** Which language this file is in, and what it is called: asked again when it is renamed. */
+    private final Highlighting highlighting;
     /** What the tab shows: the field, or for Markdown the formatted view in its place. */
     private final Node page;
     /** Built only for Markdown, which is all that has a formatted view, the first time the file is; null before. */
@@ -107,12 +109,13 @@ final class Buffer implements AutoCloseable {
     private String problem = "";
 
     /** {@code readOnly}: a built-in module's source, to be read; see {@code NavigateText.builtins}. */
-    Buffer(Gui gui, long id, Path path, String initial, boolean readOnly) {
+    Buffer(Gui gui, Highlighting highlighting, long id, Path path, String initial, boolean readOnly) {
         this.id = id;
         this.gui = gui;
+        this.highlighting = highlighting;
         this.path = path;
         this.problemGround = Role.DANGER.alpha(PROBLEM_GROUND);
-        this.scope = Grammars.scopeFor(String.valueOf(path.getFileName()));
+        this.scope = highlighting.scopeFor(String.valueOf(path.getFileName()));
         // A document: its past is its own, so Ctrl+Z in one file never reaches into another, and its save mark
         // says whether this file is saved rather than whether the window is. Named, so its messages say which.
         // Multiline is also what gives it Ctrl+F. Whitespace dotted where it means something or hides a mistake:
@@ -180,7 +183,7 @@ final class Buffer implements AutoCloseable {
      */
     Mark moved(Path to) {
         path = to;
-        scope = Grammars.scopeFor(name());
+        scope = highlighting.scopeFor(name());
         field.node().font(scope != null ? Type.MONO : Type.UI);
         if (showingFormatted && !Markdown.handles(name())) {
             showFormatted(false);
@@ -412,7 +415,7 @@ final class Buffer implements AutoCloseable {
 
     /** The file's format, for the status line: "Java", or "Plain text". */
     String language() {
-        return Grammars.nameOf(scope);
+        return highlighting.nameOf(scope);
     }
 
     /** Whether closing this would lose work. */

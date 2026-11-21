@@ -3,6 +3,7 @@ package dev.vexelray.demo.editor;
 import dev.vexelray.demo.editor.core.Core;
 import dev.vexelray.framework.api.VexelApp;
 import dev.vexelray.framework.automation.AutomationStarter;
+import dev.vexelray.framework.highlight.HighlightStarter;
 
 /**
  * The application declaration: {@link TextEditor}'s facts, and what the application is built out of beyond
@@ -18,6 +19,9 @@ import dev.vexelray.framework.automation.AutomationStarter;
  *       whoever reaches it full control of the application's input. The plug's lamps show each one's port open or not
  *       and anything connected now or earlier; {@code --automation.available=none} leaves them out of a run
  *       altogether.</li>
+ *   <li>{@link HighlightStarter}: syntax highlighting, the part {@code MarkText} colours documents with. It holds the
+ *       TextMate grammars, TM4E and their native-image metadata; the editor gives it its colours ({@code Recipes}'
+ *       {@code Look.CODE}) and Pontif ({@code Core.pontif}), each by providing a type, and nothing else.</li>
  * </ul>
  *
  * <p>The processor generates {@code TextEditorAppWiring} from this. {@code icon} is the mark the window wears: the
@@ -25,7 +29,7 @@ import dev.vexelray.framework.automation.AutomationStarter;
  * Draw your own, render it to an {@code .ico}, and replace that one file; see the README, <i>The icon</i>.
  */
 @VexelApp(name = TextEditor.APP, title = TextEditor.TITLE, width = TextEditor.W, height = TextEditor.H,
-        icon = TextEditor.ICON, startsHidden = true, starters = {AutomationStarter.class, Core.class})
+        icon = TextEditor.ICON, startsHidden = true, starters = {AutomationStarter.class, HighlightStarter.class, Core.class})
 final class TextEditorApp {
 
     private TextEditorApp() {

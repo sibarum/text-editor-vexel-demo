@@ -269,7 +269,7 @@ class ViewTest {
         assertEquals(2, ws.all().size());
     }
 
-    /** A format with a grammar is coloured by MarkText, through the Grammars part the recipe builds; plain text is not. */
+    /** A format the highlighting knows is coloured by MarkText, through the part HighlightStarter builds; plain text is not. */
     @Test
     void aFileInAKnownFormatIsGivenSpansAndATextFileIsNot() throws Exception {
         Buffer md = opened(Files.writeString(dir.resolve("notes.md"), "# Title\n\nSome *emphasis*."));

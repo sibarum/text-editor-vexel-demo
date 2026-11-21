@@ -17,6 +17,7 @@ import dev.vexelray.gui.widget.SplitPane;
 import dev.vexelray.gui.widget.StatusBar;
 import dev.vexelray.gui.widget.TitleBar;
 import dev.vexelray.framework.core.WindowCommand;
+import dev.vexelray.framework.highlight.Highlighting;
 import sibarum.atchung.Sender;
 
 import java.util.List;
@@ -56,7 +57,7 @@ final class Ui {
     private boolean picturing;
     private final Motion motion;
 
-    Ui(Gui gui, Motion motion, TitleBar titleBar, Scratches scratches) {
+    Ui(Gui gui, Motion motion, TitleBar titleBar, Scratches scratches, Highlighting highlighting) {
         this.titleBar = titleBar;
         this.motion = motion;
 
@@ -74,7 +75,7 @@ final class Ui {
             gui.landmark(slot, status.slot(slot));
         }
 
-        workspace = new Workspace(gui, motion, NavigateText.builtins(scratches));
+        workspace = new Workspace(gui, motion, NavigateText.builtins(scratches), highlighting);
         navigator = new Navigator(gui, motion, scratches);
 
         // In Open the editor steps aside for a picture of the folder being considered: the two share the place

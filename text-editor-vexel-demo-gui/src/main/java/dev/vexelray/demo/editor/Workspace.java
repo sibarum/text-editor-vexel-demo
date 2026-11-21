@@ -1,5 +1,6 @@
 package dev.vexelray.demo.editor;
 
+import dev.vexelray.framework.highlight.Highlighting;
 import dev.vexelray.gui.core.Gui;
 import dev.vexelray.gui.core.Node;
 import dev.vexelray.gui.core.input.InteractionState;
@@ -54,11 +55,15 @@ final class Workspace {
     private final Map<Long, Buffer> byId = new HashMap<>();
     private final Map<String, Buffer> byField = new HashMap<>();
 
+    /** Which file is in which language, for each document's face and colours: the framework's highlighting. */
+    private final Highlighting highlighting;
+
     /** Where built-in modules' sources are opened from (NavigateText.builtins): a document there is read-only. */
     private final Path builtins;
 
-    Workspace(Gui gui, Motion motion, Path builtins) {
+    Workspace(Gui gui, Motion motion, Path builtins, Highlighting highlighting) {
         this.gui = gui;
+        this.highlighting = highlighting;
         this.builtins = builtins.toAbsolutePath().normalize();
         this.motion = motion;
 
@@ -117,7 +122,7 @@ final class Workspace {
 
     /** Open {@code text} as {@code path} in a new tab, in front. {@code focus}: whether it takes the keyboard. */
     Buffer add(long id, Path path, String text, boolean focus) {
-        Buffer buffer = new Buffer(gui, id, path, text, path.toAbsolutePath().normalize().startsWith(builtins));
+        Buffer buffer = new Buffer(gui, highlighting, id, path, text, path.toAbsolutePath().normalize().startsWith(builtins));
         tabs.add(buffer.name(), buffer.node());
         buffers.add(buffer);
         byId.put(id, buffer);

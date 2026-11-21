@@ -1,9 +1,12 @@
 package dev.vexelray.demo.editor.core;
 
 import dev.vexelray.framework.api.Configuration;
+import dev.vexelray.framework.api.Provides;
+import dev.vexelray.framework.highlight.Language;
 
 /**
- * What this module is made of: the {@link Editor} and the jobs that touch the disk.
+ * What this module is made of: the {@link Editor} and the jobs that touch the disk, and the one language it colours
+ * that is not a bundled grammar.
  *
  * <p>The annotation processor sees only the sources of the module it is compiling, so when {@code -gui} compiles,
  * everything here is a class file it would never construct. This list is how it hears of them: {@code -gui}'s
@@ -20,4 +23,14 @@ import dev.vexelray.framework.api.Configuration;
         sources = ScanRepos.class,
         destinations = Runner.class)
 public final class Core {
+
+    /**
+     * Pontif, coloured by its own token scan ({@link Pontif}): one more language for the framework's
+     * {@code HighlightStarter}, which takes every {@code Language} the application provides. Here, beside the scan,
+     * because pontif-tooling is this module's dependency and not {@code -gui}'s.
+     */
+    @Provides
+    public Language pontif() {
+        return Pontif.LANGUAGE;
+    }
 }
