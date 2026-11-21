@@ -1,42 +1,22 @@
 {
   "comment": [
-    "This program's own native-image metadata: the entry point the launcher reaches by JNI, and the JDK's",
-    "locale and time-zone data a native run of the calculator was seen to read. Everything else registers",
-    "itself: the libraries carry their own (Win32, tactroller, DXGI, the shaders, the standard font atlas), and the processor writes the icon's.",
-    "This editor's own fonts (the <families> baked into dev/vexelray/demo/editor/fonts/) are not the library's, so they are listed below,",
-    "as are the grammars/ and every jcodings tables/*.bin -core brings (a trace lists only the tables one run loaded).",
+    "This program's own native-image metadata: only what it reads and no library of the stack does. The libraries carry",
+    "their own (Win32, tactroller, DXGI, the pseudoconsole, the shaders, the standard font atlas) with their FFM flags,",
+    "and the processor writes the icon's, so none of that is here.",
+    "This editor's own fonts (the <families> baked into dev/vexelray/demo/editor/fonts/) are not the library's, so they are listed below.",
     "The title bar's wordmark, /wordmark.sdgb (Wordmark), is read by name, so it is listed too.",
+    "Syntax highlighting: the grammars/ and every jcodings tables/*.bin -core brings (a trace lists only the tables one run",
+    "loaded), and two methods for TM4E. These move to the text-highlighting starter when it exists; until then they are",
+    "here, since without them a native build highlights nothing.",
     "TM4E deep-copies a grammar through ObjectCloner, which finds each Raw* map's and list's clone() by Class.getMethod",
     "and, when that finds nothing, copies into a plain HashMap or ArrayList, so the grammar is no longer an IRawGrammar.",
     "Raw* inherit that public clone() from java.util.HashMap and ArrayList, so registering those two methods is enough.",
     "Never register the Raw* classes themselves: TM4E's jar is signed, and that drags its X509 certificates into the image heap, which fails the build.",
     "Add to it when a native run of this program fails on something the JVM run did not: run it on a JVM",
-    "under -agentlib:native-image-agent and keep only the entries naming this program."
+    "under -agentlib:native-image-agent and keep only the entries naming this program. An entry naming a library",
+    "belongs in that library's jar (docs/framework-notes.md)."
   ],
   "reflection": [
-    {
-      "type": "dev.vexelray.demo.editor.TextEditor",
-      "jniAccessible": true,
-      "methods": [
-        {
-          "name": "main",
-          "parameterTypes": ["java.lang.String[]"]
-        }
-      ]
-    },
-    {
-      "type": "java.lang.Boolean",
-      "jniAccessible": true,
-      "methods": [
-        {
-          "name": "getBoolean",
-          "parameterTypes": ["java.lang.String"]
-        }
-      ]
-    },
-    {
-      "type": "java.lang.String[]"
-    },
     {
       "type": "java.util.ArrayList",
       "methods": [{"name": "clone", "parameterTypes": []}]
@@ -44,45 +24,9 @@
     {
       "type": "java.util.HashMap",
       "methods": [{"name": "clone", "parameterTypes": []}]
-    },
-    {
-      "type": "sun.launcher.LauncherHelper",
-      "jniAccessible": true,
-      "fields": [
-        {
-          "name": "isStaticMain"
-        },
-        {
-          "name": "noArgMain"
-        }
-      ],
-      "methods": [
-        {
-          "name": "getApplicationClass",
-          "parameterTypes": []
-        }
-      ]
-    },
-    {
-      "type": "sun.text.resources.FormatData"
-    },
-    {
-      "type": "sun.text.resources.FormatData_en"
-    },
-    {
-      "type": "sun.text.resources.JavaTimeSupplementary"
-    },
-    {
-      "type": "sun.text.resources.cldr.FormatData"
-    },
-    {
-      "type": "sun.text.resources.cldr.FormatData_en"
     }
   ],
   "resources": [
-    {
-      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
-    },
     {
       "glob": "dev/vexelray/demo/editor/fonts/fonts.json"
     },

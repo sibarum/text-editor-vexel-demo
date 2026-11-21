@@ -29,19 +29,16 @@
         <dependency>
             <groupId>dev.vexelray.framework</groupId>
             <artifactId>vexelray-framework-api</artifactId>
-            <version>${vexelray-framework.version}</version>
         </dependency>
         <!-- The command line's paths (Launch), which the editor opens once the window exists. JDK-only. -->
         <dependency>
             <groupId>dev.vexelray.framework</groupId>
             <artifactId>vexelray-framework-core</artifactId>
-            <version>${vexelray-framework.version}</version>
         </dependency>
         <!-- Span, Color and Settings, and through it the bus (atchung-core) and the logger (atchung-probe). -->
         <dependency>
             <groupId>dev.vexelray.gui</groupId>
             <artifactId>vexelray-gui-core</artifactId>
-            <version>${vexelray-gui.version}</version>
         </dependency>
         <!-- Syntax highlighting (Grammars): TM4E's TextMate tokenizer, the NetBeans repack of org.eclipse.tm4e.core,
              which is the only current release on Maven Central, and the three runtime dependencies it does not
@@ -103,13 +100,11 @@
         <dependency>
             <groupId>dev.sibarum</groupId>
             <artifactId>vex-suite-common-pty</artifactId>
-            <version>${vex-suite-common.version}</version>
         </dependency>
         <!-- git status for the navigator's colours (ReadGitStatus): the suite's, which Vexplore reads it with too. -->
         <dependency>
             <groupId>dev.sibarum</groupId>
             <artifactId>vex-suite-common-git</artifactId>
-            <version>${vex-suite-common.version}</version>
         </dependency>
 
         <dependency>
@@ -128,7 +123,6 @@
                 <dependency>
                     <groupId>dev.sibarum</groupId>
                     <artifactId>vex-suite-common-pty-windows</artifactId>
-                    <version>${vex-suite-common.version}</version>
                     <scope>test</scope>
                 </dependency>
             </dependencies>
@@ -140,7 +134,6 @@
                 <dependency>
                     <groupId>dev.sibarum</groupId>
                     <artifactId>vex-suite-common-pty-linux</artifactId>
-                    <version>${vex-suite-common.version}</version>
                     <scope>test</scope>
                 </dependency>
             </dependencies>

@@ -85,9 +85,14 @@ own `link.exe` comes first. The script finds `vcvars64.bat` with `vswhere`, load
 arguments it was given (`./native-build.cmd ...` from Git Bash). Plain `mvn` works too from a developer prompt; from
 anywhere else the icon step stops and says to use the script.
 
-This program's own native-image metadata is `text-editor-vexel-demo-gui/src/main/resources/META-INF/native-image/.../reachability-metadata.json`,
-and it is short because almost nothing is this program's: the libraries register their own, and the processor
-registers the icon. If a native run fails on something the JVM run did not (a `Missing...RegistrationError`), run it
+This program writes no `-H` flags, and its own native-image metadata,
+`text-editor-vexel-demo-gui/src/main/resources/META-INF/native-image/.../reachability-metadata.json`, is short because
+almost nothing is this program's. Each library carries what it needs in its own jar
+(`META-INF/native-image/<groupId>/<artifactId>/`): its downcalls, its resources, and the FFM flags
+(`-H:+ForeignAPISupport`, shared arenas, `--enable-native-access`), which native-image merges from every jar on the
+class path; the processor registers the icon. What is left is what only this program reads: its fonts, its wordmark,
+and the syntax highlighting's grammars, joni tables and TM4E's two `clone()` methods, which move to a
+text-highlighting starter when there is one. If a native run fails on something the JVM run did not (a `Missing...RegistrationError`), run it
 on a JVM under `-agentlib:native-image-agent=config-output-dir=...`, do the thing that failed, and add
 only the entries that name this program.
 
@@ -318,6 +323,12 @@ rings a tab you asked to open that was already open, or the status line when som
 
 Everything below is installed locally rather than downloaded, so `mvn install` in each of those projects has to have
 happened at least once. If the build cannot resolve them, that is why.
+
+No stack dependency here names a version. The parent pom imports `vexelray-bom`, which fixes the version of every
+library in the stack, the ones this project reaches through others included, so the whole stack moves together: to
+build against a newer one, change `vexelray-bom.version`. Only the stack's build plugins (vexelray-build's, the icons
+plugin and vexelray's font-atlas plugin) name a version of their own, because a BOM cannot manage a plugin; so do
+Pontif, Concordance and the third-party libraries, which are not the stack's.
 
 | what | why it is here |
 | --- | --- |
