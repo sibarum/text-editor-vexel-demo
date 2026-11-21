@@ -115,7 +115,7 @@ class EditorTest {
                 Messages.RECALL_TOPIC, Messages.REMEMBER_TOPIC, Messages.PLAIN_TOPIC, Messages.RECENT_TOPIC,
                 Messages.DROPPING_TOPIC, Messages.MOVED_TOPIC, Messages.START_RUN_TOPIC, Messages.PROJECT_WANTED_TOPIC,
                 Messages.REVEAL_ROW_TOPIC, Messages.WELCOME_TOPIC, WindowCommand.TOPIC, Messages.SCAN_TOPIC,
-                Messages.STOP_SCAN_TOPIC, Messages.REPOS_TOPIC)) {
+                Messages.STOP_SCAN_TOPIC, Messages.REPOS_TOPIC, Messages.NEW_SCRATCH_TOPIC, dev.vexelray.framework.core.PickFile.TOPIC)) {
             listen(heard, t);
         }
     }
@@ -716,6 +716,107 @@ class EditorTest {
         tell(Messages.REPOS_FOUND_TOPIC, new ReposFound(List.of(dir.resolve("c")), 1300));
         tell(Messages.SCANNED_TOPIC, new Scanned(Repositories.End.STOPPED, 1300, 4));
         assertTrue(took(Repos.class).isEmpty(), "Welcome has gone; nothing more is said to it");
+    }
+
+    /**
+     * Welcome… over a live session: it lists the folder shown and the recent ones and looks again; a folder chosen is
+     * shown as the path bar shows one, tabs and all left alone; closing it, unlike at start, quits nothing.
+     */
+    @Test
+    void welcomeAskedAgainShowsAFolderAndClosingItQuitsNothing() {
+        Path old = dir.resolve("old");
+        Path other = dir.resolve("other");
+        start(new Recalled(Optional.of(dir), List.of(), Optional.empty(), List.of(old), List.of(), dir, dir));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        long tab = opened("a.txt", "a");
+        sent.clear();
+
+        tell(Messages.WELCOME_ASKED_TOPIC, new Messages.WelcomeAsked());
+        assertEquals(List.of(new Welcome(List.of(dir, old)), new Scan(dir)), List.copyOf(sent),
+                "the folder shown, then the recent ones; and the home folder looked through again");
+        sent.clear();
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(other));
+        assertEquals(List.of(new StopScan(), WindowCommand.show(CloseRequested.MAIN), new Find(other, Why.GO)),
+                List.copyOf(sent), "shown as the path bar shows a folder: nothing brought back, nothing closed");
+        assertTrue(sent.stream().noneMatch(CloseTabs.class::isInstance));
+        assertEquals(tab, editor.state().doc().front().id(), "the tab in front is still there");
+
+        tell(Messages.WELCOME_ASKED_TOPIC, new Messages.WelcomeAsked());
+        sent.clear();
+        tell(WindowClosed.TOPIC, new WindowClosed(Messages.WELCOME));
+        assertEquals(List.of(new StopScan()), List.copyOf(sent), "closed: the looking stops, and nothing else");
+        tell(Messages.OPEN_PROJECT_TOPIC, new OpenProject(old));
+        assertEquals(List.of(new StopScan()), List.copyOf(sent), "and a late choice changes nothing");
+    }
+
+    /**
+     * New file at start: the window is about that file alone, plain and keeping no session, as when the command line
+     * names one; and an untitled file is asked for.
+     */
+    @Test
+    void aNewFileAtStartIsAPlainWindowOnAnUntitledFile() {
+        tell(Messages.RECALLED_TOPIC, recalled(Optional.of(dir), List.of(file("a.txt")), Optional.empty(), List.of()));
+        sent.clear();
+        tell(Messages.NEW_FILE_ASKED_TOPIC, new Messages.NewFileAsked());
+        assertEquals(List.of(new StopScan(), WindowCommand.show(CloseRequested.MAIN), new Plain(),
+                new Messages.NewScratch(Optional.empty(), true)), List.copyOf(sent),
+                "the main window up, plain, nothing of the session looked at; then a new untitled file");
+        sent.clear();
+
+        Path untitled = dir.resolve("scratches/.untitled/Untitled.txt");
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(untitled, false, "", true));
+        assertEquals(1, took(AddTab.class).size());
+        tell(WindowClosed.TOPIC, new WindowClosed(Messages.WELCOME));
+        assertTrue(took(WindowCommand.class).isEmpty(), "Welcome is done with: closing it now quits nothing");
+        assertTrue(took(Remember.class).isEmpty(), "and nothing of this window is kept");
+    }
+
+    /**
+     * Ctrl+S on an untitled file asks where it goes, with the native Save dialog, and writes nothing yet; the answer is
+     * written, and once it lands the tab is on that file and the untitled one goes. After that a save just saves.
+     */
+    @Test
+    void anUntitledFilesFirstSaveAsksWhereThenTheTabIsOnThatFile() {
+        start(recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
+        tell(Messages.FOUND_TOPIC, new Found(dir, Why.RESTORE_FOLDER, Kind.FOLDER));
+        Path untitled = dir.resolve("scratches/.untitled/Untitled.txt");
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(untitled, false, "", true));
+        long id = took(AddTab.class).getFirst().id();
+        sent.clear();
+
+        tell(Messages.SAVE_TOPIC, new Save(id, "hello", true));
+        assertEquals(List.of(dev.vexelray.framework.core.PickFile.save(id, dir.toString(), "Untitled.txt", List.of())),
+                List.copyOf(sent), "the Save dialog, in the folder shown, the name filled in; nothing written yet");
+        sent.clear();
+        tell(Messages.SAVE_TOPIC, new Save(id, "hello there", true));
+        assertTrue(sent.isEmpty(), "asked again while the dialog is up: nothing asked twice");
+
+        Path chosen = dir.resolve("notes.txt").toAbsolutePath().normalize();
+        tell(dev.vexelray.framework.core.Picked.TOPIC, new dev.vexelray.framework.core.Picked(id, chosen.toString()));
+        assertEquals(List.of(new Write(id, chosen, "hello there", false)), took(Write.class), "the newest text, there");
+        tell(Messages.WRITTEN_TOPIC, new Written(id, chosen, ""));
+        assertEquals(List.of(new Moved(id, chosen)), took(Moved.class));
+        sent.clear();
+        assertEquals(chosen, editor.state().doc().entry(id).path());
+
+        tell(Messages.SAVE_TOPIC, new Save(id, "again", true));
+        assertEquals(List.of(new Write(id, chosen, "again", false)), took(Write.class), "saved: a save just saves");
+    }
+
+    /** The Save dialog cancelled: nothing is written, the tab stays unsaved, and a later save asks again. */
+    @Test
+    void aCancelledSaveDialogWritesNothing() {
+        start(recalled(Optional.of(dir), List.of(), Optional.empty(), List.of()));
+        Path untitled = dir.resolve("scratches/.untitled/Untitled.txt");
+        tell(Messages.SCRATCH_MADE_TOPIC, new ScratchMade(untitled, false, "", true));
+        long id = took(AddTab.class).getFirst().id();
+        tell(Messages.SAVE_TOPIC, new Save(id, "hello", true));
+        sent.clear();
+        tell(dev.vexelray.framework.core.Picked.TOPIC, dev.vexelray.framework.core.Picked.cancelled(id));
+        assertTrue(sent.stream().noneMatch(Write.class::isInstance), "nothing written");
+        assertEquals(List.of(new SaveFailed(id)), took(SaveFailed.class));
+        tell(Messages.SAVE_TOPIC, new Save(id, "hello", true));
+        assertEquals(1, took(dev.vexelray.framework.core.PickFile.class).size(), "asked again");
     }
 
     @Test

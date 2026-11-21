@@ -144,4 +144,16 @@ class ScratchesTest {
         assertTrue(Files.isRegularFile(made.path()));
         assertTrue(s.holds(made.path()));
     }
+
+    /** Welcome's new files: Untitled.txt, then Untitled 2.txt, in a hidden folder among the scratches. */
+    @Test
+    void untitledFilesAreNumberedInAHiddenFolder() {
+        Scratches s = scratches();
+        ScratchMade first = new MakeScratch(s).run(new NewScratch(Optional.empty(), true));
+        ScratchMade second = new MakeScratch(s).run(new NewScratch(Optional.empty(), true));
+        assertTrue(first.untitled());
+        assertEquals(s.dir().resolve(".untitled").resolve("Untitled.txt"), first.path());
+        assertEquals(s.dir().resolve(".untitled").resolve("Untitled 2.txt"), second.path());
+        assertTrue(s.holds(first.path()), "a scratch all the same, so closed empty it goes");
+    }
 }

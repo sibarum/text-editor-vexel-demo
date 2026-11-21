@@ -101,6 +101,8 @@ final class Landmarks {
     static final String WELCOME_JAVA = "welcome.java";
     static final String WELCOME_MAVEN = "welcome.maven";
     static final String WELCOME_LOOK_AGAIN = "welcome.look-again";
+    /** Welcome's New file: a new, empty file in the main window, untitled until saved. */
+    static final String WELCOME_NEW_FILE = "welcome.new-file";
 
     private Landmarks() {
     }

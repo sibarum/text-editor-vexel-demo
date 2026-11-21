@@ -42,6 +42,18 @@ settings at once (`run.java.home`, `run.maven.home`, by `KeepTools`); one whose 
 environment's own. **Look again** looks for them again. To a script: `welcome.java`, `welcome.maven` and
 `welcome.look-again`.
 
+**View → Welcome…** brings Welcome back over the main window, listing the folder shown and the recent ones and
+looking for repositories again: for another folder, or to change Run with. A folder chosen there is shown as the path
+bar shows one, the tabs left open; closing it changes nothing. To a script it is `menu.welcome`.
+
+**New file**, at the top of Welcome, opens a new, empty `Untitled.txt`. At start the main window is about that file
+alone, as when the command line names one: no navigator, and nothing of the last session brought back or kept. From
+Welcome… it is one more tab. The file is a scratch kept out of sight (`.untitled` among the scratches), so closed
+empty it goes. Its first **Ctrl+S** opens the native Save dialog, in the folder shown or the home folder, with the
+name filled in; once the text lands where you chose, the tab is on that file and the untitled one goes, and from then
+on Ctrl+S just saves. Cancelled, nothing is written and the tab stays unsaved. To a script the button is
+`welcome.new-file`; the dialog cannot be driven (FN-19).
+
 ```
 mvn compile exec:exec "-Dapp.args=C:/notes"               # open a folder (or files) named on the command line
 mvn compile exec:exec -Dapp.args=120                      # 120 frames and quit
@@ -144,7 +156,8 @@ as the last save. To a script: `symbols` (the field),
 `symbols.list`, `symbols.note` (the line under the list, "12 declarations", worth an `await`), `symbols.index`, and
 `symbols.mode`, the header, there only while Symbols is up.
 
-**View**, after New, has word wrap, the navigator, Go to symbol…, the formatted view and zoom, each with its chord beside it.
+**View**, after New, has word wrap, the navigator, Go to symbol…, the formatted view and zoom, each with its chord beside it,
+and under a rule Welcome….
 
 A folder that holds one folder and nothing else is one row with it, as a package's folders are
 (`dev.vexelray.gui.widget`), so deep files have room for their names.
@@ -153,8 +166,9 @@ keyboard in the tree. A tab's menu has Save, Close, Close others, Close all and 
 around it) and selects its row there. A bullet in
 front of a tab's name means unsaved changes; closing anything unsaved asks first, and so does quitting.
 
-There is no file dialog, by choice: the path bar is the whole of "open", and it works the same in a test as in use. The
-framework brings native pickers (a `PickFile` message, answered by `Picked`) for a project that wants them.
+There is no file dialog for opening, by choice: the path bar is the whole of "open", and it works the same in a test as
+in use. The one native picker is the Save dialog of a new file's first save (Welcome's New file), the framework's
+`PickFile`, answered by `Picked`.
 
 ### Running things
 

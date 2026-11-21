@@ -2,6 +2,7 @@ package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Messages.Offer;
 import dev.vexelray.demo.editor.core.Messages.RunThis;
+import dev.vexelray.demo.editor.core.Messages.WelcomeAsked;
 import dev.vexelray.demo.editor.core.NavigateText;
 import dev.vexelray.demo.editor.core.Scratches;
 import dev.vexelray.gui.core.Gui;
@@ -192,11 +193,12 @@ final class Ui {
 
     /**
      * The View menu, declared again when what it says changes: word wrap first, a line ticked while documents wrap,
-     * then the navigator, Symbols and the formatted view, then zoom. Each line names its command, so it shows the chord as the
+     * then the navigator, Symbols and the formatted view, then zoom, then Welcome…, which brings Welcome back over the
+     * window. Each line but Welcome names its command, so it shows the chord as the
      * person has it bound. Word wrap's line sets the setting to the other way from its tick rather than flipping it,
      * so it does what it said when it was drawn; the rest send the same {@link Intent} as their chord.
      */
-    void viewMenu(boolean wrapping, Sender<Intent> intents) {
+    void viewMenu(boolean wrapping, Sender<Intent> intents, Sender<WelcomeAsked> welcome) {
         titleBar.menu(VIEW, "View", Menu.builder()
                 .item("Word wrap", intents,
                         new Intent(wrapping ? Intent.Command.WRAP_OFF : Intent.Command.WRAP_ON))
@@ -212,6 +214,8 @@ final class Ui {
                 .item("Zoom in", intents, new Intent(Intent.Command.ZOOM_IN)).command(CommandIds.ZOOM_IN)
                 .item("Zoom out", intents, new Intent(Intent.Command.ZOOM_OUT)).command(CommandIds.ZOOM_OUT)
                 .item("Reset zoom", intents, new Intent(Intent.Command.ZOOM_RESET)).command(CommandIds.ZOOM_RESET)
+                .separator()
+                .item("Welcome…", welcome, new WelcomeAsked())
                 .build());
     }
 

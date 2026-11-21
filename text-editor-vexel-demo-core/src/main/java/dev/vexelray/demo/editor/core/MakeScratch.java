@@ -6,6 +6,7 @@ import dev.vexelray.framework.api.Job;
 import sibarum.probe.Log;
 
 import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Make a new, empty scratch, on the offload lane: made at once, so Ctrl+S just saves it, and in the platform's line
@@ -25,10 +26,11 @@ public final class MakeScratch {
 
     public ScratchMade run(NewScratch s) {
         try {
-            return new ScratchMade(scratches.create(s.in().orElse(null)), CRLF, "");
+            Path made = s.untitled() ? scratches.untitled() : scratches.create(s.in().orElse(null));
+            return new ScratchMade(made, CRLF, "", s.untitled());
         } catch (IOException | RuntimeException e) {
             LOG.warn("could not make a scratch in {}", scratches.dir(), e);
-            return new ScratchMade(scratches.dir(), CRLF, String.valueOf(e.getMessage()));
+            return new ScratchMade(scratches.dir(), CRLF, String.valueOf(e.getMessage()), s.untitled());
         }
     }
 }

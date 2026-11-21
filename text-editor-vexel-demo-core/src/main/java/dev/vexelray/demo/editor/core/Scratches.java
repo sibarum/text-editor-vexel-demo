@@ -102,6 +102,24 @@ public record Scratches(Path dir) {
         }
     }
 
+    /**
+     * Make a new, empty file for Welcome's New file: {@code Untitled.txt}, then {@code Untitled 2.txt} and so on, in a
+     * hidden folder among the scratches, out of their list. It is a scratch all the same, so closed empty it goes.
+     */
+    public Path untitled() throws IOException {
+        Path in = Files.createDirectories(ensure().resolve(UNTITLED));
+        for (int n = 1; ; n++) {
+            try {
+                return Files.createFile(in.resolve(n == 1 ? "Untitled.txt" : "Untitled " + n + ".txt"));
+            } catch (FileAlreadyExistsException taken) {
+                // the next number
+            }
+        }
+    }
+
+    /** The hidden folder Welcome's new files are made in. */
+    static final String UNTITLED = ".untitled";
+
     /** A new folder in {@code parent} (the scratches folder for null), called {@code Folder}, {@code Folder 2}... */
     public Path folder(Path parent) throws IOException {
         Path in = parent != null && holds(parent) && Files.isDirectory(parent) ? parent : ensure();

@@ -15,9 +15,12 @@ declaration (the index is built when a project is shown and on each save, and Ct
 it by name).
 Its code is on `develop`, to copy from as each piece is rebuilt.
 
-- [ ] Welcome, after slices 1 to 4 (done 2026-11-20): a Welcome… item to bring it back, which is also the only way
-      to change Run with once the main window is up. Closing Welcome before choosing quits, which only `EditorTest`
-      covers: ottermate has no verb for a window's close box.
+- [ ] Closing Welcome (at start it quits; from Welcome… it changes nothing) is covered only by `EditorTest`: ottermate
+      has no verb for a window's close box. One script through it, once there is one.
+- [ ] An untitled file's save from a closing (Save, at the question on close or quit) opens the Save dialog, but the
+      closing waits for its saves only the tick's default bound, so a dialog left open ends it with a late-saves
+      message. Holding the closing for the person while the dialog is up would mend it. And the save itself has only
+      `EditorTest` behind it: the dialog cannot be scripted (FN-19).
 - [ ] The console loses the top of a run's first line when the line is long and the console small: it is written
       wrapped at the terminal's first width and the pseudo-terminal keeps no scrollback, so a Run line with the chosen
       JDK and Maven in front (two paths) shows only its tail in a 960x600 console. Seen 2026-11-20.

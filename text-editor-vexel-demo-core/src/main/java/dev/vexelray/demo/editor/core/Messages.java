@@ -102,11 +102,27 @@ public final class Messages {
 
     /**
      * Ctrl+Shift+N: a new, empty scratch ({@link MakeScratch}), in {@code in} if that is among the scratches, else in
-     * the scratches' own folder. The job answers the editor, which opens it.
+     * the scratches' own folder. The job answers the editor, which opens it. {@code untitled}: Welcome's New file, an
+     * {@code Untitled.txt} kept out of sight, whose first save asks where it goes ({@code Scratches#untitled}); the
+     * editor sends that one, and the job says it back.
      */
     public static final Topic<NewScratch> NEW_SCRATCH_TOPIC = Topic.edge(NewScratch.class);
 
-    public record NewScratch(Optional<Path> in) {
+    public record NewScratch(Optional<Path> in, boolean untitled) {
+
+        /** A scratch, as Ctrl+Shift+N makes one. */
+        public NewScratch(Optional<Path> in) {
+            this(in, false);
+        }
+    }
+
+    /**
+     * Welcome's New file: a new, empty file in the main window, untitled until its first save asks where it goes. At
+     * start the window is about that file alone, as when the command line names one; from Welcome… it is one more tab.
+     */
+    public static final Topic<NewFileAsked> NEW_FILE_ASKED_TOPIC = Topic.edge(NewFileAsked.class);
+
+    public record NewFileAsked() {
     }
 
     /**
@@ -138,6 +154,15 @@ public final class Messages {
     public static final Topic<OpenProject> OPEN_PROJECT_TOPIC = Topic.edge(OpenProject.class);
 
     public record OpenProject(Path folder) {
+    }
+
+    /**
+     * Welcome…, from the View menu: Welcome comes up again over the main window, for another folder or to change Run
+     * with. Choosing a folder there shows it, as the path bar would; closing it changes nothing.
+     */
+    public static final Topic<WelcomeAsked> WELCOME_ASKED_TOPIC = Topic.edge(WelcomeAsked.class);
+
+    public record WelcomeAsked() {
     }
 
     // ------------------------------------------------------------------ the editor tells the view
@@ -422,11 +447,16 @@ public final class Messages {
 
     /**
      * What {@link NewScratch} made: the new, empty scratch, with the line endings a save gives it, or why not
-     * ({@code problem}, and {@code path} the scratches' folder).
+     * ({@code problem}, and {@code path} the scratches' folder). {@code untitled} as the request said.
      */
     public static final Topic<ScratchMade> SCRATCH_MADE_TOPIC = Topic.edge(ScratchMade.class);
 
-    public record ScratchMade(Path path, boolean crlf, String problem) {
+    public record ScratchMade(Path path, boolean crlf, String problem, boolean untitled) {
+
+        /** A scratch, as Ctrl+Shift+N makes one. */
+        public ScratchMade(Path path, boolean crlf, String problem) {
+            this(path, crlf, problem, false);
+        }
     }
 
     /**

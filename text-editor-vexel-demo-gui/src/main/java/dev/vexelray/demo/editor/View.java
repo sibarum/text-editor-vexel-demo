@@ -59,6 +59,7 @@ import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.Written;
 import dev.vexelray.demo.editor.core.Messages.SymbolsFound;
 import dev.vexelray.demo.editor.core.Messages.SymbolsWanted;
+import dev.vexelray.demo.editor.core.Messages.WelcomeAsked;
 import dev.vexelray.demo.editor.core.FindSymbols;
 import dev.vexelray.demo.editor.core.NavigateText;
 import dev.vexelray.framework.api.Subscribe;
@@ -162,6 +163,8 @@ final class View {
     private final Sender<GitStatusWanted> gitStatusWanted;
     private final Sender<TreeView.Inks> inks;
     private final Sender<SymbolsWanted> symbolsWanted;
+    /** Welcome…, from the View menu: the editor puts Welcome up again. */
+    private final Sender<WelcomeAsked> welcomeAsked;
     private final Sender<RevealAsked> revealAsked;
     /** How many times git's status has been asked for: an answer to any but the last is stale, and left. */
     private long gitAsked;
@@ -220,7 +223,8 @@ final class View {
          Sender<ScratchFolderWanted> scratchFolderWanted, Sender<RunsWanted> runsWanted, Sender<RunThis> runThis,
          Sender<WindowCommand> windows, Sender<IndexWanted> indexWanted, Sender<HandTo> handTo,
          Sender<GitStatusWanted> gitStatusWanted, Sender<TreeView.Inks> inks, Sender<SymbolsWanted> symbolsWanted,
-         Sender<RevealAsked> revealAsked) {
+         Sender<RevealAsked> revealAsked, Sender<WelcomeAsked> welcomeAsked) {
+        this.welcomeAsked = welcomeAsked;
         this.symbolsWanted = symbolsWanted;
         this.revealAsked = revealAsked;
         this.handTo = handTo;
@@ -255,7 +259,7 @@ final class View {
         this.intents = intents;
         commands(keys);
         ui.newMenu(false, false, intents);   // off until a folder is shown, and what it offers comes with its listing
-        ui.viewMenu(wrap, intents);
+        ui.viewMenu(wrap, intents, welcomeAsked);
         ui.runMenu(List.of(), runThis, windows);   // Run… at once; what the folder offers comes with its answer
         gui.claim(nav.renameNode(), Shortcut.of(Key.ESCAPE), ClaimScope.FOCUSED, intents,
                 new Intent(Command.LEAVE_RENAME));
@@ -1450,7 +1454,7 @@ final class View {
         for (Buffer b : ws.all()) {
             b.wordWrap(wrap);
         }
-        ui.viewMenu(wrap, intents);
+        ui.viewMenu(wrap, intents, welcomeAsked);
         ui.status(wrap ? "Word wrap on" : "Word wrap off", false);
     }
 

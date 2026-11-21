@@ -42,6 +42,9 @@ import dev.vexelray.demo.editor.core.Messages.ScratchMade;
 import dev.vexelray.demo.editor.core.Messages.ShowFolder;
 import dev.vexelray.demo.editor.core.Messages.Status;
 import dev.vexelray.demo.editor.core.Messages.Welcome;
+import dev.vexelray.demo.editor.core.Messages.WelcomeAsked;
+import dev.vexelray.demo.editor.core.Messages.NewFileAsked;
+import dev.vexelray.demo.editor.core.Messages.NewScratch;
 import dev.vexelray.demo.editor.core.Messages.Repos;
 import dev.vexelray.demo.editor.core.Messages.ReposFound;
 import dev.vexelray.demo.editor.core.Messages.Scan;
@@ -58,6 +61,8 @@ import dev.vexelray.framework.core.Answer;
 import dev.vexelray.framework.core.Ask;
 import dev.vexelray.framework.core.CloseAnswer;
 import dev.vexelray.framework.core.CloseRequested;
+import dev.vexelray.framework.core.PickFile;
+import dev.vexelray.framework.core.Picked;
 import dev.vexelray.framework.core.WindowClosed;
 import dev.vexelray.framework.core.WindowCommand;
 import dev.vexelray.framework.core.WindowOpened;
@@ -132,12 +137,13 @@ import java.util.Set;
 @Hears({WindowOpened.class, Recalled.class, Go.class, Add.class, Open.class, FileRead.class, Found.class,
         Created.class, ScratchMade.class, Relocated.class, Fronted.class, Edited.class, Save.class, Written.class,
         Answer.class, Close.class, CloseRequested.class, RunThis.class, RevealAsked.class, ProjectFound.class,
-        OpenProject.class, WindowClosed.class, ReposFound.class, Scanned.class})
+        OpenProject.class, WindowClosed.class, ReposFound.class, Scanned.class, WelcomeAsked.class, NewFileAsked.class,
+        Picked.class})
 @Publishes({ShowFolder.class, AddTab.class, FrontTab.class, CloseTabs.class, Retitle.class, Moved.class,
         Caption.class, Status.class, Ask.class, Flush.class, SaveFailed.class, CloseAnswer.class,
         Read.class, Write.class, Find.class, Create.class, Recall.class, Remember.class, Plain.class, Recent.class,
         Dropping.class, StartRun.class, ProjectWanted.class, RevealRow.class, Welcome.class, WindowCommand.class,
-        Scan.class, StopScan.class, Repos.class})
+        Scan.class, StopScan.class, Repos.class, NewScratch.class, PickFile.class})
 public final class Editor {
 
     /**
@@ -168,11 +174,16 @@ public final class Editor {
      * @param fresh     scratches this run made and nothing has been written to since: closed like that, they go again
      * @param welcoming what Welcome is waiting on: the session brought back and the repositories found, while it is up
      *                  and nothing is chosen yet
+     * @param home      the person's home folder, which Welcome looks in for repositories; known once the session is
+     *                  recalled
+     * @param untitled  Welcome's new files open now ({@code Untitled.txt}): saved, each asks where it goes first
+     * @param savingAs  the text of each untitled tab whose save waits on the Save dialog, by its id
      */
     @Withers
     record State(Doc doc, long ids, Set<Path> reading, Map<Long, Closing> closings, List<Restore> restoring,
                  Optional<Path> front, Optional<Path> started, boolean armed, boolean keeps,
-                 Optional<Remember> last, Set<Path> fresh, Optional<Welcoming> welcoming)
+                 Optional<Remember> last, Set<Path> fresh, Optional<Welcoming> welcoming, Optional<Path> home,
+                 Set<Path> untitled, Map<Long, String> savingAs)
             implements EditorStateWithers {
 
         State {
@@ -180,11 +191,29 @@ public final class Editor {
             closings = Map.copyOf(closings);
             restoring = List.copyOf(restoring);
             fresh = Set.copyOf(fresh);
+            untitled = Set.copyOf(untitled);
+            savingAs = Map.copyOf(savingAs);
         }
 
         static State initial() {
             return new State(Doc.initial(), 0, Set.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(),
-                    false, true, Optional.empty(), Set.of(), Optional.empty());
+                    false, true, Optional.empty(), Set.of(), Optional.empty(), Optional.empty(), Set.of(), Map.of());
+        }
+
+        /** {@code file} counted as untitled, or no longer. */
+        State untitled(Path file, boolean value) {
+            return withUntitled(with(untitled, file, value));
+        }
+
+        /** Tab {@code id}'s text held while the Save dialog asks where it goes, or (null) no longer. */
+        State savingAs(long id, String text) {
+            Map<Long, String> next = new HashMap<>(savingAs);
+            if (text == null) {
+                next.remove(id);
+            } else {
+                next.put(id, text);
+            }
+            return withSavingAs(next);
         }
 
         // One wither per component (withDoc, withIds, ... withFresh) is generated for @Withers. These are the ones
@@ -285,10 +314,14 @@ public final class Editor {
     /**
      * Welcome, up and waiting for a choice.
      *
-     * @param session what the last session left, which comes back if its folder is chosen
+     * @param session what the last session left, which comes back if its folder is chosen; or, asked for again, the
+     *                session as it is, its folder and recent ones
      * @param repos   the repositories found so far that Recent does not list, in the order found
+     * @param atStart whether the application opened on it, with the main window hidden: then a choice brings the
+     *                session back and closing it quits; asked for again (Welcome…), a choice shows a folder and closing
+     *                it changes nothing
      */
-    record Welcoming(Recalled session, List<Path> repos) {
+    record Welcoming(Recalled session, List<Path> repos, boolean atStart) {
         Welcoming {
             repos = List.copyOf(repos);
         }
@@ -376,6 +409,9 @@ public final class Editor {
         Step<State, WindowClosed> windowClosed = b.step("windowClosed", Editor::windowClosed);
         Step<State, ReposFound> reposFound = b.step("reposFound", Editor::reposFound);
         Step<State, Scanned> scanned = b.step("scanned", Editor::scanned);
+        Step<State, WelcomeAsked> welcomeAsked = b.step("welcomeAsked", Editor::welcomeAsked);
+        Step<State, NewFileAsked> newFileAsked = b.step("newFileAsked", Editor::newFileAsked);
+        Step<State, Picked> picked = b.step("picked", Editor::picked);
 
         Step<State, Close> closeAsked = b.step("closeAsked", Editor::closeAsked);
         Step<State, CloseRequested> quitAsked = b.step("quitAsked", Editor::quitAsked);
@@ -411,7 +447,10 @@ public final class Editor {
                 .on(Messages.OPEN_PROJECT_TOPIC, chosen)
                 .on(WindowClosed.TOPIC, windowClosed)
                 .on(Messages.REPOS_FOUND_TOPIC, reposFound)
-                .on(Messages.SCANNED_TOPIC, scanned);
+                .on(Messages.SCANNED_TOPIC, scanned)
+                .on(Messages.WELCOME_ASKED_TOPIC, welcomeAsked)
+                .on(Messages.NEW_FILE_ASKED_TOPIC, newFileAsked)
+                .on(Picked.TOPIC, picked);
         ledger = b.build(inbox, "editor", CAPACITY);
 
         closing(Chain.start("close tabs", ledger, closeAsked).on(Messages.CLOSE_TOPIC), ask, saveThem, discard, finish,
@@ -480,13 +519,35 @@ public final class Editor {
      * first argument is looked at, so the navigator is never seen to go.
      */
     private static State recalled(State s, Recalled r, Out out) {
+        State known = s.withHome(Optional.of(r.home()));
         if (r.arguments().isEmpty()) {
             out.send(Messages.WELCOME_TOPIC, new Welcome(welcomed(r)));
             out.send(Messages.SCAN_TOPIC, new Scan(r.home()));
-            return s.withWelcoming(Optional.of(new Welcoming(r, List.of())));
+            return known.withWelcoming(Optional.of(new Welcoming(r, List.of(), true)));
         }
         out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
-        return restore(s, r, out);
+        return restore(known, r, out);
+    }
+
+    /**
+     * Welcome…: Welcome again, over the main window, listing the folder shown and the recent ones, and looking for
+     * repositories afresh. Asked while it is up, it is only brought to the front.
+     */
+    private static State welcomeAsked(State s, WelcomeAsked m, Out out) {
+        if (s.welcoming().isPresent()) {
+            out.send(Messages.WELCOME_TOPIC, new Welcome(welcomed(s.welcoming().get().session())));
+            return s;
+        }
+        Path started = s.started().orElse(null);
+        Path home = s.home().orElse(started);
+        if (started == null || home == null) {
+            return s;   // nothing recalled yet: a test's headless tree, which has no session to welcome
+        }
+        Recalled now = new Recalled(Optional.ofNullable(s.doc().folder()), List.of(), Optional.empty(),
+                s.doc().recent(), List.of(), started, home);
+        out.send(Messages.WELCOME_TOPIC, new Welcome(welcomed(now)));
+        out.send(Messages.SCAN_TOPIC, new Scan(home));
+        return s.withWelcoming(Optional.of(new Welcoming(now, List.of(), false)));
     }
 
     /**
@@ -502,19 +563,48 @@ public final class Editor {
     }
 
     /**
+     * Welcome's New file: a new, empty {@code Untitled.txt} in the main window, whose first save asks where it goes
+     * ({@link #save}). At start the window is about that file alone, as when the command line names one: plain, the
+     * navigator out of the way, and nothing of the session brought back or kept. From Welcome… it is one more tab.
+     */
+    private static State newFileAsked(State s, NewFileAsked m, Out out) {
+        State next = s;
+        if (s.welcoming().isPresent()) {
+            Welcoming w = s.welcoming().get();
+            next = s.withWelcoming(Optional.empty());
+            out.send(Messages.STOP_SCAN_TOPIC, new StopScan());
+            out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
+            if (w.atStart()) {
+                out.send(Messages.PLAIN_TOPIC, new Plain());
+                next = next(next.withRestoring(List.of(), Optional.empty(), w.session().started(), false), out);
+            }
+        }
+        out.send(Messages.NEW_SCRATCH_TOPIC, new NewScratch(Optional.empty(), true));
+        return next;
+    }
+
+    /**
      * A folder chosen in Welcome: the main window comes up on it. The last session's folder brings its tabs back with
      * it (or, with none, the folder started in, as before); any other opens alone, and the last session's folder
-     * becomes recent, as leaving it would have made it.
+     * becomes recent, as leaving it would have made it. Asked for again (Welcome…), it is shown as the path bar shows
+     * one, the tabs left as they are; the folder already shown changes nothing.
      * Heard only while Welcome is waiting; a second choice, or a late one, changes nothing.
      */
     private static State chosen(State s, OpenProject m, Out out) {
         if (s.welcoming().isEmpty()) {
             return s;
         }
-        Recalled r = s.welcoming().get().session();
+        Welcoming w = s.welcoming().get();
+        Recalled r = w.session();
         State next = s.withWelcoming(Optional.empty());
         out.send(Messages.STOP_SCAN_TOPIC, new StopScan());
         out.send(WindowCommand.TOPIC, WindowCommand.show(CloseRequested.MAIN));
+        if (!w.atStart()) {
+            if (!m.folder().equals(s.doc().folder())) {
+                out.send(Messages.FIND_TOPIC, new Find(m.folder(), Why.GO));
+            }
+            return next;
+        }
         if (m.folder().equals(r.folder().orElse(r.started()))) {
             return restore(next, r, out);
         }
@@ -525,13 +615,20 @@ public final class Editor {
                 r.started(), r.home()), out);
     }
 
-    /** Welcome closed with nothing chosen: there is nothing to work on, so the application goes. */
+    /**
+     * Welcome closed with nothing chosen. At start there is nothing to work on, so the application goes; asked for
+     * again, the main window is still there, and nothing changes but the looking, which stops.
+     */
     private static State windowClosed(State s, WindowClosed m, Out out) {
-        if (m.window().equals(Messages.WELCOME) && s.welcoming().isPresent()) {
-            out.send(Messages.STOP_SCAN_TOPIC, new StopScan());
-            out.send(WindowCommand.TOPIC, WindowCommand.close(CloseRequested.MAIN));
+        if (!m.window().equals(Messages.WELCOME) || s.welcoming().isEmpty()) {
+            return s;
         }
-        return s;
+        out.send(Messages.STOP_SCAN_TOPIC, new StopScan());
+        if (s.welcoming().get().atStart()) {
+            out.send(WindowCommand.TOPIC, WindowCommand.close(CloseRequested.MAIN));
+            return s;
+        }
+        return s.withWelcoming(Optional.empty());
     }
 
     /**
@@ -552,7 +649,7 @@ public final class Editor {
         }
         out.send(Messages.REPOS_TOPIC, new Repos(repos, "Looking… " + count(m.folders(), "folder", "folders")
                 + " so far"));
-        return s.withWelcoming(Optional.of(new Welcoming(w.session(), repos)));
+        return s.withWelcoming(Optional.of(new Welcoming(w.session(), repos, w.atStart())));
     }
 
     /** The scan has ended: Welcome says what it came to. */
@@ -631,8 +728,10 @@ public final class Editor {
         }
         Doc d = s.doc();
         Doc.Entry f = d.front();
-        Remember now = new Remember(Optional.ofNullable(d.folder()), d.files(),
-                f == null ? Optional.empty() : Optional.of(f.path()), d.recent());
+        // An untitled file is not kept: it has no place yet, and what is typed in it lives only in its tab.
+        List<Path> files = d.files().stream().filter(p -> !s.untitled().contains(p)).toList();
+        Optional<Path> front = f == null || s.untitled().contains(f.path()) ? Optional.empty() : Optional.of(f.path());
+        Remember now = new Remember(Optional.ofNullable(d.folder()), files, front, d.recent());
         if (s.last().equals(Optional.of(now))) {
             return s;
         }
@@ -777,19 +876,21 @@ public final class Editor {
 
     /**
      * A new scratch is made: open it, empty, in front, and count it fresh until something is written to it. The folder
-     * shown is listed again if the scratch is in it, as when the scratches are the folder shown.
+     * shown is listed again if the scratch is in it, as when the scratches are the folder shown. Welcome's new file is
+     * counted untitled besides, so its first save asks where it goes.
      */
     private static State scratchMade(State s, ScratchMade m, Out out) {
         if (!m.problem().isEmpty()) {
-            refuse(out, "Could not make a scratch: " + m.problem());
+            refuse(out, (m.untitled() ? "Could not make a new file: " : "Could not make a scratch: ") + m.problem());
             return s;
         }
         Path folder = s.doc().folder();
         if (folder != null && m.path().startsWith(folder)) {
             out.send(Messages.SHOW_FOLDER_TOPIC, new ShowFolder(folder));
         }
-        State next = addTab(s.fresh(m.path(), true), m.path(), "", m.crlf(), true, out);
-        say(out, "New scratch " + m.path().getFileName());
+        State next = addTab(s.fresh(m.path(), true).untitled(m.path(), m.untitled()), m.path(), "", m.crlf(), true,
+                out);
+        say(out, (m.untitled() ? "New file " : "New scratch ") + m.path().getFileName());
         return next;
     }
 
@@ -904,15 +1005,52 @@ public final class Editor {
 
     // ------------------------------------------------------------------ saving
 
-    /** Write a tab's text, whether the view sent it of its own accord (Ctrl+S) or because a close asked for it. */
+    /**
+     * Write a tab's text, whether the view sent it of its own accord (Ctrl+S) or because a close asked for it. An
+     * untitled one asks where first: the native Save dialog, in the folder shown or else the home folder, with its name
+     * filled in, and its text is held until the answer ({@link #picked}). Asked again while the dialog is up, the newer
+     * text is held instead, and nothing is asked twice.
+     */
     private static State save(State s, Save save, Out out) {
         Doc.Entry entry = s.doc().entry(save.id());
         if (!save.open() || entry == null) {
             // The tab went while its text was asked for: there is nothing left to write, and nothing lost by not.
             return landed(s, save.id(), out);
         }
+        if (s.untitled().contains(entry.path())) {
+            if (!s.savingAs().containsKey(save.id())) {
+                String start = Optional.ofNullable(s.doc().folder()).or(s::home).or(s::started)
+                        .map(Path::toString).orElse("");
+                out.send(PickFile.TOPIC, PickFile.save(save.id(), start, entry.name(), List.of()));
+            }
+            return s.savingAs(save.id(), save.text());
+        }
         out.send(Messages.WRITE_TOPIC, new Write(save.id(), entry.path(), save.text(), entry.crlf()));
         return s;
+    }
+
+    /**
+     * Where an untitled tab goes, from the Save dialog: its held text is written there, and once that lands the tab is
+     * on that file ({@link #written}). Cancelled, nothing is written, the tab stays unsaved, and a closing waiting on
+     * it stops, as when a write fails.
+     */
+    private static State picked(State s, Picked m, Out out) {
+        String text = s.savingAs().get(m.id());
+        Doc.Entry entry = s.doc().entry(m.id());
+        if (text == null) {
+            return s;   // not a save of ours, or its tab has gone
+        }
+        State next = s.savingAs(m.id(), null);
+        Optional<Path> to = m.isCancelled() ? Optional.empty() : ReadSession.path(m.path());
+        if (entry == null || to.isEmpty()) {
+            if (entry != null) {
+                out.send(Messages.SAVE_FAILED_TOPIC, new SaveFailed(m.id()));
+                say(out, "Not saved: " + entry.name());
+            }
+            return failed(next, m.id(), out);
+        }
+        out.send(Messages.WRITE_TOPIC, new Write(m.id(), to.get(), text, entry.crlf()));
+        return next;
     }
 
     private static State written(State s, Written w, Out out) {
@@ -923,8 +1061,27 @@ public final class Editor {
             return failed(s, w.id(), out);
         }
         say(out, "Saved " + name);
+        State next = s;
+        Doc.Entry entry = s.doc().entry(w.id());
+        if (entry != null && !entry.path().equals(w.path()) && s.untitled().contains(entry.path())) {
+            next = savedAs(s, entry, w.path(), out);
+        }
         // A scratch written to is one somebody means to keep: closed empty after all, it stays.
-        return landed(s.fresh(w.path(), false), w.id(), out);
+        return landed(next.fresh(w.path(), false), w.id(), out);
+    }
+
+    /**
+     * An untitled tab's first save landed at {@code to}: the tab is on that file now, titled by it, and the untitled
+     * file, never written, goes. What is in front and the session follow.
+     */
+    private static State savedAs(State s, Doc.Entry entry, Path to, Out out) {
+        Path from = entry.path();
+        State next = s.withDoc(s.doc().relocated(from, to)).untitled(from, false).fresh(from, false);
+        out.send(Messages.MOVED_TOPIC, new Moved(entry.id(), to));
+        out.send(Messages.RETITLE_TOPIC, new Retitle(entry.id(), next.doc().entry(entry.id()).title()));
+        out.send(Messages.DROPPING_TOPIC, new Dropping(from));
+        caption(next, out);
+        return remember(next, out);
     }
 
     /** A save landed: the closing waiting on it goes on once it waits on nothing else. */
@@ -1148,13 +1305,14 @@ public final class Editor {
         return s.withoutClosing(out.run());
     }
 
-    /** {@code file} has closed: if it is a fresh scratch, it goes. */
+    /** {@code file} has closed: if it is a fresh scratch, it goes; an untitled file is untitled no longer. */
     private static State drop(State s, Path file, Out out) {
-        if (!s.fresh().contains(file)) {
-            return s;
+        State next = s.untitled(file, false);
+        if (!next.fresh().contains(file)) {
+            return next;
         }
         out.send(Messages.DROPPING_TOPIC, new Dropping(file));
-        return s.fresh(file, false);
+        return next.fresh(file, false);
     }
 
     private static String names(Doc doc, List<Long> ids) {

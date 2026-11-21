@@ -1,6 +1,7 @@
 package dev.vexelray.demo.editor;
 
 import dev.vexelray.demo.editor.core.Messages;
+import dev.vexelray.demo.editor.core.Messages.NewFileAsked;
 import dev.vexelray.demo.editor.core.Messages.OpenProject;
 import dev.vexelray.demo.editor.core.Messages.ToolsChosen;
 import dev.vexelray.demo.editor.core.Messages.ToolsFound;
@@ -32,9 +33,11 @@ public final class WelcomeView {
     private final Sender<WindowCommand> windows;
     private final Sender<ToolsWanted> toolsWanted;
     private final Sender<ToolsChosen> toolsChosen;
+    private final Sender<NewFileAsked> newFile;
 
     public WelcomeView(Welcome welcome, Sender<OpenProject> open, Sender<WindowCommand> windows,
-                       Sender<ToolsWanted> toolsWanted, Sender<ToolsChosen> toolsChosen) {
+                       Sender<ToolsWanted> toolsWanted, Sender<ToolsChosen> toolsChosen, Sender<NewFileAsked> newFile) {
+        this.newFile = newFile;
         this.welcome = welcome;
         this.open = open;
         this.windows = windows;
@@ -76,11 +79,17 @@ public final class WelcomeView {
         welcome.kept(m.problem());
     }
 
-    /** Look again: for tools installed since Welcome came up. */
+    /**
+     * Look again: for tools installed since Welcome came up. New file: a new, empty file in the main window, and Welcome
+     * hidden, as when a folder is opened.
+     */
     @Subscribe
     public void pressed(Button.Pressed m) {
         if (welcome.looksAgain(m.button())) {
             toolsWanted.send(new ToolsWanted());
+        } else if (welcome.newFile(m.button())) {
+            newFile.send(new NewFileAsked());
+            windows.send(WindowCommand.hide(Welcome.KEY));
         }
     }
 

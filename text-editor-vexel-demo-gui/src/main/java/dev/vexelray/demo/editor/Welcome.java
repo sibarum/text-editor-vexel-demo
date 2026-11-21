@@ -52,6 +52,7 @@ final class Welcome {
     private final Select<Optional<Tool>> java;
     private final Select<Optional<Tool>> maven;
     private final Button lookAgain;
+    private final Button newFile;
     private final Node kept;
 
     Welcome(Window window) {
@@ -67,6 +68,8 @@ final class Welcome {
         maven = tool(Landmarks.WELCOME_MAVEN, "MAVEN_HOME");
         lookAgain = new Button(gui, "Look again").name("look-again");
         gui.landmark(Landmarks.WELCOME_LOOK_AGAIN, lookAgain.node());
+        newFile = new Button(gui, "New file").name("new-file");
+        gui.landmark(Landmarks.WELCOME_NEW_FILE, newFile.node());
         kept = gui.text("").font(Type.UI).textSize(Type.SMALL).textColor(Role.DANGER).wordWrap(true)
                 .width(Length.FILL);
 
@@ -77,7 +80,9 @@ final class Welcome {
                 .background(Look.CARD)
                 .corner(Type.CORNER)
                 .border(Type.RULE, Look.RIM)
-                .children(label("Recent"), list.node(),
+                .children(gui.row().width(Length.FILL).alignItems(AlignItems.CENTER).gap(Type.TIGHT).children(
+                                label("Recent"), gui.box().width(Length.grow(1f)), newFile.node()),
+                        list.node(),
                         label("Git repositories in your home folder"), repos.node(), note,
                         gui.row().width(Length.FILL).alignItems(AlignItems.CENTER).gap(Type.TIGHT).children(
                                 label("Run with"), gui.box().width(Length.grow(1f)), lookAgain.node()),
@@ -193,6 +198,11 @@ final class Welcome {
     /** Whether {@code address} is one of the two tool choices. */
     boolean choosesTool(String address) {
         return address.equals(java.address()) || address.equals(maven.address());
+    }
+
+    /** Whether {@code address} is the New file button. */
+    boolean newFile(String address) {
+        return address.equals(newFile.address());
     }
 
     /** Whether {@code address} is the Look again button. */

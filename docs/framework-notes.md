@@ -234,3 +234,17 @@ page and the stack's light set on the light one, each held to 4.5:1 on the light
 already on screen, coloured or not, now follows the look, and the background fades. Still open: the console's own
 lines are 24-bit escapes in the theme's faint, accent and danger, so a line already written keeps its look; the named
 colours a feed could ask for are not there yet.
+
+## FN-19 · A native file picker cannot be answered by a script, and a background run shows it on the desktop 🔬
+
+Welcome's New file opens an untitled file whose first Ctrl+S asks where it goes with the framework's Save dialog
+(`PickFile.save`, answered by `Picked`, through `NativeDialogs` and NFD). Driving that with ottermate is not possible:
+the picker is the OS's own window, outside every tree, so no verb reaches it; and a run the agent started in the
+background (`CLAUDECODE`), whose own windows are cloaked and never focused, still puts the picker on the person's
+desktop, in front, with the keyboard. So the live check stopped before Ctrl+S, and the save itself is held only by
+`EditorTest`, which publishes the `Picked` a dialog would.
+
+What the framework could do: under automation, answer `PickFile` from the driving socket instead of opening NFD (an
+ottermate verb, `pick <path>` or `pick cancel`, for the next request), as the modals already are trees a script can
+press; and in a background run never open a native picker at all, answering a cancel and logging why, rather than
+take the person's screen.
