@@ -33,6 +33,15 @@ choosing quits. The main window is created hidden (`@VexelApp(startsHidden = tru
 flashes up behind Welcome. A launch that names a folder or file skips Welcome. To a script, Welcome is `window
 welcome`, its lists `welcome.recent` and `welcome.repos`, and the line under the repositories `welcome.note`.
 
+Under them, **Run with** chooses the Java runtime and the Maven that Run uses: each is either *as the environment has
+it* (`JAVA_HOME`/`MAVEN_HOME` and the `PATH`, as before) or one found on this machine (`Toolchains`, by the `FindTools`
+job): the one those variables name, the one the `PATH` runs, the usual install folders' (`Program Files\Java`,
+`Eclipse Adoptium`, `C:\JDK`, `/usr/lib/jvm`, …), `~/.jdks` and SDKMAN's for Java, the Maven wrapper's downloads for
+Maven, and whatever sits beside any of those. Each is listed with its version, newest first. A choice is kept in the
+settings at once (`run.java.home`, `run.maven.home`, by `KeepTools`); one whose folder has gone reads as the
+environment's own. **Look again** looks for them again. To a script: `welcome.java`, `welcome.maven` and
+`welcome.look-again`.
+
 ```
 mvn compile exec:exec "-Dapp.args=C:/notes"               # open a folder (or files) named on the command line
 mvn compile exec:exec -Dapp.args=120                      # 120 frames and quit

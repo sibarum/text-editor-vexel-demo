@@ -16,7 +16,7 @@ import dev.vexelray.framework.api.Configuration;
                 MarkText.class, FormatText.class, WriteSession.class, SurveyFolder.class, MakeScratch.class,
                 DropScratch.class, FindScratches.class, MoveScratch.class, MakeScratchFolder.class, FindRuns.class,
                 TypeRun.class, CheckText.class, NavigateText.class, BuildIndex.class, FindSymbols.class, ReadGitStatus.class,
-                FindProject.class},
+                FindProject.class, FindTools.class, KeepTools.class},
         sources = ScanRepos.class,
         destinations = Runner.class)
 public final class Core {

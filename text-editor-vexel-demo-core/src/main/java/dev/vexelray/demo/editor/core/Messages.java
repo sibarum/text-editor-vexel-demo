@@ -874,4 +874,44 @@ public final class Messages {
             repositories = List.copyOf(repositories);
         }
     }
+
+    // ------------------------------------------------------------------ Welcome's Run with
+
+    /**
+     * A Java runtime or a Maven installation: the folder it is installed in (above its {@code bin}), its version as it
+     * says it, and who made it.
+     */
+    public record Tool(Path home, String version, String vendor) {
+    }
+
+    /** Find the Java runtimes and Maven installations on this machine, and which are chosen ({@link FindTools}). */
+    public static final Topic<ToolsWanted> TOOLS_WANTED_TOPIC = Topic.edge(ToolsWanted.class);
+
+    public record ToolsWanted() {
+    }
+
+    /**
+     * What {@link FindTools} found, newest first, and the ones chosen for Run: empty for the environment's own (the
+     * {@code java} and {@code mvn} the {@code PATH} finds), which is also what a choice whose folder has gone becomes.
+     */
+    public static final Topic<ToolsFound> TOOLS_FOUND_TOPIC = Topic.edge(ToolsFound.class);
+
+    public record ToolsFound(List<Tool> javas, List<Tool> mavens, Optional<Tool> java, Optional<Tool> maven) {
+        public ToolsFound {
+            javas = List.copyOf(javas);
+            mavens = List.copyOf(mavens);
+        }
+    }
+
+    /** The Java runtime and Maven Run is to use, empty for the environment's own: kept in the settings ({@link KeepTools}). */
+    public static final Topic<ToolsChosen> TOOLS_CHOSEN_TOPIC = Topic.edge(ToolsChosen.class);
+
+    public record ToolsChosen(Optional<Tool> java, Optional<Tool> maven) {
+    }
+
+    /** What {@link KeepTools} kept: the choice as the settings now hold it, or why it could not ({@code problem}). */
+    public static final Topic<ToolsKept> TOOLS_KEPT_TOPIC = Topic.edge(ToolsKept.class);
+
+    public record ToolsKept(Optional<Tool> java, Optional<Tool> maven, String problem) {
+    }
 }

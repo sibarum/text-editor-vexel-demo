@@ -97,6 +97,10 @@ final class Landmarks {
     /** Welcome's list of git repositories found in the home folder, and the line under it saying how the looking goes. */
     static final String WELCOME_REPOS = "welcome.repos";
     static final String WELCOME_NOTE = "welcome.note";
+    /** Welcome's Run with: the Java runtime and the Maven Run uses, and the button that looks for them again. */
+    static final String WELCOME_JAVA = "welcome.java";
+    static final String WELCOME_MAVEN = "welcome.maven";
+    static final String WELCOME_LOOK_AGAIN = "welcome.look-again";
 
     private Landmarks() {
     }

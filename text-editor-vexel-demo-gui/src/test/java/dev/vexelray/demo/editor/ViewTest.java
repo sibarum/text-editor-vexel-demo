@@ -115,6 +115,29 @@ class ViewTest {
         assertEquals(List.of(new Messages.OpenProject(a)), told);
     }
 
+    /** The tools found are offered after the environment's own, the chosen one showing; a choice is sent to be kept. */
+    @org.junit.jupiter.api.Test
+    void aToolChosenInWelcomeIsSentToBeKept() throws InterruptedException {
+        Messages.Tool jdk = new Messages.Tool(dir.resolve("jdk-25"), "25.0.3", "Acme");
+        Messages.Tool mvn = new Messages.Tool(dir.resolve("maven"), "3.9.16", "Apache Maven");
+        List<Messages.ToolsChosen> kept = new java.util.concurrent.CopyOnWriteArrayList<>();
+        shell.bus().subscribe(Messages.TOOLS_CHOSEN_TOPIC, kept::add);
+        shell.bus().publish(Messages.TOOLS_FOUND_TOPIC, new Messages.ToolsFound(List.of(jdk), List.of(mvn),
+                java.util.Optional.empty(), java.util.Optional.of(mvn)));
+        VexelApplication.frame(shell);
+        var choice = wiring.welcome().javaSelect();
+        var order = choice.list().order();
+        assertEquals(List.of(java.util.Optional.empty(), java.util.Optional.of(jdk)),
+                java.util.stream.IntStream.range(0, order.size()).mapToObj(order::at).toList());
+        assertEquals(java.util.Optional.empty(), choice.value(), "the environment's own, as chosen");
+
+        choice.show(java.util.Optional.of(jdk));
+        shell.bus().publish(dev.vexelray.gui.widget.Select.COMMITTED,
+                new dev.vexelray.gui.widget.Select.Committed(choice.address(), java.util.Set.of(java.util.Optional.of(jdk))));
+        eventually("the choice sent", () -> !kept.isEmpty());
+        assertEquals(List.of(new Messages.ToolsChosen(java.util.Optional.of(jdk), java.util.Optional.of(mvn))), kept);
+    }
+
     /** Dialogs that answer a question with {@link #answer}, and cancel every file picker. */
     private final class Answering implements Dialogs {
 
