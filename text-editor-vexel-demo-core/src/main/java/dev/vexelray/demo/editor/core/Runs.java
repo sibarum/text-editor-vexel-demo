@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -304,6 +305,16 @@ public final class Runs {
      * whole of what ran and Run again repeats it.
      */
     public static Offer typed(String command, Path dir, Map<String, String> environment, List<String> path) {
+        String what = command.strip();
+        String label = what.length() > LABEL_MAX ? what.substring(0, LABEL_MAX - 1).strip() + "…" : what;
+        return new Offer(label, prefix(environment, path) + what, dir, 0);
+    }
+
+    /**
+     * What sets {@code environment} and puts {@code path} ahead of the {@code PATH}, in the platform's shell, ending in
+     * {@code " && "} ready for the command; empty when there is nothing to set.
+     */
+    static String prefix(Map<String, String> environment, List<String> path) {
         boolean cmd = File.pathSeparatorChar == ';';
         StringBuilder line = new StringBuilder();
         environment.forEach((name, value) -> line.append(cmd ? "set \"" + name + "=" + value + "\""
@@ -313,10 +324,38 @@ public final class Runs {
             line.append(cmd ? "set \"PATH=" + String.join(";", folders) + ";%PATH%\""
                     : "export PATH=" + String.join(":", folders) + ":\"$PATH\"").append(" && ");
         }
-        String what = command.strip();
-        line.append(what);
-        String label = what.length() > LABEL_MAX ? what.substring(0, LABEL_MAX - 1).strip() + "…" : what;
-        return new Offer(label, line.toString(), dir, 0);
+        return line.toString();
+    }
+
+    // ------------------------------------------------------------------ the chosen JDK and Maven
+
+    /**
+     * {@code offers}, each that runs Maven or Java run with the ones chosen in Welcome: {@code JAVA_HOME} set to the
+     * chosen JDK and its {@code bin} ahead of the {@code PATH}, for {@code java} and for {@code mvn}, which runs on
+     * {@code JAVA_HOME}; and the chosen Maven's {@code bin} ahead of that, for {@code mvn}. Set in the line, as Run…'s
+     * environment is, so the console's first line is the whole of what ran. Every other offer, and every offer when
+     * neither is chosen, is left as it is.
+     */
+    public static List<Offer> withTools(List<Offer> offers, Optional<Path> java, Optional<Path> maven) {
+        return offers.stream().map(o -> withTools(o, java, maven)).toList();
+    }
+
+    static Offer withTools(Offer o, Optional<Path> java, Optional<Path> maven) {
+        boolean mvn = o.line().startsWith("mvn ");
+        if (!mvn && !o.line().startsWith("java ")) {
+            return o;
+        }
+        Map<String, String> env = new LinkedHashMap<>();
+        List<String> path = new ArrayList<>();
+        if (mvn) {
+            maven.ifPresent(m -> path.add(m.resolve("bin").toString()));
+        }
+        java.ifPresent(j -> {
+            env.put("JAVA_HOME", j.toString());
+            path.add(j.resolve("bin").toString());
+        });
+        return env.isEmpty() && path.isEmpty() ? o
+                : new Offer(o.label(), prefix(env, path) + o.line(), o.dir(), o.group());
     }
 
     /**

@@ -15,11 +15,12 @@ declaration (the index is built when a project is shown and on each save, and Ct
 it by name).
 Its code is on `develop`, to copy from as each piece is rebuilt.
 
-- [ ] Welcome, after slices 1 to 3 (Recent, the main window hidden until a choice, the home folder's git
-      repositories, the Java runtime and Maven chosen and kept; done 2026-11-20): the Run menu's Maven and `java`
-      lines run with the chosen ones (`JAVA_HOME` and the `PATH` set in the line, as Run… does); a
-      Welcome… item to bring it back. Closing Welcome before choosing quits, which only `EditorTest` covers: ottermate
-      has no verb for a window's close box.
+- [ ] Welcome, after slices 1 to 4 (done 2026-11-20): a Welcome… item to bring it back, which is also the only way
+      to change Run with once the main window is up. Closing Welcome before choosing quits, which only `EditorTest`
+      covers: ottermate has no verb for a window's close box.
+- [ ] The console loses the top of a run's first line when the line is long and the console small: it is written
+      wrapped at the terminal's first width and the pseudo-terminal keeps no scrollback, so a Run line with the chosen
+      JDK and Maven in front (two paths) shows only its tail in a 960x600 console. Seen 2026-11-20.
 - [ ] Reading the index further: uses of a name (`Query.usages`), Ctrl+click on a name, and a library's declarations
       in a read-only tab, which Symbols leaves out today.
 

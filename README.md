@@ -180,6 +180,12 @@ that is not `NAME=value`, a folder that is not there; the problem stays in the w
 settings for next time. The variables and the `PATH` are set in the line itself (`set "NAME=value" && …` for `cmd`,
 `export` for `sh`), so the console's first line is still the whole of what ran and Run again repeats it.
 
+The menu's Maven and `java` lines (Compile, Clean Install, Package, Execute, a `main` and a runnable jar) run with
+the JDK and Maven chosen in Welcome's **Run with**, set in the line the same way (`Runs.withTools`): `JAVA_HOME` the
+chosen JDK, and its `bin`, and for `mvn` the chosen Maven's `bin`, ahead of the `PATH`. With neither chosen, or one
+whose folder has gone, they run as the environment has it. The choice is read at each Run menu, so it counts from the
+next one. Run… and Pontif are run as typed.
+
 Before anything runs, every unsaved document is saved, since what
 runs is what is on disk; a save that fails runs nothing (the editor's `run` chain).
 

@@ -32,6 +32,34 @@ class RunsTest {
     @TempDir
     Path dir;
 
+    /** The JDK and Maven chosen in Welcome, set in each Maven and Java line, and in nothing else's. */
+    @Test
+    void mavenAndJavaRunWithTheChosenJdkAndMaven() {
+        Path jdk = dir.resolve("jdk");
+        Path mvn = dir.resolve("maven");
+        Offer compile = new Offer("Compile", "mvn compile", dir, 1);
+        Offer jar = new Offer("Run Recent Build (a.jar)", "java -jar a.jar", dir, 1);
+        Offer program = new Offer("Run tool.exe", "tool.exe", dir, 2);
+        java.util.Optional<Path> none = java.util.Optional.empty();
+
+        List<Offer> both = Runs.withTools(List.of(compile, jar, program), java.util.Optional.of(jdk),
+                java.util.Optional.of(mvn));
+        String envJdk = Runs.prefix(Map.of("JAVA_HOME", jdk.toString()),
+                List.of(mvn.resolve("bin").toString(), jdk.resolve("bin").toString()));
+        assertEquals(new Offer("Compile", envJdk + "mvn compile", dir, 1), both.get(0),
+                "Maven's bin first, then the JDK's, and JAVA_HOME, which Maven runs on");
+        assertEquals(Runs.prefix(Map.of("JAVA_HOME", jdk.toString()), List.of(jdk.resolve("bin").toString()))
+                + "java -jar a.jar", both.get(1).line(), "java needs no Maven");
+        assertEquals(program, both.get(2), "a program is run as it is");
+
+        assertEquals(List.of(compile, jar), Runs.withTools(List.of(compile, jar), none, none),
+                "nothing chosen: the environment's own, as before");
+        assertEquals(List.of(new Offer("Compile", Runs.prefix(Map.of(), List.of(mvn.resolve("bin").toString()))
+                        + "mvn compile", dir, 1), jar),
+                Runs.withTools(List.of(compile, jar), none, java.util.Optional.of(mvn)),
+                "only a Maven chosen: java is left alone");
+    }
+
     @Test
     void aJavaFileWithAMainRunsItThroughMavenInsideAModule() throws IOException {
         pom(dir, "jar", "");
